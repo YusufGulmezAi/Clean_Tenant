@@ -35,6 +35,12 @@ public sealed class AuthSession
     /// <summary>Aktif tenant; System scope'unda null.</summary>
     public Guid? TenantId { get; init; }
 
+    /// <summary>Aktif tenant adı (denormalize; audit/log enrichment için).</summary>
+    public string? TenantName { get; init; }
+
+    /// <summary>Kullanıcının görünen adı (FirstName + LastName, denormalize).</summary>
+    public string? FullName { get; init; }
+
     /// <summary>Aktif şirket; Tenant ve üstü scope'larda null.</summary>
     public Guid? CompanyId { get; init; }
 

@@ -12,6 +12,8 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
     <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" />
+    <!-- v0.1.7 — HttpAuditMetadataAccessor User-Agent parse için. -->
+    <PackageReference Include="UAParser" />
   </ItemGroup>
 
   <PropertyGroup>

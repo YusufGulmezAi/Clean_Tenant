@@ -1,7 +1,24 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
     <ProjectReference Include="..\..\Core\CleanTenant.Application\CleanTenant.Application.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- v0.1.7 — Serilog + PostgreSQL sink + enricher'lar. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Serilog" />
+    <PackageReference Include="Serilog.AspNetCore" />
+    <PackageReference Include="Serilog.Sinks.Console" />
+    <PackageReference Include="Serilog.Sinks.PostgreSQL" />
+    <PackageReference Include="Serilog.Enrichers.Environment" />
+    <PackageReference Include="Serilog.Enrichers.Process" />
+    <PackageReference Include="Serilog.Enrichers.Thread" />
+    <!-- Sink'in Npgsql 5.0.5 (güvenlik açığı) transitive bağımlılığını override eder. -->
+    <PackageReference Include="Npgsql" />
   </ItemGroup>
 
   <PropertyGroup>

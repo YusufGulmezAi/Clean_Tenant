@@ -4,6 +4,114 @@ Bu dosya, Faz v0.1 (Temel Altyapı) kapsamında yapılan tüm alt-faz değişikl
 
 ---
 
+## v0.1.7 — 2026-05-17 — Audit Interceptor + Serilog + Detaylı Bağlam (Faz 0 KAPANIŞ)
+
+### Mimari Karar: Detaylı Audit/Log Bağlamı
+Kullanıcı talebi: "Loglama ve Audit tablosunda Kullanıcı, zaman, environment ve lokasyon bilgileri en detaylı şekilde loglansın." `AuditMetadata` ve `audit_entries` tablosu **denormalize** her satıra şu alanları taşır:
+
+- **Kullanıcı:** UserId, UserEmail, UserFullName, TenantId, TenantName, ScopeLevel, CompanyId, UnitId, PersonaSide, Roles, IsSystemSession, SupportSessionId, ImpersonatedByUserId.
+- **Zaman:** Timestamp (UTC, microsecond hassasiyetli — `timestamptz`).
+- **Environment:** EnvironmentName, MachineName, ApplicationName, ApplicationVersion, ProcessId, ThreadId.
+- **Lokasyon (client):** IpAddress, UserAgent, BrowserName, BrowserVersion, OperatingSystem, DeviceType (Desktop/Mobile/Tablet/Bot), AcceptLanguage, Referer, Country/City (Faz 1+ GeoIP placeholder).
+- **Request bağlamı:** TraceId, CorrelationId, RequestPath, RequestMethod.
+- **Değişiklik:** EntityType, EntityId, Action, ChangesJson (delta, PII redact'li).
+
+### Mimari Karar: Audit DB Yazımı Dapper ile
+- EF Core her satır için ChangeTracker hit'i = audit hacminde sürdürülemez.
+- `FullAuditInterceptor` `SavingChangesAsync`'te entries toplar (AuditingInterceptor'dan sonra), `SavedChangesAsync`'te Dapper ile audit DB'ye batch INSERT.
+- Atomic kararı: Catalog SaveChanges başarılı olduktan SONRA audit yazımı — "data yazılmadan audit yazılmaz" garantisi.
+- `SaveChangesFailedAsync` → pending audit entries silinir.
+
+### Mimari Karar: PII Redaction
+- `[Sensitive]` attribute (Domain'de) — kendi entity'lerimizin PII property'lerine işaretleme.
+- Merkezi liste — `PasswordHash`, `SecurityStamp`, `ConcurrencyStamp`, `TokenHash`, `RefreshTokenHash`, `AuthenticatorKey` (IdentityUser miras alınan property'ler attribute eklenemediği için).
+- `ChangesJson`'da bu alanların değeri `"[REDACTED]"`.
+
+### Mimari Karar: Soft-Delete Audit Davranışı
+- `ISoftDeletable.IsDeleted` false→true güncellemesi audit'te `Update` değil **`Delete`** action.
+
+### Mimari Karar: WriteActionCount Artırımı
+- `SupportSession.WriteActionCount` her başarılı Catalog write'da artırılır (Support Mode aktifse).
+- Aynı SaveChanges transaction'ı içinde — atomic. v0.1.5.b.2'nin açık konusu kapandı.
+
+### Mimari Karar: Serilog
+- **Sinks:** Console (her zaman) + PostgreSQL (`ConnectionStrings:Log` varsa).
+- **Enricher'lar:** `FromLogContext` + `WithMachineName` + `WithProcessId` + `WithThreadId` + custom `AuditMetadataEnricher`.
+- `AuditMetadataEnricher` her log event'ine `AuditMetadata` alanlarını property olarak ekler — log DB `properties` jsonb'sinde audit DB ile aynı zenginlik.
+
+### Mimari Karar: Paket Sürümleri
+- Serilog 4.2.0 (Serilog.AspNetCore 9.0.0 transitive ister).
+- Npgsql 10.0.0 explicit (Serilog.Sinks.PostgreSQL'in eski 5.0.5'i override eder — NU1903 güvenlik açığı kapanır).
+
+### Domain Eklenenler
+- `Domain/Auditing/AuditEntry.cs` — 35+ alanlı kapsamlı audit kaydı (BaseEntity'den türemez).
+- `Domain/Auditing/AuditAction.cs` — Create / Update / Delete.
+- `Domain/Auditing/SensitiveAttribute.cs` — PII işaretleyici.
+
+### Application Eklenenler
+- `Application/Common/Auditing/AuditMetadata.cs` — 30+ alanlı record.
+- `Application/Common/Auditing/IAuditMetadataAccessor.cs`.
+- `AuthSession`: `TenantName`, `FullName` alanları (denormalize için).
+- `LoginFinalizer` bunları doldurur.
+
+### Infrastructure
+**Identity:**
+- `Auditing/HttpAuditMetadataAccessor.cs` — HttpContext + ICurrentSessionAccessor + IHostEnvironment + UAParser birleştiricisi.
+
+**Persistence:**
+- `Audit/AuditDbContext` + `AuditEntryConfiguration` + initial migration (`audit_entries` tablosu, 3 indeks).
+- `Log/LogEntry` + `LogDbContext` + initial migration (`logs` tablosu, Serilog yazar).
+- `Interceptors/FullAuditInterceptor.cs` (300+ satır) — Dapper ile batch INSERT + delta + PII redact + WriteActionCount.
+- `AddCatalogPersistence(catalogConn, auditConn?)` — audit conn varsa interceptor wire'lanır.
+- `AddAuditPersistence` + `AddLogPersistence` extension'ları.
+- EF Core 10 `PendingModelChangesWarning` suppress'i.
+
+**Logging:**
+- `Enrichers/AuditMetadataEnricher.cs` — her log event'ine 30+ property ekler.
+- `LoggingConfiguration.cs` — `AddCleanTenantSerilog()` extension.
+
+### WebApi
+- `Program.cs`: `builder.AddCleanTenantSerilog()`.
+- `ServiceCollectionExtensions`: opsiyonel `ConnectionStrings:Audit` + `ConnectionStrings:Log` ile audit/log DB'leri devreye girer.
+
+### Test Fixture
+- `PostgresFixture`: aynı container'da iki database (`cleantenant_catalog` + `cleantenant_audit`). Migration ikisi için de çalıştırılır.
+- `IAuditMetadataAccessor` NSubstitute mock'u — testler metadata enjekte eder.
+
+### Eklenen Test'ler (4 yeni)
+**`Audit/FullAuditInterceptorTests`:**
+1. `Yeni_tenant_eklendiginde_audit_kaydi_create_olarak_yazilmali`
+2. `Tenant_guncellendiginde_delta_olarak_yazilmali` (old/new field)
+3. `Soft_delete_audit_action_Delete_olarak_kaydedilmeli`
+4. `Audit_kaydi_metadata_alanlarini_tasimali` (12 denormalize alan)
+
+### Paket Eklemeleri
+`Serilog 4.2.0`, `Serilog.AspNetCore 9.0.0`, `Serilog.Sinks.Console 6.0.0`, `Serilog.Sinks.PostgreSQL 2.3.0`, `Serilog.Enrichers.Environment 3.0.1`, `Serilog.Enrichers.Process 3.0.0`, `Serilog.Enrichers.Thread 4.0.0`, `Dapper 2.1.66`, `UAParser 3.1.47`, `Npgsql 10.0.0` (override).
+
+### Doğrulama
+- ✓ `dotnet build` — 17 proje / 0 uyarı / 0 hata.
+- ✓ `dotnet test` — **146 test başarılı** (17 App + 70 Domain + 25 Infrastructure + 34 WebApi).
+- ✓ Önceki 142 test davranış olarak korundu.
+
+### Açık Konular (Faz 1+'a Ertelenenler)
+- **GeoIP enrichment** — Country/City alanları null; MaxMind GeoLite2 Faz 1'de.
+- **Audit DB outbox pattern** — retry için Hangfire v0.1.9'da.
+- **Log DB retention policy** — PG partitioning + retention Faz 1+'da.
+- **`[RequirePermission]` handler'lara yerleştirilmesi** — Faz 1 ManagementApp rol-permission map'i ile.
+- **MigrationRunner `--db` argümanı** — Audit + Log kapsamı genişletme Faz 1 başında.
+
+### Sonraki Adım
+**🎉 Faz 0 TAMAMLANDI.** Backend production'a açılabilir bir noktada:
+- Auth + 2FA + Multi-scope + Support Mode + Force-logout + Session management
+- MediatR pipeline (Auth → Validation → Logging) + FluentValidation + Permission Checker
+- AuditingInterceptor + FullAuditInterceptor + Serilog structured logging
+- 4 DB ayrılığı (Catalog + Main placeholder + Log + Audit) + EF Core migrations
+- 146 test (Domain + Infrastructure + WebApi)
+
+**Faz 1 — ManagementApp UI:** Blazor Server + MudBlazor; auth/login ekranları, tenant onboarding, rol-permission yönetimi, support mode UI, audit explorer.
+
+---
+
 ## v0.1.6 — 2026-05-17 — MediatR Pipeline + FluentValidation + Permission Checker
 
 ### Mimari Karar: MediatR + Pipeline Behavior'lar

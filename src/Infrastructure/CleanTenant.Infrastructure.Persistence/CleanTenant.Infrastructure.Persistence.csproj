@@ -23,6 +23,8 @@
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
     <PackageReference Include="EFCore.NamingConventions" />
+    <!-- v0.1.7 — FullAuditInterceptor audit DB'ye Dapper ile yazar (yüksek hacim). -->
+    <PackageReference Include="Dapper" />
     <!-- Microsoft.Extensions.Caching.Memory + Configuration.EnvironmentVariables
          Microsoft.AspNetCore.App framework reference üzerinden geliyor. -->
   </ItemGroup>

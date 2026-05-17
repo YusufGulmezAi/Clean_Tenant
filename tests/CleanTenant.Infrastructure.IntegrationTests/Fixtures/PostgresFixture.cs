@@ -1,9 +1,12 @@
+using CleanTenant.Application.Common.Auditing;
 using CleanTenant.Infrastructure.Persistence;
+using CleanTenant.Infrastructure.Persistence.Audit;
 using CleanTenant.Infrastructure.Persistence.Catalog;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using NSubstitute;
 using Npgsql;
 using Testcontainers.PostgreSql;
 
@@ -11,51 +14,66 @@ namespace CleanTenant.Infrastructure.IntegrationTests.Fixtures;
 
 /// <summary>
 /// <para>
-/// Test sınıfı seviyesinde paylaşılan PostgreSQL container'ı sağlar.
-/// Container açılışı, gerekli extension'ların yüklenmesi ve EF Core
-/// migration'larının uygulanmasını üstlenir.
-/// </para>
-/// <para>
-/// <b>Kullanım:</b> Test sınıfı <c>IClassFixture&lt;PostgresFixture&gt;</c>
-/// implement eder; ctor üzerinden fixture inject edilir. Her test scope açar,
-/// işini yapar, scope dispose olur (DbContext kapanır). Tests arasında DB
-/// state'i akıyorsa testler benzersiz UrlCode/Email gibi alanlarla çakışmadan
-/// çalışacak şekilde yazılır.
+/// Test sınıfı seviyesinde paylaşılan PostgreSQL container'ı. v0.1.7'den
+/// itibaren <b>iki database</b> üretir: <c>cleantenant_catalog</c> +
+/// <c>cleantenant_audit</c>. FullAuditInterceptor testleri ikincisini kullanır.
 /// </para>
 /// </summary>
 public sealed class PostgresFixture : IAsyncLifetime
 {
+    private const string CatalogDatabase = "cleantenant_catalog";
+    private const string AuditDatabase = "cleantenant_audit";
+
     private readonly PostgreSqlContainer _container = new PostgreSqlBuilder()
         .WithImage("postgres:17-alpine")
-        .WithDatabase("cleantenant_catalog")
+        .WithDatabase(CatalogDatabase)
         .WithUsername("cleantenant")
         .WithPassword("test-only-password")
         .Build();
 
-    /// <summary>Container'ın PostgreSQL bağlantı dizgesi (container start sonrası geçerli).</summary>
+    /// <summary>Catalog DB bağlantı dizgesi.</summary>
     public string ConnectionString { get; private set; } = string.Empty;
 
-    /// <summary>
-    /// Migrations uygulanmış ve servislerin kayıt olduğu DI provider. Her test
-    /// <see cref="IServiceProvider.CreateScope"/> ile scoped servislere erişir.
-    /// </summary>
+    /// <summary>Audit DB bağlantı dizgesi (v0.1.7).</summary>
+    public string AuditConnectionString { get; private set; } = string.Empty;
+
+    /// <summary>Migrations uygulanmış DI provider. (Catalog odaklı; audit için ayrı API.)</summary>
     public IServiceProvider Services { get; private set; } = null!;
 
-    /// <summary>Container'ı başlatır, extension'ları yükler, migration'ları uygular.</summary>
+    /// <summary>IAuditMetadataAccessor mock'u — testler set ederek metadata enjekte eder.</summary>
+    public IAuditMetadataAccessor AuditMetadataAccessor { get; } =
+        Substitute.For<IAuditMetadataAccessor>();
+
+    /// <summary>Container'ı başlatır, iki DB oluşturur, extension'ları yükler, migration'ları uygular.</summary>
     public async Task InitializeAsync()
     {
         await _container.StartAsync();
         ConnectionString = _container.GetConnectionString();
+        AuditConnectionString = ConnectionString.Replace(
+            $"Database={CatalogDatabase}", $"Database={AuditDatabase}", StringComparison.Ordinal);
 
+        await CreateAuditDatabaseAsync(ConnectionString);
         await CreatePostgresExtensionsAsync(ConnectionString);
+        await CreatePostgresExtensionsAsync(AuditConnectionString);
 
         var services = new ServiceCollection();
         services.AddLogging(b => b.AddProvider(NullLoggerProvider.Instance));
-        // v0.1.5.c: Identity'nin AddDefaultTokenProviders zinciri
-        // DataProtectorTokenProvider'ı kayıt ediyor, bu da IDataProtectionProvider'a
-        // bağımlı. Test fixture'ında bunu açıkça kayıt etmek gerek.
         services.AddDataProtection();
-        services.AddCatalogPersistence(ConnectionString);
+
+        AuditMetadataAccessor.Capture().Returns(new AuditMetadata
+        {
+            EnvironmentName = "Test",
+            MachineName = "test-host",
+            ApplicationName = "CleanTenant.Test",
+            ApplicationVersion = "0.0.0-test",
+            ProcessId = Environment.ProcessId,
+            ThreadId = Environment.CurrentManagedThreadId,
+        });
+        services.AddSingleton(AuditMetadataAccessor);
+
+        services.AddCatalogPersistence(ConnectionString, AuditConnectionString);
+        services.AddAuditPersistence(AuditConnectionString);
+
         Services = services.BuildServiceProvider();
 
         await ApplyMigrationsAsync(Services);
@@ -71,11 +89,28 @@ public sealed class PostgresFixture : IAsyncLifetime
         await _container.DisposeAsync();
     }
 
-    /// <summary>
-    /// Container'da PostgreSQL extension'larını (citext / unaccent / pg_trgm / pgcrypto)
-    /// yükler. EF migration'ı bu extension'lara dayalı kolon tipleri kullanır,
-    /// o yüzden migration öncesi uygulanmalı.
-    /// </summary>
+    /// <summary>İkinci database'i (audit) postgres'in initial DB'sinde manuel CREATE eder.</summary>
+    private static async Task CreateAuditDatabaseAsync(string catalogConnectionString)
+    {
+        await using var conn = new NpgsqlConnection(catalogConnectionString);
+        await conn.OpenAsync();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = $"""
+            SELECT 'CREATE DATABASE {AuditDatabase}'
+            WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '{AuditDatabase}')\gexec
+            """;
+        // pg_database'i sorgulayıp yoksa CREATE.
+        cmd.CommandText = $"CREATE DATABASE \"{AuditDatabase}\"";
+        try
+        {
+            await cmd.ExecuteNonQueryAsync();
+        }
+        catch (PostgresException ex) when (ex.SqlState == "42P04")
+        {
+            // 42P04: database already exists — sessiz geç.
+        }
+    }
+
     private static async Task CreatePostgresExtensionsAsync(string connectionString)
     {
         await using var conn = new NpgsqlConnection(connectionString);
@@ -93,7 +128,9 @@ public sealed class PostgresFixture : IAsyncLifetime
     private static async Task ApplyMigrationsAsync(IServiceProvider services)
     {
         using var scope = services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<CatalogDbContext>();
-        await db.Database.MigrateAsync();
+        var catalog = scope.ServiceProvider.GetRequiredService<CatalogDbContext>();
+        await catalog.Database.MigrateAsync();
+        var audit = scope.ServiceProvider.GetRequiredService<AuditDbContext>();
+        await audit.Database.MigrateAsync();
     }
 }

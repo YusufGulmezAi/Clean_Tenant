@@ -1,10 +1,13 @@
+using CleanTenant.Application.Common.Auditing;
 using CleanTenant.Application.Common.MultiTenancy;
 using CleanTenant.Application.Common.Persistence;
 using CleanTenant.Domain.Identity.Authorization;
 using CleanTenant.Domain.Identity.Users;
+using CleanTenant.Infrastructure.Persistence.Audit;
 using CleanTenant.Infrastructure.Persistence.Catalog;
 using CleanTenant.Infrastructure.Persistence.Context;
 using CleanTenant.Infrastructure.Persistence.Interceptors;
+using CleanTenant.Infrastructure.Persistence.Log;
 using CleanTenant.Infrastructure.Persistence.MultiTenancy;
 using CleanTenant.Infrastructure.Persistence.Seeding;
 using CleanTenant.SharedKernel.Context;
@@ -12,6 +15,7 @@ using CleanTenant.SharedKernel.Identifiers;
 using CleanTenant.SharedKernel.Time;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CleanTenant.Infrastructure.Persistence;
@@ -31,10 +35,15 @@ public static class DependencyInjection
     /// </summary>
     /// <param name="services">DI servis koleksiyonu.</param>
     /// <param name="connectionString">Catalog DB PostgreSQL bağlantı dizgesi.</param>
+    /// <param name="auditConnectionString">
+    /// v0.1.7 — opsiyonel Audit DB bağlantısı. Verildiyse <c>FullAuditInterceptor</c>
+    /// kayıt edilir ve her Catalog SaveChanges audit DB'ye Dapper ile yazılır.
+    /// </param>
     /// <returns>Chain için aynı servis koleksiyonu.</returns>
     public static IServiceCollection AddCatalogPersistence(
         this IServiceCollection services,
-        string connectionString)
+        string connectionString,
+        string? auditConnectionString = null)
     {
         // ---- SharedKernel primitif'leri ----
         services.AddSingleton<IClock, SystemClock>();
@@ -48,15 +57,34 @@ public static class DependencyInjection
         services.AddScoped<AuditingInterceptor>();
         services.AddScoped<UrlCodeGeneratingInterceptor>();
 
+        // v0.1.7 — FullAuditInterceptor (audit DB conn string verildiyse aktif).
+        if (!string.IsNullOrWhiteSpace(auditConnectionString))
+        {
+            var auditConn = auditConnectionString;
+            services.AddScoped<FullAuditInterceptor>(sp => new FullAuditInterceptor(
+                sp.GetRequiredService<IAuditMetadataAccessor>(),
+                sp.GetRequiredService<IClock>(),
+                auditConn));
+        }
+
         // ---- DbContext ----
         services.AddDbContext<CatalogDbContext>((sp, options) =>
         {
+            var interceptors = new List<Microsoft.EntityFrameworkCore.Diagnostics.IInterceptor>
+            {
+                sp.GetRequiredService<AuditingInterceptor>(),
+                sp.GetRequiredService<UrlCodeGeneratingInterceptor>(),
+            };
+            if (!string.IsNullOrWhiteSpace(auditConnectionString))
+            {
+                interceptors.Add(sp.GetRequiredService<FullAuditInterceptor>());
+            }
+
             options
                 .UseNpgsql(connectionString, npg => npg.MigrationsAssembly(typeof(CatalogDbContext).Assembly.GetName().Name))
                 .UseSnakeCaseNamingConvention()
-                .AddInterceptors(
-                    sp.GetRequiredService<AuditingInterceptor>(),
-                    sp.GetRequiredService<UrlCodeGeneratingInterceptor>());
+                .ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning))
+                .AddInterceptors(interceptors);
         });
 
         services.AddScoped<ICatalogDbContext>(sp => sp.GetRequiredService<CatalogDbContext>());
@@ -99,6 +127,43 @@ public static class DependencyInjection
         services.AddScoped<DevSeedData>();
         services.AddScoped<DemoSeedData>();
 
+        return services;
+    }
+
+    /// <summary>
+    /// Audit DB için EF Core DbContext kayıt eder. Yalnızca migration ve seyrek
+    /// read senaryoları için; yazım <c>FullAuditInterceptor</c> üzerinden Dapper
+    /// ile yapılır.
+    /// </summary>
+    public static IServiceCollection AddAuditPersistence(
+        this IServiceCollection services,
+        string connectionString)
+    {
+        services.AddDbContext<AuditDbContext>(options =>
+        {
+            options
+                .UseNpgsql(connectionString, npg => npg.MigrationsAssembly(typeof(AuditDbContext).Assembly.GetName().Name))
+                .UseSnakeCaseNamingConvention()
+                .ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning));
+        });
+        return services;
+    }
+
+    /// <summary>
+    /// Log DB için EF Core DbContext kayıt eder. Yalnız şema (migration) içindir;
+    /// runtime'da Serilog PostgreSQL sink doğrudan <c>NpgsqlConnection</c> üzerinden yazar.
+    /// </summary>
+    public static IServiceCollection AddLogPersistence(
+        this IServiceCollection services,
+        string connectionString)
+    {
+        services.AddDbContext<LogDbContext>(options =>
+        {
+            options
+                .UseNpgsql(connectionString, npg => npg.MigrationsAssembly(typeof(LogDbContext).Assembly.GetName().Name))
+                .UseSnakeCaseNamingConvention()
+                .ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning));
+        });
         return services;
     }
 }

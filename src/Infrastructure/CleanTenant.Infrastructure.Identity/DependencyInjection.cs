@@ -1,7 +1,9 @@
+using CleanTenant.Application.Common.Auditing;
 using CleanTenant.Application.Common.Auth;
 using CleanTenant.Application.Common.Authorization;
 using CleanTenant.Application.Common.Notifications;
 using CleanTenant.Application.Features.Auth.Login;
+using CleanTenant.Infrastructure.Identity.Auditing;
 using CleanTenant.Infrastructure.Identity.Authorization;
 using CleanTenant.Infrastructure.Identity.Context;
 using CleanTenant.Infrastructure.Identity.Jwt;
@@ -50,6 +52,9 @@ public static class DependencyInjection
 
         // v0.1.6 — Permission checker (Redis session permission listesinden okur)
         services.AddScoped<IPermissionChecker, SessionPermissionChecker>();
+
+        // v0.1.7 — Audit metadata accessor (HttpContext + session + UA parser)
+        services.AddScoped<IAuditMetadataAccessor, HttpAuditMetadataAccessor>();
 
         // JWT bearer authentication
         var jwt = configuration.GetSection(JwtSettings.SectionName).Get<JwtSettings>()

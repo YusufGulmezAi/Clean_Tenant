@@ -29,13 +29,25 @@ public static class ServiceCollectionExtensions
             ?? throw new InvalidOperationException("ConnectionStrings:Catalog bulunamadı.");
         var redisConnection = configuration.GetConnectionString("Redis")
             ?? throw new InvalidOperationException("ConnectionStrings:Redis bulunamadı.");
+        // Audit ve Log DB bağlantıları opsiyonel — yoksa interceptor/sink kayıt edilmez.
+        var auditConnection = configuration.GetConnectionString("Audit");
+        var logConnection = configuration.GetConnectionString("Log");
 
         services.AddOpenApi();
         services.AddApplicationServices();
-        services.AddCatalogPersistence(catalogConnection);
+        services.AddCatalogPersistence(catalogConnection, auditConnection);
         services.AddRedisCache(redisConnection);
         services.AddIdentityServices(configuration);
         services.AddCleanTenantNotifications(configuration, environment);
+
+        if (!string.IsNullOrWhiteSpace(auditConnection))
+        {
+            services.AddAuditPersistence(auditConnection);
+        }
+        if (!string.IsNullOrWhiteSpace(logConnection))
+        {
+            services.AddLogPersistence(logConnection);
+        }
 
         // Enum'lar JSON request/response'larda string olarak okunup yazılsın
         // (örn. "Management"/"Portal", "ReadOnly"/"WriteEnabled" gibi).

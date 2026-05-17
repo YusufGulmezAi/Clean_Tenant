@@ -84,6 +84,25 @@
     <PackageVersion Include="FluentValidation.DependencyInjectionExtensions" Version="11.11.0" />
   </ItemGroup>
 
+  <ItemGroup Label="Serilog + Dapper + UAParser (v0.1.7 — audit + structured logging)">
+    <PackageVersion Include="Serilog" Version="4.2.0" />
+    <PackageVersion Include="Serilog.AspNetCore" Version="9.0.0" />
+    <PackageVersion Include="Serilog.Sinks.Console" Version="6.0.0" />
+    <PackageVersion Include="Serilog.Sinks.PostgreSQL" Version="2.3.0" />
+    <PackageVersion Include="Serilog.Enrichers.Environment" Version="3.0.1" />
+    <PackageVersion Include="Serilog.Enrichers.Process" Version="3.0.0" />
+    <PackageVersion Include="Serilog.Enrichers.Thread" Version="4.0.0" />
+    <!--
+      Serilog.Sinks.PostgreSQL 2.3.0 eski Npgsql 5.0.5'e bağımlı (güvenlik açığı
+      bildirilmiş — NU1903). Sink'in çalışması için Npgsql gerekli; Persistence
+      katmanı zaten Npgsql 8.x çekiyor (Npgsql.EntityFrameworkCore.PostgreSQL 10.0.0
+      transitive). Bu satır yalnız NU1903 uyarısını override etmek için.
+    -->
+    <PackageVersion Include="Npgsql" Version="10.0.0" />
+    <PackageVersion Include="Dapper" Version="2.1.66" />
+    <PackageVersion Include="UAParser" Version="3.1.47" />
+  </ItemGroup>
+
   <!--
     İlerleyen alt fazlarda eklenecek paketler:
     - v0.1.4.b: Testcontainers.PostgreSql, Dapper

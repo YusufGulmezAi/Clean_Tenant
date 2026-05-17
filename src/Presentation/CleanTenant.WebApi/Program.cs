@@ -1,9 +1,11 @@
+using CleanTenant.Infrastructure.Logging;
 using CleanTenant.WebApi.Configuration;
 using CleanTenant.WebApi.Endpoints;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Configuration.AddCleanTenantEnvironmentMappings();
+builder.AddCleanTenantSerilog();
 builder.Services.AddCleanTenantApi(builder.Configuration, builder.Environment);
 
 var app = builder.Build();

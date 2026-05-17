@@ -83,6 +83,7 @@ public sealed class LoginFinalizer
         var contextId = requestedContextId ?? Guid.CreateVersion7(now);
         var sessionId = Guid.CreateVersion7(now);
 
+        var fullName = $"{user.FirstName} {user.LastName}".Trim();
         var session = new AuthSession
         {
             SessionId = sessionId,
@@ -90,8 +91,10 @@ public sealed class LoginFinalizer
             ContextId = contextId,
             Email = user.Email ?? string.Empty,
             UserName = user.UserName ?? user.Email ?? string.Empty,
+            FullName = string.IsNullOrWhiteSpace(fullName) ? null : fullName,
             ScopeLevel = primary.Level,
             TenantId = primary.TenantId,
+            TenantName = primary.TenantName,
             CompanyId = primary.CompanyId,
             UnitId = primary.UnitId,
             Roles = roles,
