@@ -1,0 +1,51 @@
+@*
+    Sol drawer'ın içeriği — AdminLTE+ nested menu pattern.
+    Faz 1.1: yalnız Dashboard aktif; diğerleri "Yakında" badge'li.
+    Faz 1.5+: scope-aware visibility (TenantScope yalnız kendi audit'i; SystemScope cross-tenant).
+*@
+
+<MudNavMenu Color="Color.Primary" Bordered="true">
+    <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">
+        Dashboard
+    </MudNavLink>
+
+    <MudNavGroup Title="Yönetim" Icon="@Icons.Material.Filled.AdminPanelSettings" Expanded="true">
+        <MudNavLink Href="/tenants" Icon="@Icons.Material.Filled.Domain" Disabled="true">
+            Tenant Yönetimi
+            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="ml-2">Faz 1.4</MudChip>
+        </MudNavLink>
+        <MudNavLink Href="/roles" Icon="@Icons.Material.Filled.Security" Disabled="true">
+            Roller &amp; İzinler
+            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="ml-2">Faz 1.5</MudChip>
+        </MudNavLink>
+        <MudNavLink Href="/users" Icon="@Icons.Material.Filled.People" Disabled="true">
+            Kullanıcılar
+            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="ml-2">Faz 1.4</MudChip>
+        </MudNavLink>
+    </MudNavGroup>
+
+    <MudNavGroup Title="Gözetim" Icon="@Icons.Material.Filled.QueryStats" Expanded="true">
+        <MudNavLink Href="/audit" Icon="@Icons.Material.Filled.History" Disabled="true">
+            Audit &amp; Loglar
+            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="ml-2">Faz 1.6</MudChip>
+        </MudNavLink>
+        <MudNavLink Href="/support-sessions" Icon="@Icons.Material.Filled.Support" Disabled="true">
+            Destek Oturumları
+            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="ml-2">Faz 1.6</MudChip>
+        </MudNavLink>
+    </MudNavGroup>
+
+    <MudDivider Class="my-2" />
+
+    <MudNavGroup Title="Ayarlar" Icon="@Icons.Material.Filled.Settings">
+        <MudNavLink Href="/settings/theme" Icon="@Icons.Material.Filled.Palette">
+            Tema
+        </MudNavLink>
+        <MudNavLink Href="/settings/language" Icon="@Icons.Material.Filled.Language">
+            Dil
+        </MudNavLink>
+        <MudNavLink Href="/about" Icon="@Icons.Material.Filled.Info">
+            Hakkında
+        </MudNavLink>
+    </MudNavGroup>
+</MudNavMenu>

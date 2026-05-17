@@ -9,6 +9,12 @@
     <ProjectReference Include="..\..\Infrastructure\CleanTenant.Infrastructure.BackgroundJobs\CleanTenant.Infrastructure.BackgroundJobs.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- v0.2.1 — MudBlazor UI + tema kalıcılığı için Blazored.LocalStorage -->
+    <PackageReference Include="MudBlazor" />
+    <PackageReference Include="Blazored.LocalStorage" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>

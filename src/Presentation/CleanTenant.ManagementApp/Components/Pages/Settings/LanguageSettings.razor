@@ -1,0 +1,43 @@
+@page "/settings/language"
+@rendermode InteractiveServer
+
+<PageTitle>Dil Ayarları — CleanTenant</PageTitle>
+
+<MudBreadcrumbs Items="@_breadcrumbs" Class="px-0 pb-2" />
+
+<MudText Typo="Typo.h4" Class="mb-1">Dil Ayarları</MudText>
+<MudText Typo="Typo.body1" Color="Color.Default" Class="mb-4">
+    v0.2.1'de Türkçe sabit. Çoklu dil (EN/AR/RU/DE) Faz 1.7'de devreye girecek;
+    aşağıda placeholder seçici görünür.
+</MudText>
+
+<MudPaper Elevation="0" Outlined="true" Class="pa-4">
+    <MudRadioGroup T="string" Value="@_selectedLang" ValueChanged="@OnLangChanged" Disabled="true">
+        <MudRadio Value="@("tr")">🇹🇷 Türkçe (varsayılan)</MudRadio>
+        <MudRadio Value="@("en")">🇬🇧 English (Faz 1.7)</MudRadio>
+        <MudRadio Value="@("ar")">🇸🇦 العربية (Faz 1.7 — RTL)</MudRadio>
+        <MudRadio Value="@("ru")">🇷🇺 Русский (Faz 1.7)</MudRadio>
+        <MudRadio Value="@("de")">🇩🇪 Deutsch (Faz 1.7)</MudRadio>
+    </MudRadioGroup>
+
+    <MudAlert Severity="Severity.Info" Class="mt-4">
+        Faz 1.7'de dil seçici aktive edilecek. Şu an Türkçe sabit.
+    </MudAlert>
+</MudPaper>
+
+@code {
+    private readonly List<BreadcrumbItem> _breadcrumbs =
+    [
+        new("Anasayfa", href: "/", icon: Icons.Material.Filled.Home),
+        new("Ayarlar", href: null, disabled: true),
+        new("Dil", href: null, disabled: true),
+    ];
+
+    private string _selectedLang = "tr";
+
+    private void OnLangChanged(string value)
+    {
+        // Faz 1.7'de gerçek dil değişimi
+        _selectedLang = value;
+    }
+}

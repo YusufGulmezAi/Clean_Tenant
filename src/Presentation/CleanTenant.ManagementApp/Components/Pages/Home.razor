@@ -1,7 +1,80 @@
-﻿@page "/"
+@page "/"
+@rendermode InteractiveServer
 
-<PageTitle>Home</PageTitle>
+<PageTitle>Dashboard — CleanTenant</PageTitle>
 
-<h1>Hello, world!</h1>
+<MudBreadcrumbs Items="@_breadcrumbs" Class="px-0 pb-2" />
 
-Welcome to your new app.
+<MudText Typo="Typo.h4" Class="mb-1">Dashboard</MudText>
+<MudText Typo="Typo.body1" Color="Color.Default" Class="mb-4">
+    Hoş geldiniz. v0.2.1 Faz 1 başlangıç sürümü — gerçek veriler v0.2.2'de auth devreye girdiğinde gelir.
+</MudText>
+
+<MudGrid>
+    <MudItem xs="12" sm="6" md="3">
+        <MudPaper Elevation="2" Class="pa-4 d-flex flex-column">
+            <div class="d-flex align-center mb-2">
+                <MudIcon Icon="@Icons.Material.Filled.Domain" Color="Color.Primary" />
+                <MudText Typo="Typo.subtitle2" Class="ml-2">Tenant Sayısı</MudText>
+            </div>
+            <MudText Typo="Typo.h4">—</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Default">Faz 1.4'te dolacak</MudText>
+        </MudPaper>
+    </MudItem>
+
+    <MudItem xs="12" sm="6" md="3">
+        <MudPaper Elevation="2" Class="pa-4 d-flex flex-column">
+            <div class="d-flex align-center mb-2">
+                <MudIcon Icon="@Icons.Material.Filled.People" Color="Color.Secondary" />
+                <MudText Typo="Typo.subtitle2" Class="ml-2">Aktif Kullanıcı</MudText>
+            </div>
+            <MudText Typo="Typo.h4">—</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Default">Faz 1.4'te dolacak</MudText>
+        </MudPaper>
+    </MudItem>
+
+    <MudItem xs="12" sm="6" md="3">
+        <MudPaper Elevation="2" Class="pa-4 d-flex flex-column">
+            <div class="d-flex align-center mb-2">
+                <MudIcon Icon="@Icons.Material.Filled.Support" Color="Color.Info" />
+                <MudText Typo="Typo.subtitle2" Class="ml-2">Aktif Support</MudText>
+            </div>
+            <MudText Typo="Typo.h4">—</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Default">Faz 1.6'da dolacak</MudText>
+        </MudPaper>
+    </MudItem>
+
+    <MudItem xs="12" sm="6" md="3">
+        <MudPaper Elevation="2" Class="pa-4 d-flex flex-column">
+            <div class="d-flex align-center mb-2">
+                <MudIcon Icon="@Icons.Material.Filled.History" Color="Color.Tertiary" />
+                <MudText Typo="Typo.subtitle2" Class="ml-2">Bugünkü Audit</MudText>
+            </div>
+            <MudText Typo="Typo.h4">—</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Default">Faz 1.6'da dolacak</MudText>
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+<MudPaper Elevation="0" Outlined="true" Class="pa-4 mt-6">
+    <MudText Typo="Typo.h6" Class="mb-2">Faz 1 Yol Haritası</MudText>
+    <MudList T="string" Dense="true">
+        <MudListItem Icon="@Icons.Material.Filled.CheckCircle" IconColor="Color.Success">
+            v0.2.1 — ManagementApp shell + 4 tema + MudBlazor (mevcut)
+        </MudListItem>
+        <MudListItem Icon="@Icons.Material.Filled.RadioButtonUnchecked">v0.2.2 — Auth ekranları (login, 2FA challenge, switch-context)</MudListItem>
+        <MudListItem Icon="@Icons.Material.Filled.RadioButtonUnchecked">v0.2.3 — Main DbContext + Companies tablosu</MudListItem>
+        <MudListItem Icon="@Icons.Material.Filled.RadioButtonUnchecked">v0.2.4 — Tenant onboarding wizard</MudListItem>
+        <MudListItem Icon="@Icons.Material.Filled.RadioButtonUnchecked">v0.2.5 — Rol-Permission yönetim ekranı + [RequirePermission] yerleştirme</MudListItem>
+        <MudListItem Icon="@Icons.Material.Filled.RadioButtonUnchecked">v0.2.6 — Audit explorer + Log viewer</MudListItem>
+        <MudListItem Icon="@Icons.Material.Filled.RadioButtonUnchecked">v0.2.7 — PortalApp shell + Unit kullanıcı ekranları</MudListItem>
+    </MudList>
+</MudPaper>
+
+@code {
+    private readonly List<BreadcrumbItem> _breadcrumbs =
+    [
+        new("Anasayfa", href: "/", icon: Icons.Material.Filled.Home),
+        new("Dashboard", href: null, disabled: true),
+    ];
+}
