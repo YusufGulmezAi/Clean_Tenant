@@ -1,4 +1,5 @@
 using CleanTenant.Infrastructure.Persistence;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -35,6 +36,11 @@ internal static class HostBuilderFactory
             ?? throw new InvalidOperationException(
                 "ConnectionStrings:Catalog bulunamadı. .env.<env> dosyası yüklenmiş mi?");
 
+        // AspNet Identity AddDefaultTokenProviders zinciri IDataProtectionProvider ister
+        // (DataProtectorTokenProvider için). WebApi/ManagementApp host'larında otomatik
+        // gelir; MigrationRunner standalone olduğu için explicit eklenmeli — yoksa
+        // seed UserManager<User>'i çözemez.
+        builder.Services.AddDataProtection();
         builder.Services.AddCatalogPersistence(catalogConnection);
 
         return builder.Build();
