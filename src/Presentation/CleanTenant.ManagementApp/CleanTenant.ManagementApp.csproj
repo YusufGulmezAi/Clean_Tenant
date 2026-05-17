@@ -13,6 +13,8 @@
     <!-- v0.2.1 — MudBlazor UI + tema kalıcılığı için Blazored.LocalStorage -->
     <PackageReference Include="MudBlazor" />
     <PackageReference Include="Blazored.LocalStorage" />
+    <!-- v0.2.2 — TOTP enrollment QR kodu -->
+    <PackageReference Include="QRCoder" />
   </ItemGroup>
 
   <PropertyGroup>

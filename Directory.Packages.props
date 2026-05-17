@@ -96,6 +96,11 @@
     <PackageVersion Include="bunit" Version="1.40.0" />
   </ItemGroup>
 
+  <ItemGroup Label="UI — Auth (v0.2.2 — 2FA QR + cookie auth)">
+    <!-- QRCoder TOTP authenticator QR kodu (otpauth://) üretimi. MIT. -->
+    <PackageVersion Include="QRCoder" Version="1.6.0" />
+  </ItemGroup>
+
   <ItemGroup Label="Serilog + Dapper + UAParser (v0.1.7 — audit + structured logging)">
     <PackageVersion Include="Serilog" Version="4.2.0" />
     <PackageVersion Include="Serilog.AspNetCore" Version="9.0.0" />

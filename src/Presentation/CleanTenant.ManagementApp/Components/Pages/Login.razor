@@ -1,0 +1,98 @@
+@page "/login"
+@layout EmptyLayout
+@attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
+@*
+    Login sayfası — Static SSR. Form /auth/sign-in endpoint'ine POST eder.
+    İnteraktivite minimum (loading state SignalR-bağımsız). Hata gösterimi
+    query string'den (?error=CODE) alınır.
+*@
+
+<PageTitle>Giriş — CleanTenant</PageTitle>
+
+<MudPaper Elevation="3" Class="pa-8 mx-auto mt-16" MaxWidth="MaxWidth.Small" Style="max-width: 460px;">
+    <div class="d-flex align-center mb-6">
+        <MudIcon Icon="@Icons.Material.Filled.Domain" Color="Color.Primary" Size="Size.Large" />
+        <MudText Typo="Typo.h4" Class="ml-2">CleanTenant</MudText>
+    </div>
+
+    <MudText Typo="Typo.h6" Class="mb-2">Yönetim Paneline Giriş</MudText>
+    <MudText Typo="Typo.body2" Color="Color.Default" Class="mb-4">
+        E-posta, TCKN/YKN, VKN veya cep telefonunuzla giriş yapabilirsiniz.
+    </MudText>
+
+    @if (!string.IsNullOrEmpty(ErrorCode))
+    {
+        <MudAlert Severity="@SeverityFor(ErrorCode)" Class="mb-4" ShowCloseIcon="true">
+            @MessageFor(ErrorCode)
+        </MudAlert>
+    }
+
+    <form method="post" action="/auth/sign-in">
+        <input type="hidden" name="persona" value="Management" />
+
+        <div class="mb-3">
+            <label for="identifier" class="d-block mb-1" style="font-weight: 500;">
+                E-posta / TCKN / VKN / Telefon
+            </label>
+            <input id="identifier"
+                   name="identifier"
+                   type="text"
+                   required
+                   autocomplete="username"
+                   autofocus
+                   class="mud-input-control-input-container"
+                   style="width: 100%; padding: 10px; border: 1px solid rgba(0,0,0,0.23); border-radius: 4px; font-size: 1rem;" />
+        </div>
+
+        <div class="mb-3">
+            <label for="password" class="d-block mb-1" style="font-weight: 500;">Şifre</label>
+            <input id="password"
+                   name="password"
+                   type="password"
+                   required
+                   autocomplete="current-password"
+                   style="width: 100%; padding: 10px; border: 1px solid rgba(0,0,0,0.23); border-radius: 4px; font-size: 1rem;" />
+        </div>
+
+        <div class="mb-4 d-flex align-center">
+            <input id="rememberMe" name="rememberMe" type="checkbox" value="true" />
+            <label for="rememberMe" class="ml-2">Beni hatırla (7 gün)</label>
+        </div>
+
+        <button type="submit"
+                style="width: 100%; padding: 12px; background-color: var(--mud-palette-primary); color: white; border: none; border-radius: 4px; font-size: 1rem; font-weight: 500; cursor: pointer;">
+            Giriş Yap
+        </button>
+    </form>
+
+    <MudDivider Class="my-4" />
+
+    <MudText Typo="Typo.caption" Color="Color.Default" Align="Align.Center" Class="d-block">
+        v0.2.2 · CleanTenant Yönetim Paneli
+    </MudText>
+</MudPaper>
+
+@code {
+    [SupplyParameterFromQuery]
+    public string? ErrorCode { get; set; }
+
+    private static Severity SeverityFor(string code) => code switch
+    {
+        "AUTH-001" or "AUTH-009" => Severity.Warning,
+        "AUTH-002" or "AUTH-003" => Severity.Error,
+        "AUTH-2FA-ENROLLMENT-REQUIRED" => Severity.Info,
+        "AUTH-004" => Severity.Error,
+        _ => Severity.Error,
+    };
+
+    private static string MessageFor(string code) => code switch
+    {
+        "AUTH-001" => "Kullanıcı kimliği ve şifre zorunlu.",
+        "AUTH-002" => "Geçersiz kimlik veya şifre.",
+        "AUTH-003" => "Hesap geçici olarak kilitli (çok fazla başarısız deneme).",
+        "AUTH-004" => "Bu kullanıcı için Management persona'sında erişilebilir bir scope yok.",
+        "AUTH-009" => "Kimlik tipi tanınamadı — geçerli bir e-posta/TCKN/VKN/telefon girin.",
+        "AUTH-2FA-ENROLLMENT-REQUIRED" => "System hesabınız için 2FA enrollment zorunlu. Lütfen önce bir yöntem aktif edin.",
+        _ => $"Bilinmeyen hata: {code}",
+    };
+}

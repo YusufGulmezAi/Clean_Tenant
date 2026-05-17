@@ -22,6 +22,7 @@
     <Project Path="tests/CleanTenant.Application.UnitTests/CleanTenant.Application.UnitTests.csproj" />
     <Project Path="tests/CleanTenant.Domain.UnitTests/CleanTenant.Domain.UnitTests.csproj" />
     <Project Path="tests/CleanTenant.Infrastructure.IntegrationTests/CleanTenant.Infrastructure.IntegrationTests.csproj" />
+    <Project Path="tests/CleanTenant.ManagementApp.bUnitTests/CleanTenant.ManagementApp.bUnitTests.csproj" />
     <Project Path="tests/CleanTenant.WebApi.IntegrationTests/CleanTenant.WebApi.IntegrationTests.csproj" />
   </Folder>
   <Folder Name="/tools/">

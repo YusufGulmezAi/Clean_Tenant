@@ -7,6 +7,71 @@ Bu dosya, Faz 1 (UI başlangıç + ManagementApp) kapsamında yapılan tüm alt-
 
 ---
 
+## v0.2.2 — 2026-05-17 — Auth Ekranları (Login + 2FA Challenge + 2FA Enrollment)
+
+### Mimari Karar: In-process MediatR
+- Kullanıcı kararı: "Backend'e nasıl çağrı yapılsın? → In-process IMediator."
+- ManagementApp WebApi'ye HTTP çağrısı yapmaz. Faz 0 backend handler'ları doğrudan `IMediator.Send` ile çalıştırılır — aynı pipeline (Authorization → Validation → Logging), aynı audit, aynı Redis session.
+- ManagementApp.Program.cs WebApi'nin `AddCleanTenantApi` adımlarını **inline** olarak tekrarlar. Faz 1.2'de paylaşılan composition extension'a refactor edilir.
+
+### Mimari Karar: Cookie Auth Scheme
+- Default scheme: `CookieAuthenticationDefaults.AuthenticationScheme`.
+- Cookie ayarları: `HttpOnly + Secure + SameSite=Strict`, `ExpireTimeSpan=30dk`, `SlidingExpiration=true`.
+- Claims: `sid` (session id), `ctx` (context id), `scope` (System/Tenant/Company/Unit).
+- `AnonymousAuthenticationStateProvider` → `JwtCookieAuthenticationStateProvider` swap (HttpContext.User cascading state).
+- "Beni hatırla" → `IsPersistent=true` + 7 gün `ExpiresUtc`.
+
+### Mimari Karar: Form Post Pattern (Static SSR)
+- Login + 2FA Challenge sayfaları **static SSR** — `<form method="POST">` ile `/auth/sign-in` ve `/auth/2fa/verify` endpoint'lerine post.
+- Endpoint handler'ları `HttpContext.SignInAsync` ile cookie set'ler — Blazor SignalR circuit problemi yok.
+- 2FA Enrollment **InteractiveServer** (QR kod render + state'li akış).
+
+### Eklenen Dosyalar
+**Auth/:**
+- `AuthEndpoints.cs` — MapPost handlers: `/auth/sign-in`, `/auth/sign-out`, `/auth/2fa/verify`, `/auth/2fa/send-code`.
+- `JwtCookieAuthenticationStateProvider.cs` — HttpContext.User → cascading state.
+
+**Components/Layout/:**
+- `EmptyLayout.razor` — Login/2FA sayfaları için (AppBar/Drawer'sız minimal).
+- `MainLayout.razor` güncel — Logout `/auth/sign-out` + "2FA Yönetimi" link.
+- `Routes.razor` güncel — `AuthorizeRouteView` ile kimlik doğrulanmamış kullanıcı `/login`'e yönlendirilir.
+
+**Components/Pages/:**
+- `Login.razor` (`/login`) — Static SSR. Email/TCKN/VKN/Telefon tek input + şifre + persona hidden Management + "Beni hatırla" + error display.
+- `TwoFactorChallenge.razor` (`/2fa/challenge`) — Method seçici + kod input + Email kod gönder.
+- `Settings/TwoFactorEnrollment.razor` (`/settings/2fa/enroll`) — 3 adım state machine (Start → QrCode → RecoveryCodes). QR kod QRCoder ile base64 PNG.
+- `NotFound.razor` + `Error.razor` MudBlazor görsel + `EmptyLayout` + `AllowAnonymous`.
+
+**Program.cs:**
+- JWT_* env mapping + AddCleanTenantSerilog + backend DI + Cookie auth + MapAuthEndpoints.
+
+### Eklenen Paketler
+- **QRCoder 1.6.0** — TOTP QR kodu (MIT).
+
+### Test Eklemeleri (4 yeni bUnit testi)
+- `LoginTests` (3): form action + name'ler + "Beni hatırla" + persona hidden.
+- `TwoFactorChallengeTests` (1): Token yoksa error alert.
+- SupplyParameterFromQuery testleri NavigationManager pattern'ı gerektiriyor (v0.2.2.b).
+
+### Slnx Güncellemesi
+`CleanTenant.ManagementApp.bUnitTests.csproj` Solution dosyasına eklendi (v0.2.1'de eklenmişti ama .slnx'e yazılmamıştı; düzeltildi).
+
+### Doğrulama
+- ✓ `dotnet build` — 18 proje / 0 uyarı / 0 hata.
+- ✓ `dotnet test` — **179 test başarılı** (146 Faz 0 + 33 ManagementApp bUnit).
+
+### Açık Konular (Faz 1.X)
+- Switch-context UI (app bar chip + dropdown) → v0.2.3 veya v0.2.4
+- Antiforgery POST-only logout → v0.2.3
+- `AddCleanTenantApi` paylaşılan extension → v0.2.3
+- Pre-auth 2FA enrollment akışı (System kullanıcılar için) → Faz 1.X+
+- SignInAsync sonrası SignalR state refresh — JwtCookieAuthenticationStateProvider.NotifyStateChanged() eklendi ama henüz çağrılmıyor (ForceLoad ile cookie zaten okunuyor).
+
+### Sonraki Adım
+**v0.2.3 — Main DbContext + Companies tablosu:** Faz 0'da Catalog vardı; tenant business data için Main DB devreye alınır. İlk iş varlığı: `Company` (Şirket).
+
+---
+
 ## v0.2.1 — 2026-05-17 — ManagementApp Shell (AdminLTE+ + 4 Tema)
 
 ### Mimari Karar: Layout — AdminLTE+ Pateni MudBlazor ile

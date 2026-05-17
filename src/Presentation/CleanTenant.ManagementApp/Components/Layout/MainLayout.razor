@@ -47,9 +47,10 @@
                  AnchorOrigin="Origin.BottomRight"
                  TransformOrigin="Origin.TopRight">
             <MudMenuItem Icon="@Icons.Material.Filled.Person" Href="/profile">Profilim (Faz 1.2)</MudMenuItem>
+            <MudMenuItem Icon="@Icons.Material.Filled.Security" Href="/settings/2fa/enroll">2FA Yönetimi</MudMenuItem>
             <MudMenuItem Icon="@Icons.Material.Filled.Settings" Href="/settings/theme">Ayarlar</MudMenuItem>
             <MudDivider />
-            <MudMenuItem Icon="@Icons.Material.Filled.Logout" Href="/login">Çıkış (Faz 1.2)</MudMenuItem>
+            <MudMenuItem Icon="@Icons.Material.Filled.Logout" Href="/auth/sign-out" ForceLoad="true">Çıkış</MudMenuItem>
         </MudMenu>
     </MudAppBar>
 

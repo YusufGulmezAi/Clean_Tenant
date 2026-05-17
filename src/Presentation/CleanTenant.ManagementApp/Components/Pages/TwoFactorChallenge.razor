@@ -1,0 +1,105 @@
+@page "/2fa/challenge"
+@layout EmptyLayout
+@attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
+@*
+    2FA Challenge sayfası — Login akışında "TwoFactorRequired" sonucu sonrası
+    yönlendirilir. Token query string'den (?token=...) alınır. Form
+    /auth/2fa/verify endpoint'ine POST eder.
+*@
+
+<PageTitle>2FA Doğrulama — CleanTenant</PageTitle>
+
+<MudPaper Elevation="3" Class="pa-8 mx-auto mt-16" MaxWidth="MaxWidth.Small" Style="max-width: 460px;">
+    <div class="d-flex align-center mb-6">
+        <MudIcon Icon="@Icons.Material.Filled.Security" Color="Color.Primary" Size="Size.Large" />
+        <MudText Typo="Typo.h4" Class="ml-2">İki Faktörlü Doğrulama</MudText>
+    </div>
+
+    @if (string.IsNullOrEmpty(Token))
+    {
+        <MudAlert Severity="Severity.Error" Class="mb-4">
+            Geçersiz challenge token. <MudLink Href="/login">Giriş sayfasına dön</MudLink>.
+        </MudAlert>
+    }
+    else
+    {
+        @if (!string.IsNullOrEmpty(ErrorCode))
+        {
+            <MudAlert Severity="Severity.Error" Class="mb-4">
+                @MessageFor(ErrorCode)
+            </MudAlert>
+        }
+        @if (!string.IsNullOrEmpty(Info))
+        {
+            <MudAlert Severity="Severity.Success" Class="mb-4">@Info</MudAlert>
+        }
+
+        <MudText Typo="Typo.body2" Color="Color.Default" Class="mb-4">
+            Doğrulama yönteminizi seçin ve kodu girin.
+        </MudText>
+
+        <form method="post" action="/auth/2fa/verify">
+            <input type="hidden" name="token" value="@Token" />
+
+            <div class="mb-3">
+                <label for="method" class="d-block mb-1" style="font-weight: 500;">Yöntem</label>
+                <select id="method" name="method"
+                        style="width: 100%; padding: 10px; border: 1px solid rgba(0,0,0,0.23); border-radius: 4px; font-size: 1rem;">
+                    <option value="Authenticator">Authenticator (TOTP)</option>
+                    <option value="Email">E-posta kodu</option>
+                    <option value="Phone">SMS kodu</option>
+                    <option value="RecoveryCode">Recovery kodu</option>
+                </select>
+            </div>
+
+            <div class="mb-4">
+                <label for="code" class="d-block mb-1" style="font-weight: 500;">
+                    Kod (6 hane veya XXXXX-XXXXX)
+                </label>
+                <input id="code" name="code" type="text" required
+                       autocomplete="one-time-code" autofocus
+                       style="width: 100%; padding: 10px; border: 1px solid rgba(0,0,0,0.23); border-radius: 4px; font-size: 1rem;" />
+            </div>
+
+            <button type="submit"
+                    style="width: 100%; padding: 12px; background-color: var(--mud-palette-primary); color: white; border: none; border-radius: 4px; font-size: 1rem; font-weight: 500; cursor: pointer;">
+                Doğrula
+            </button>
+        </form>
+
+        <MudDivider Class="my-4" />
+
+        <form method="post" action="/auth/2fa/send-code">
+            <input type="hidden" name="token" value="@Token" />
+            <input type="hidden" name="method" value="Email" />
+            <button type="submit"
+                    style="width: 100%; padding: 8px; background: transparent; color: var(--mud-palette-primary); border: 1px solid var(--mud-palette-primary); border-radius: 4px; cursor: pointer;">
+                E-posta yöntemi için kod gönder
+            </button>
+        </form>
+
+        <MudText Typo="Typo.caption" Color="Color.Default" Class="d-block mt-4">
+            Token 5 dakika geçerli. <MudLink Href="/login">Baştan giriş</MudLink>.
+        </MudText>
+    }
+</MudPaper>
+
+@code {
+    [SupplyParameterFromQuery(Name = "token")]
+    public string? Token { get; set; }
+
+    [SupplyParameterFromQuery(Name = "error")]
+    public string? ErrorCode { get; set; }
+
+    [SupplyParameterFromQuery(Name = "info")]
+    public string? Info { get; set; }
+
+    private static string MessageFor(string code) => code switch
+    {
+        "AUTH-2FA-001" => "Yöntem ve kod zorunlu.",
+        "AUTH-2FA-INVALID-CODE" => "Doğrulama kodu hatalı veya süresi dolmuş.",
+        "AUTH-2FA-CHALLENGE-NOT-FOUND" => "Challenge süresi doldu. Lütfen tekrar giriş yapın.",
+        "AUTH-2FA-METHOD-NOT-AVAILABLE" => "Bu yöntem hesabınızda aktif değil.",
+        _ => $"Doğrulama hatası: {code}",
+    };
+}
