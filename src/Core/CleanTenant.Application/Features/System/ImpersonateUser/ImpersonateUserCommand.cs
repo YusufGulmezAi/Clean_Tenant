@@ -1,3 +1,7 @@
+using CleanTenant.Application.Common.Auth;
+using CleanTenant.SharedKernel.Common.Results;
+using MediatR;
+
 namespace CleanTenant.Application.Features.System.ImpersonateUser;
 
 /// <summary>
@@ -13,4 +17,4 @@ public sealed record ImpersonateUserCommand(
     string TargetUserUrlCode,
     string Reason,
     string IpAddress,
-    string UserAgent);
+    string UserAgent) : IRequest<Result<TokenPair>>;

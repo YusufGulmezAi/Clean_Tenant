@@ -5,6 +5,8 @@ using CleanTenant.SharedKernel.Common.Errors;
 using CleanTenant.SharedKernel.Common.Results;
 using Microsoft.AspNetCore.Identity;
 
+using MediatR;
+
 namespace CleanTenant.Application.Features.Auth.TwoFactor.DisableTotp;
 
 /// <summary>
@@ -16,7 +18,7 @@ namespace CleanTenant.Application.Features.Auth.TwoFactor.DisableTotp;
 ///   <item>Diğer yöntem yok ve System değil → TOTP sil + <c>TwoFactorEnabled=false</c>.</item>
 /// </list>
 /// </summary>
-public sealed class DisableTotpCommandHandler
+public sealed class DisableTotpCommandHandler : IRequestHandler<DisableTotpCommand, Result>
 {
     private const string AuthenticatorProvider = "Authenticator";
     private const string AuthenticatorTokenLoginProvider = "[AspNetUserStore]";
@@ -38,7 +40,7 @@ public sealed class DisableTotpCommandHandler
     }
 
     /// <summary>Disable isteğini işler.</summary>
-    public async Task<Result> HandleAsync(DisableTotpCommand command, CancellationToken cancellationToken)
+    public async Task<Result> Handle(DisableTotpCommand command, CancellationToken cancellationToken)
     {
         var session = _sessionAccessor.Current
             ?? throw new InvalidOperationException("ICurrentSessionAccessor.Current null.");

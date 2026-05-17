@@ -6,6 +6,8 @@ using CleanTenant.SharedKernel.Time;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
+using MediatR;
+
 namespace CleanTenant.Application.Features.System.ExitSupportMode;
 
 /// <summary>
@@ -18,7 +20,7 @@ namespace CleanTenant.Application.Features.System.ExitSupportMode;
 ///   <item>Yoksa "orijinal session sona ermiş" hatası.</item>
 /// </list>
 /// </summary>
-public sealed class ExitSupportModeCommandHandler
+public sealed class ExitSupportModeCommandHandler : IRequestHandler<ExitSupportModeCommand, Result<ExitSupportModeResult>>
 {
     private readonly ICatalogDbContext _db;
     private readonly IJwtTokenService _jwtTokenService;
@@ -48,7 +50,7 @@ public sealed class ExitSupportModeCommandHandler
     }
 
     /// <summary>Exit Support Mode isteğini işler.</summary>
-    public async Task<Result<ExitSupportModeResult>> HandleAsync(
+    public async Task<Result<ExitSupportModeResult>> Handle(
         ExitSupportModeCommand command,
         CancellationToken cancellationToken)
     {

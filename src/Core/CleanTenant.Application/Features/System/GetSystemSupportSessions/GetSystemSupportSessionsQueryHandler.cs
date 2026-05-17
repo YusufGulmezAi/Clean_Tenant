@@ -2,12 +2,14 @@ using CleanTenant.Application.Common.Persistence;
 using CleanTenant.SharedKernel.Common.Results;
 using Microsoft.EntityFrameworkCore;
 
+using MediatR;
+
 namespace CleanTenant.Application.Features.System.GetSystemSupportSessions;
 
 /// <summary>
 /// Tüm tenant'lara ait destek oturumları (System operatörlerin denetimi için).
 /// </summary>
-public sealed class GetSystemSupportSessionsQueryHandler
+public sealed class GetSystemSupportSessionsQueryHandler : IRequestHandler<GetSystemSupportSessionsQuery, Result<IReadOnlyList<SystemSupportSessionDto>>>
 {
     private const int MaxPageSize = 100;
 
@@ -20,7 +22,7 @@ public sealed class GetSystemSupportSessionsQueryHandler
     }
 
     /// <summary>Sorguyu çalıştırır.</summary>
-    public async Task<Result<IReadOnlyList<SystemSupportSessionDto>>> HandleAsync(
+    public async Task<Result<IReadOnlyList<SystemSupportSessionDto>>> Handle(
         GetSystemSupportSessionsQuery query,
         CancellationToken cancellationToken)
     {

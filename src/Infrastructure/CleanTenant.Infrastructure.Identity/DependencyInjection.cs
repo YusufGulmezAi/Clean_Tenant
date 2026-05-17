@@ -1,25 +1,7 @@
 using CleanTenant.Application.Common.Auth;
+using CleanTenant.Application.Common.Authorization;
 using CleanTenant.Application.Common.Notifications;
 using CleanTenant.Application.Features.Auth.Login;
-using CleanTenant.Application.Features.Auth.Logout;
-using CleanTenant.Application.Features.Auth.LogoutAllSessions;
-using CleanTenant.Application.Features.Auth.Refresh;
-using CleanTenant.Application.Features.Auth.SwitchContext;
-using CleanTenant.Application.Features.Auth.TwoFactor.ConfirmTotpEnrollment;
-using CleanTenant.Application.Features.Auth.TwoFactor.DisableTotp;
-using CleanTenant.Application.Features.Auth.TwoFactor.EnrollTotp;
-using CleanTenant.Application.Features.Auth.TwoFactor.GetTwoFactorMethods;
-using CleanTenant.Application.Features.Auth.TwoFactor.RegenerateRecoveryCodes;
-using CleanTenant.Application.Features.Auth.TwoFactor.SendCode;
-using CleanTenant.Application.Features.Auth.TwoFactor.VerifyTwoFactor;
-using CleanTenant.Application.Features.System.ElevateToWrite;
-using CleanTenant.Application.Features.System.EnterSupportMode;
-using CleanTenant.Application.Features.System.ExitSupportMode;
-using CleanTenant.Application.Features.System.ForceLogoutUser;
-using CleanTenant.Application.Features.System.GetSystemSupportSessions;
-using CleanTenant.Application.Features.System.ImpersonateUser;
-using CleanTenant.Application.Features.System.RevokeSession;
-using CleanTenant.Application.Features.Tenant.GetTenantSupportAccessHistory;
 using CleanTenant.Infrastructure.Identity.Authorization;
 using CleanTenant.Infrastructure.Identity.Context;
 using CleanTenant.Infrastructure.Identity.Jwt;
@@ -61,32 +43,13 @@ public static class DependencyInjection
         services.AddScoped<ICurrentSessionAccessor>(sp => sp.GetRequiredService<HttpUserContext>());
         services.AddScoped<ITenantContext, HttpTenantContext>();
 
-        // Auth command handler'ları
+        // Auth command handler'ları MediatR tarafından otomatik kayıt edilir
+        // (AddApplicationServices). LoginFinalizer IRequestHandler değil — yardımcı
+        // sınıf, manuel kayıt.
         services.AddScoped<LoginFinalizer>();
-        services.AddScoped<LoginCommandHandler>();
-        services.AddScoped<RefreshTokenCommandHandler>();
-        services.AddScoped<LogoutCommandHandler>();
-        services.AddScoped<SwitchContextCommandHandler>();
-        services.AddScoped<LogoutAllSessionsCommandHandler>();
-        services.AddScoped<ForceLogoutUserCommandHandler>();
-        services.AddScoped<RevokeSessionCommandHandler>();
 
-        // 2FA handler'ları (v0.1.5.c)
-        services.AddScoped<VerifyTwoFactorCommandHandler>();
-        services.AddScoped<SendTwoFactorCodeCommandHandler>();
-        services.AddScoped<EnrollTotpCommandHandler>();
-        services.AddScoped<ConfirmTotpEnrollmentCommandHandler>();
-        services.AddScoped<DisableTotpCommandHandler>();
-        services.AddScoped<RegenerateRecoveryCodesCommandHandler>();
-        services.AddScoped<GetTwoFactorMethodsQueryHandler>();
-
-        // Support Mode handler'ları (System operatörlerin tenant'a giriş/çıkış akışı)
-        services.AddScoped<EnterSupportModeCommandHandler>();
-        services.AddScoped<ExitSupportModeCommandHandler>();
-        services.AddScoped<ElevateToWriteCommandHandler>();
-        services.AddScoped<ImpersonateUserCommandHandler>();
-        services.AddScoped<GetTenantSupportAccessQueryHandler>();
-        services.AddScoped<GetSystemSupportSessionsQueryHandler>();
+        // v0.1.6 — Permission checker (Redis session permission listesinden okur)
+        services.AddScoped<IPermissionChecker, SessionPermissionChecker>();
 
         // JWT bearer authentication
         var jwt = configuration.GetSection(JwtSettings.SectionName).Get<JwtSettings>()

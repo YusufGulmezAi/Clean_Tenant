@@ -1,4 +1,6 @@
 using CleanTenant.Application.Common.Auth;
+using CleanTenant.SharedKernel.Common.Results;
+using MediatR;
 
 namespace CleanTenant.Application.Features.Auth.Login;
 
@@ -27,4 +29,4 @@ public sealed record LoginCommand(
     PersonaSide Persona,
     Guid? ContextId,
     string IpAddress,
-    string UserAgent);
+    string UserAgent) : IRequest<Result<LoginResult>>;

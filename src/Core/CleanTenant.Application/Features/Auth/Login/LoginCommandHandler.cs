@@ -4,6 +4,7 @@ using CleanTenant.Domain.Identity.Users;
 using CleanTenant.SharedKernel.Common.Errors;
 using CleanTenant.SharedKernel.Common.Results;
 using CleanTenant.SharedKernel.Time;
+using MediatR;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -21,7 +22,7 @@ namespace CleanTenant.Application.Features.Auth.Login;
 ///   <item>Diğer durum → <see cref="LoginFinalizer"/> ile TokenPair üret.</item>
 /// </list>
 /// </summary>
-public sealed class LoginCommandHandler
+public sealed class LoginCommandHandler : IRequestHandler<LoginCommand, Result<LoginResult>>
 {
     /// <summary>2FA challenge için kısa TTL — istemcinin kod girmek için makul süresi.</summary>
     public static readonly TimeSpan TwoFactorChallengeTtl = TimeSpan.FromMinutes(5);
@@ -48,14 +49,8 @@ public sealed class LoginCommandHandler
     }
 
     /// <summary>Login isteğini işler ve sonucu (TokenPair veya 2FA challenge) döner.</summary>
-    public async Task<Result<LoginResult>> HandleAsync(LoginCommand command, CancellationToken cancellationToken)
+    public async Task<Result<LoginResult>> Handle(LoginCommand command, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(command.Identifier) || string.IsNullOrWhiteSpace(command.Password))
-        {
-            return Result<LoginResult>.Failure(
-                Error.Validation("AUTH-001", "Kullanıcı kimliği ve şifre zorunlu."));
-        }
-
         var (idType, normalized) = LoginIdentifier.Resolve(command.Identifier);
         if (idType == LoginIdentifierType.Unknown)
         {

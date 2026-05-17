@@ -12,6 +12,12 @@
       tamamen abstract repository pattern over-engineering olurdu.
     -->
     <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <!-- v0.1.6: MediatR IRequest/IRequestHandler + FluentValidation IValidator -->
+    <PackageReference Include="MediatR" />
+    <PackageReference Include="FluentValidation" />
+    <!-- AddApplicationServices() extension'ı için (composition root tek satırla çağırır) -->
+    <PackageReference Include="MediatR.Extensions.Microsoft.DependencyInjection" />
+    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
   </ItemGroup>
 
   <PropertyGroup>

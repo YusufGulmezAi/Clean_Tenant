@@ -7,6 +7,8 @@ using CleanTenant.SharedKernel.Time;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
+using MediatR;
+
 namespace CleanTenant.Application.Features.Auth.SwitchContext;
 
 /// <summary>
@@ -23,7 +25,7 @@ namespace CleanTenant.Application.Features.Auth.SwitchContext;
 ///   <item>Yeni JWT döner.</item>
 /// </list>
 /// </summary>
-public sealed class SwitchContextCommandHandler
+public sealed class SwitchContextCommandHandler : IRequestHandler<SwitchContextCommand, Result<TokenPair>>
 {
     private readonly ICatalogDbContext _db;
     private readonly IJwtTokenService _jwtTokenService;
@@ -56,7 +58,7 @@ public sealed class SwitchContextCommandHandler
     }
 
     /// <summary>Switch-context isteğini işler.</summary>
-    public async Task<Result<TokenPair>> HandleAsync(SwitchContextCommand command, CancellationToken cancellationToken)
+    public async Task<Result<TokenPair>> Handle(SwitchContextCommand command, CancellationToken cancellationToken)
     {
         var current = _sessionAccessor.Current
             ?? throw new InvalidOperationException("ICurrentSessionAccessor.Current null. Endpoint Bearer korumalı olmalı.");

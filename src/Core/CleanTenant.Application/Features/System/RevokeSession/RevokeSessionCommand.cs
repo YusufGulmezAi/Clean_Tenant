@@ -1,3 +1,6 @@
+using CleanTenant.SharedKernel.Common.Results;
+using MediatR;
+
 namespace CleanTenant.Application.Features.System.RevokeSession;
 
 /// <summary>
@@ -7,4 +10,4 @@ namespace CleanTenant.Application.Features.System.RevokeSession;
 /// <param name="Reason">Zorunlu sebep (min 20 karakter); audit'e işlenir.</param>
 public sealed record RevokeSessionCommand(
     Guid SessionId,
-    string Reason);
+    string Reason) : IRequest<Result>;

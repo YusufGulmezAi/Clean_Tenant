@@ -1,13 +1,13 @@
 using CleanTenant.Application.Features.Tenant.GetTenantSupportAccessHistory;
 using CleanTenant.Infrastructure.Identity.Authorization;
 using CleanTenant.SharedKernel.Common.Errors;
+using MediatR;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CleanTenant.WebApi.Endpoints;
 
 /// <summary>
-/// Tenant Admin denetim endpoint'leri (v0.1.5.b.2). Şimdilik yalnız destek
-/// erişim geçmişi listesi; ileride tenant-içi audit görüntüleri buraya eklenir.
+/// Tenant Admin denetim endpoint'leri. v0.1.6'dan itibaren <see cref="IMediator"/>.
 /// </summary>
 public static class TenantAuditEndpoints
 {
@@ -23,7 +23,7 @@ public static class TenantAuditEndpoints
     }
 
     private static async Task<IResult> GetTenantSupportAccessAsync(
-        [FromServices] GetTenantSupportAccessQueryHandler handler,
+        [FromServices] IMediator mediator,
         CancellationToken cancellationToken,
         [FromQuery] DateTimeOffset? from = null,
         [FromQuery] DateTimeOffset? to = null,
@@ -31,7 +31,7 @@ public static class TenantAuditEndpoints
         [FromQuery] int pageSize = 50)
     {
         var query = new GetTenantSupportAccessQuery(from, to, page, pageSize);
-        var result = await handler.HandleAsync(query, cancellationToken);
+        var result = await mediator.Send(query, cancellationToken);
 
         return result.IsSuccess
             ? Results.Ok(result.Value)

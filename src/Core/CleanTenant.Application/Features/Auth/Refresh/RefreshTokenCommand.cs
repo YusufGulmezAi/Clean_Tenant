@@ -1,3 +1,7 @@
+using CleanTenant.Application.Common.Auth;
+using CleanTenant.SharedKernel.Common.Results;
+using MediatR;
+
 namespace CleanTenant.Application.Features.Auth.Refresh;
 
 /// <summary>
@@ -9,4 +13,4 @@ namespace CleanTenant.Application.Features.Auth.Refresh;
 public sealed record RefreshTokenCommand(
     string RefreshToken,
     string IpAddress,
-    string UserAgent);
+    string UserAgent) : IRequest<Result<TokenPair>>;

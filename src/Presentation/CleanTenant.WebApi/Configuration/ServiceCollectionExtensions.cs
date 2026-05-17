@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using CleanTenant.Application;
 using CleanTenant.Infrastructure.Caching;
 using CleanTenant.Infrastructure.Identity;
 using CleanTenant.Infrastructure.Persistence;
@@ -30,6 +31,7 @@ public static class ServiceCollectionExtensions
             ?? throw new InvalidOperationException("ConnectionStrings:Redis bulunamadı.");
 
         services.AddOpenApi();
+        services.AddApplicationServices();
         services.AddCatalogPersistence(catalogConnection);
         services.AddRedisCache(redisConnection);
         services.AddIdentityServices(configuration);

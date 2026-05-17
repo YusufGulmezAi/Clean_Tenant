@@ -1,3 +1,6 @@
+using CleanTenant.SharedKernel.Common.Results;
+using MediatR;
+
 namespace CleanTenant.Application.Features.Auth.Logout;
 
 /// <summary>
@@ -7,4 +10,4 @@ namespace CleanTenant.Application.Features.Auth.Logout;
 /// üzerinden mevcut kullanıcının session bilgisine erişir.
 /// </para>
 /// </summary>
-public sealed record LogoutCommand();
+public sealed record LogoutCommand : IRequest<Result>;

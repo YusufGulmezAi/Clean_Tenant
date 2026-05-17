@@ -5,14 +5,15 @@ using CleanTenant.Application.Features.Auth.LogoutAllSessions;
 using CleanTenant.Application.Features.Auth.Refresh;
 using CleanTenant.Application.Features.Auth.SwitchContext;
 using CleanTenant.SharedKernel.Context;
-using Microsoft.AspNetCore.Authorization;
+using MediatR;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CleanTenant.WebApi.Endpoints;
 
 /// <summary>
-/// <c>/api/v1/auth/*</c> endpoint'lerinin minimal API ile bağlanması.
-/// v0.1.5.a kapsamında <c>login</c>, <c>refresh</c>, <c>logout</c>.
+/// <c>/api/v1/auth/*</c> endpoint'leri. v0.1.6'dan itibaren handler doğrudan
+/// inject edilmez — <see cref="IMediator"/> üzerinden gönderilir; pipeline
+/// behavior'lar (Auth → Validation → Logging) handler'dan önce çalışır.
 /// </summary>
 public static class AuthEndpoints
 {
@@ -36,7 +37,7 @@ public static class AuthEndpoints
 
     private static async Task<IResult> SwitchContextAsync(
         [FromBody] SwitchContextRequest request,
-        [FromServices] SwitchContextCommandHandler handler,
+        [FromServices] IMediator mediator,
         HttpContext httpContext,
         CancellationToken cancellationToken)
     {
@@ -48,7 +49,7 @@ public static class AuthEndpoints
             request.CompanyId,
             request.UnitId,
             ip, ua);
-        var result = await handler.HandleAsync(command, cancellationToken);
+        var result = await mediator.Send(command, cancellationToken);
 
         return result.IsSuccess
             ? Results.Ok(result.Value)
@@ -56,10 +57,10 @@ public static class AuthEndpoints
     }
 
     private static async Task<IResult> LogoutAllSessionsAsync(
-        [FromServices] LogoutAllSessionsCommandHandler handler,
+        [FromServices] IMediator mediator,
         CancellationToken cancellationToken)
     {
-        var result = await handler.HandleAsync(new LogoutAllSessionsCommand(), cancellationToken);
+        var result = await mediator.Send(new LogoutAllSessionsCommand(), cancellationToken);
         return result.IsSuccess
             ? Results.Ok(new { message = "Tüm cihazlardan çıkış yapıldı." })
             : Results.Json(new { errors = result.Errors }, statusCode: MapErrorTypeToStatus(result.FirstError.Type));
@@ -67,17 +68,15 @@ public static class AuthEndpoints
 
     private static async Task<IResult> LoginAsync(
         [FromBody] LoginRequest request,
-        [FromServices] LoginCommandHandler handler,
+        [FromServices] IMediator mediator,
         HttpContext httpContext,
         CancellationToken cancellationToken)
     {
         var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
         var ua = httpContext.Request.Headers.UserAgent.ToString();
         var command = new LoginCommand(request.Identifier, request.Password, request.Persona, request.ContextId, ip, ua);
-        var result = await handler.HandleAsync(command, cancellationToken);
+        var result = await mediator.Send(command, cancellationToken);
 
-        // v0.1.5.c — Sonuç polimorfik: Success → TokenPair, TwoFactorRequired → challenge.
-        // İstemci LoginResult.Status alanına bakar.
         return result.IsSuccess
             ? Results.Ok(result.Value)
             : Results.Json(new { errors = result.Errors }, statusCode: MapErrorTypeToStatus(result.FirstError.Type));
@@ -85,14 +84,14 @@ public static class AuthEndpoints
 
     private static async Task<IResult> RefreshAsync(
         [FromBody] RefreshRequest request,
-        [FromServices] RefreshTokenCommandHandler handler,
+        [FromServices] IMediator mediator,
         HttpContext httpContext,
         CancellationToken cancellationToken)
     {
         var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
         var ua = httpContext.Request.Headers.UserAgent.ToString();
         var command = new RefreshTokenCommand(request.RefreshToken, ip, ua);
-        var result = await handler.HandleAsync(command, cancellationToken);
+        var result = await mediator.Send(command, cancellationToken);
 
         return result.IsSuccess
             ? Results.Ok(result.Value)
@@ -100,10 +99,10 @@ public static class AuthEndpoints
     }
 
     private static async Task<IResult> LogoutAsync(
-        [FromServices] LogoutCommandHandler handler,
+        [FromServices] IMediator mediator,
         CancellationToken cancellationToken)
     {
-        var result = await handler.HandleAsync(new LogoutCommand(), cancellationToken);
+        var result = await mediator.Send(new LogoutCommand(), cancellationToken);
 
         return result.IsSuccess
             ? Results.Ok(new { message = "Çıkış yapıldı." })
@@ -126,14 +125,9 @@ public static class AuthEndpoints
 /// <summary>Login isteği gövdesi.</summary>
 /// <param name="Identifier">
 /// Email, TCKN / YKN (11 hane), VKN (10 hane) veya cep telefonu numarası.
-/// Server otomatik tip tespiti yapar (<see cref="Application.Common.Auth.LoginIdentifier"/>).
 /// </param>
 /// <param name="Password">Düz metin şifre.</param>
-/// <param name="Persona">
-/// Login tarafı. ManagementApp her zaman <see cref="PersonaSide.Management"/> gönderir;
-/// PortalApp her zaman <see cref="PersonaSide.Portal"/>. Mobil persona seçim ekranından sonra
-/// uygun değer. Persona seçimine göre <c>availableScopes</c> filtre olur.
-/// </param>
+/// <param name="Persona">Login tarafı.</param>
 /// <param name="ContextId">Sekme/persona context kimliği; null ise sunucu üretir.</param>
 public sealed record LoginRequest(
     string Identifier,

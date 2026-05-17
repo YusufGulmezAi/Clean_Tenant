@@ -6,14 +6,14 @@ using CleanTenant.Application.Features.Auth.TwoFactor.RegenerateRecoveryCodes;
 using CleanTenant.Application.Features.Auth.TwoFactor.SendCode;
 using CleanTenant.Application.Features.Auth.TwoFactor.VerifyTwoFactor;
 using CleanTenant.SharedKernel.Common.Errors;
+using MediatR;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CleanTenant.WebApi.Endpoints;
 
 /// <summary>
-/// v0.1.5.c — 2FA endpoint'leri. Login akışı challenge dönerse istemci
-/// <c>verify</c> veya <c>send-code</c>'a gider. Bearer ile authenticate
-/// kullanıcılar enrollment / disable / recovery üretimi yapabilir.
+/// v0.1.5.c — 2FA endpoint'leri. v0.1.6'dan itibaren <see cref="IMediator"/>
+/// üzerinden gönderilir; pipeline behavior'lar zincirini takip eder.
 /// </summary>
 public static class TwoFactorEndpoints
 {
@@ -22,11 +22,9 @@ public static class TwoFactorEndpoints
     {
         var group = routes.MapGroup("/api/v1/auth/2fa").WithTags("TwoFactor");
 
-        // Login akışı sırasındaki anonim çağrılar (challenge token ile yetkili).
         group.MapPost("/verify", VerifyAsync).AllowAnonymous();
         group.MapPost("/send-code", SendCodeAsync).AllowAnonymous();
 
-        // Authenticated kullanıcı çağrıları (kendi hesabı için).
         group.MapPost("/enroll/totp", EnrollTotpAsync).RequireAuthorization();
         group.MapPost("/enroll/totp/confirm", ConfirmTotpAsync).RequireAuthorization();
         group.MapPost("/disable/totp", DisableTotpAsync).RequireAuthorization();
@@ -38,14 +36,14 @@ public static class TwoFactorEndpoints
 
     private static async Task<IResult> VerifyAsync(
         [FromBody] VerifyTwoFactorRequest request,
-        [FromServices] VerifyTwoFactorCommandHandler handler,
+        [FromServices] IMediator mediator,
         HttpContext httpContext,
         CancellationToken cancellationToken)
     {
         var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
         var ua = httpContext.Request.Headers.UserAgent.ToString();
         var command = new VerifyTwoFactorCommand(request.ChallengeToken, request.Method, request.Code, ip, ua);
-        var result = await handler.HandleAsync(command, cancellationToken);
+        var result = await mediator.Send(command, cancellationToken);
 
         return result.IsSuccess
             ? Results.Ok(result.Value)
@@ -54,11 +52,11 @@ public static class TwoFactorEndpoints
 
     private static async Task<IResult> SendCodeAsync(
         [FromBody] SendTwoFactorCodeRequest request,
-        [FromServices] SendTwoFactorCodeCommandHandler handler,
+        [FromServices] IMediator mediator,
         CancellationToken cancellationToken)
     {
         var command = new SendTwoFactorCodeCommand(request.ChallengeToken, request.Method);
-        var result = await handler.HandleAsync(command, cancellationToken);
+        var result = await mediator.Send(command, cancellationToken);
 
         return result.IsSuccess
             ? Results.Ok(new { message = "Kod gönderildi." })
@@ -66,10 +64,10 @@ public static class TwoFactorEndpoints
     }
 
     private static async Task<IResult> EnrollTotpAsync(
-        [FromServices] EnrollTotpCommandHandler handler,
+        [FromServices] IMediator mediator,
         CancellationToken cancellationToken)
     {
-        var result = await handler.HandleAsync(new EnrollTotpCommand(), cancellationToken);
+        var result = await mediator.Send(new EnrollTotpCommand(), cancellationToken);
         return result.IsSuccess
             ? Results.Ok(result.Value)
             : Results.Json(new { errors = result.Errors }, statusCode: MapErrorTypeToStatus(result.FirstError.Type));
@@ -77,40 +75,40 @@ public static class TwoFactorEndpoints
 
     private static async Task<IResult> ConfirmTotpAsync(
         [FromBody] ConfirmTotpRequest request,
-        [FromServices] ConfirmTotpEnrollmentCommandHandler handler,
+        [FromServices] IMediator mediator,
         CancellationToken cancellationToken)
     {
-        var result = await handler.HandleAsync(new ConfirmTotpEnrollmentCommand(request.Code), cancellationToken);
+        var result = await mediator.Send(new ConfirmTotpEnrollmentCommand(request.Code), cancellationToken);
         return result.IsSuccess
             ? Results.Ok(result.Value)
             : Results.Json(new { errors = result.Errors }, statusCode: MapErrorTypeToStatus(result.FirstError.Type));
     }
 
     private static async Task<IResult> DisableTotpAsync(
-        [FromServices] DisableTotpCommandHandler handler,
+        [FromServices] IMediator mediator,
         CancellationToken cancellationToken)
     {
-        var result = await handler.HandleAsync(new DisableTotpCommand(), cancellationToken);
+        var result = await mediator.Send(new DisableTotpCommand(), cancellationToken);
         return result.IsSuccess
             ? Results.Ok(new { message = "TOTP kapatıldı." })
             : Results.Json(new { errors = result.Errors }, statusCode: MapErrorTypeToStatus(result.FirstError.Type));
     }
 
     private static async Task<IResult> RegenerateRecoveryAsync(
-        [FromServices] RegenerateRecoveryCodesCommandHandler handler,
+        [FromServices] IMediator mediator,
         CancellationToken cancellationToken)
     {
-        var result = await handler.HandleAsync(new RegenerateRecoveryCodesCommand(), cancellationToken);
+        var result = await mediator.Send(new RegenerateRecoveryCodesCommand(), cancellationToken);
         return result.IsSuccess
             ? Results.Ok(result.Value)
             : Results.Json(new { errors = result.Errors }, statusCode: MapErrorTypeToStatus(result.FirstError.Type));
     }
 
     private static async Task<IResult> GetMethodsAsync(
-        [FromServices] GetTwoFactorMethodsQueryHandler handler,
+        [FromServices] IMediator mediator,
         CancellationToken cancellationToken)
     {
-        var result = await handler.HandleAsync(new GetTwoFactorMethodsQuery(), cancellationToken);
+        var result = await mediator.Send(new GetTwoFactorMethodsQuery(), cancellationToken);
         return result.IsSuccess
             ? Results.Ok(result.Value)
             : Results.Json(new { errors = result.Errors }, statusCode: MapErrorTypeToStatus(result.FirstError.Type));
@@ -130,16 +128,10 @@ public static class TwoFactorEndpoints
 }
 
 /// <summary>2FA verify isteği gövdesi (login challenge için).</summary>
-/// <param name="ChallengeToken">Login response'tan alınan token.</param>
-/// <param name="Method"><c>"Authenticator"</c> / <c>"Email"</c> / <c>"Phone"</c> / <c>"RecoveryCode"</c>.</param>
-/// <param name="Code">Kullanıcının girdiği kod.</param>
 public sealed record VerifyTwoFactorRequest(Guid ChallengeToken, string Method, string Code);
 
 /// <summary>2FA send-code isteği gövdesi (yalnız Email/Phone).</summary>
-/// <param name="ChallengeToken">Login response'tan alınan token.</param>
-/// <param name="Method"><c>"Email"</c> veya <c>"Phone"</c>.</param>
 public sealed record SendTwoFactorCodeRequest(Guid ChallengeToken, string Method);
 
 /// <summary>TOTP confirm isteği gövdesi.</summary>
-/// <param name="Code">Authenticator app'in ürettiği ilk doğrulama kodu.</param>
 public sealed record ConfirmTotpRequest(string Code);

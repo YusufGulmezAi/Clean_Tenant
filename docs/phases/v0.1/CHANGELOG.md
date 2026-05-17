@@ -4,6 +4,94 @@ Bu dosya, Faz v0.1 (Temel Altyapı) kapsamında yapılan tüm alt-faz değişikl
 
 ---
 
+## v0.1.6 — 2026-05-17 — MediatR Pipeline + FluentValidation + Permission Checker
+
+### Mimari Karar: MediatR + Pipeline Behavior'lar
+- 14 plain Command/Handler MediatR 11.x'e taşındı; tüm command/query'ler `IRequest<TResponse>` implement eder, handler'lar `IRequestHandler<TRequest, TResponse>` (method adı `Handle`).
+- Endpoint'ler artık handler'ı doğrudan inject etmez — `[FromServices] IMediator mediator` + `mediator.Send(command, ct)`.
+- MediatR `AddMediatR(assembly)` ile **tüm handler'ları otomatik kayıt** eder; Identity DI'da 14+ manuel handler kaydı silindi.
+
+### Mimari Karar: MediatR 11.x (12.x ÜCRETLİ)
+- MediatR 12.0.0'dan itibaren Jimmy Bogard ticari lisans modeline geçti.
+- Son ücretsiz (MIT) sürüm **11.1.0** seçildi.
+- Aynı şekilde **FluentValidation 11.11.0** (son ücretsiz; 12.x ticari).
+- Directory.Packages.props yorumu güncellendi.
+
+### Mimari Karar: Pipeline Sırası
+```
+1) AuthorizationBehavior  (yetkisiz çağrıyı erkenden reddet → bilgi sızıntısı yok)
+2) ValidationBehavior     (input formatını kontrol et; tüm ihlalleri topla)
+3) LoggingBehavior        (handler etrafında timing + UserId logla — payload yok)
+4) Handler.Handle         (asıl iş)
+```
+- Hepsi `IServiceCollection.AddTransient(typeof(IPipelineBehavior<,>), typeof(...))` sırasıyla kayıt edildi — MediatR aynı sırada zincirler.
+
+### Application Katmanına Eklenenler
+**Common/Authorization:**
+- `IPermissionChecker.cs` — Redis session'daki permission listesine karşı kontrol sözleşmesi.
+- `RequirePermissionAttribute.cs` — Command/Query'lere ek (OR semantiği, any-of). Şu an handler'lara konmadı; **altyapı hazır**, Faz 1 ManagementApp ile birlikte permission map devreye girince attribute'lar yerleştirilecek.
+
+**Common/Pipeline:**
+- `AuthorizationBehavior<TRequest, TResponse>` — `RequirePermission` okur, eksikse `AUTH-PERMISSION-DENIED` (403).
+- `ValidationBehavior<TRequest, TResponse>` — Tüm `IValidator<TRequest>`'ları çalıştırır; çoklu ihlal döner.
+- `LoggingBehavior<TRequest, TResponse>` — `Information` seviyede `MediatR {Request} user={UserId} elapsed={ms}ms`. Hata durumunda `LogError`.
+- `ResultFactoryHelper` — TResponse `Result` veya `Result<T>` için reflection ile `Failure(...)` üretir; behavior'larda tekrar kullanılan helper.
+
+**DependencyInjection.cs (Application):**
+- `AddApplicationServices(IServiceCollection)` — tek satırla MediatR + Validators + Behaviors kayıt.
+
+**14 Command/Query → IRequest<TResponse>:**
+- LoginCommand, RefreshTokenCommand, LogoutCommand, SwitchContextCommand, LogoutAllSessionsCommand, ForceLogoutUserCommand, RevokeSessionCommand
+- EnterSupportModeCommand, ExitSupportModeCommand, ElevateToWriteCommand, ImpersonateUserCommand
+- GetSystemSupportSessionsQuery, GetTenantSupportAccessQuery
+- VerifyTwoFactorCommand, SendTwoFactorCodeCommand, EnrollTotpCommand, ConfirmTotpEnrollmentCommand, DisableTotpCommand, RegenerateRecoveryCodesCommand, GetTwoFactorMethodsQuery
+
+### Validator'lar (10 yeni)
+Inline validation blokları (`if (string.IsNullOrWhiteSpace(...))`) handler'lardan kaldırıldı; her biri Command klasöründe ayrı `XxxCommandValidator.cs` dosyası:
+- `LoginCommandValidator` (AUTH-001)
+- `RefreshTokenCommandValidator` (AUTH-005)
+- `ForceLogoutUserCommandValidator`, `RevokeSessionCommandValidator` (AUTH-012, AUTH-014 — Reason min 20)
+- `EnterSupportModeCommandValidator`, `ElevateToWriteCommandValidator`, `ImpersonateUserCommandValidator` (SUP-001, SUP-005, SUP-008 — Reason min 20)
+- `VerifyTwoFactorCommandValidator`, `SendTwoFactorCodeCommandValidator`, `ConfirmTotpEnrollmentCommandValidator` (AUTH-2FA-001, -002, -004)
+
+Hata kodları `WithErrorCode(...)` ile korundu — istemcilerin error code katalogu değişmedi.
+
+### Infrastructure
+- `SessionPermissionChecker` (Infrastructure.Identity/Authorization) — `IPermissionChecker` Redis session implementasyonu. `ICurrentSessionAccessor.Current.Permissions.Contains(code)`.
+- `Identity DI` temizlendi: 14 manuel handler kaydı kaldırıldı; sadece `LoginFinalizer` (yardımcı sınıf, MediatR değil) + `IPermissionChecker` kaldı.
+
+### WebApi
+- `AddCleanTenantApi`'ye `services.AddApplicationServices()` eklendi.
+- 5 endpoint dosyası (`AuthEndpoints`, `TwoFactorEndpoints`, `SystemEndpoints`, `UserAdminEndpoints`, `TenantAuditEndpoints`) `IMediator.Send` pattern'ına geçti. **Response shape değişmedi** — istemciler için breaking change yok.
+
+### Persistence Csproj (devam)
+- `Microsoft.AspNetCore.App` framework reference (v0.1.5.c'de eklenmişti) korundu — `AddDefaultTokenProviders` zincirinin DataProtection bağımlılığı için.
+
+### Eklenen Test'ler (16 yeni Application unit testi)
+**Validators/:**
+- `LoginCommandValidatorTests` (4 test) — boş alanlar + tek/çoklu hata.
+- `EnterSupportModeCommandValidatorTests` (5 test) — Guid.Empty + kısa sebep theory + geçerli akış.
+
+**Pipeline/:**
+- `ValidationBehaviorTests` (4 test) — validator yokken pass-through, çoklu hata toplama, geçerli akış, default error code.
+- `AuthorizationBehaviorTests` (3 test) — attribute yok pass-through, permission OK pass-through, permission yok 403.
+
+### Doğrulama
+- ✓ `dotnet build` — 17 proje / 0 uyarı / 0 hata.
+- ✓ `dotnet test` — **142 test başarılı** (17 Application + 70 Domain + 21 Infrastructure + 34 WebApi).
+- ✓ Mevcut **126 entegrasyon testi davranış olarak korundu** — refactor sırasında hiçbir endpoint cevabı değişmedi.
+
+### Açık Konular (v0.1.7 / Faz 1'de)
+- **`[RequirePermission]` handler'lara henüz konmadı** — Faz 0'da permission rol-map'i yok; Faz 1 ManagementApp "Rol Yönetimi" ekranı ile birlikte attribute'lar handler'lara serpilecek.
+- **AND semantiği permission** (`[RequirePermissionAll(...)]`) — şu an OR yeterli; gerek olursa Faz 1+'da eklenecek.
+- **LoggingBehavior payload-aware audit** — v0.1.7 audit interceptor ile PII-aware payload kaydı.
+- **MediatR Notification (event)** — şu an yalnız Request/Response pattern; Faz 1+'da event bus için Notification'lar eklenebilir.
+
+### Sonraki Adım
+**v0.1.7 — Audit Interceptor + Serilog + Log/Audit DB:** SaveChangesInterceptor altyapısı genişletilir; her DB write ayrı audit DB'ye log'lanır; Serilog Log DB'ye yazar; Support Mode `WriteActionCount` artırımı bu interceptor üzerinden olur.
+
+---
+
 ## v0.1.5.c — 2026-05-17 — 2FA İskeleti (TOTP + E-posta + SMS + Recovery)
 
 ### Mimari Karar: Login Response Polimorfizmi

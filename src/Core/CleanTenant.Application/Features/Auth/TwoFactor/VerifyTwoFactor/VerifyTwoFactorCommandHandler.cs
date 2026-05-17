@@ -5,6 +5,8 @@ using CleanTenant.SharedKernel.Common.Errors;
 using CleanTenant.SharedKernel.Common.Results;
 using Microsoft.AspNetCore.Identity;
 
+using MediatR;
+
 namespace CleanTenant.Application.Features.Auth.TwoFactor.VerifyTwoFactor;
 
 /// <summary>
@@ -19,7 +21,7 @@ namespace CleanTenant.Application.Features.Auth.TwoFactor.VerifyTwoFactor;
 ///   <item><see cref="LoginFinalizer"/> ile TokenPair üret.</item>
 /// </list>
 /// </summary>
-public sealed class VerifyTwoFactorCommandHandler
+public sealed class VerifyTwoFactorCommandHandler : IRequestHandler<VerifyTwoFactorCommand, Result<TokenPair>>
 {
     /// <summary>Recovery code yöntemi adı — istemci bu string ile gönderir.</summary>
     public const string RecoveryCodeMethod = "RecoveryCode";
@@ -40,14 +42,8 @@ public sealed class VerifyTwoFactorCommandHandler
     }
 
     /// <summary>Verify isteğini işler.</summary>
-    public async Task<Result<TokenPair>> HandleAsync(VerifyTwoFactorCommand command, CancellationToken cancellationToken)
+    public async Task<Result<TokenPair>> Handle(VerifyTwoFactorCommand command, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(command.Method) || string.IsNullOrWhiteSpace(command.Code))
-        {
-            return Result<TokenPair>.Failure(
-                Error.Validation("AUTH-2FA-001", "Yöntem ve kod zorunlu."));
-        }
-
         var challenge = await _challengeStore.GetAsync(command.ChallengeToken, cancellationToken);
         if (challenge is null)
         {

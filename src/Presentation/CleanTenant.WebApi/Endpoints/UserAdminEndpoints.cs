@@ -1,12 +1,13 @@
 using CleanTenant.Application.Features.System.ForceLogoutUser;
 using CleanTenant.Infrastructure.Identity.Authorization;
-using Microsoft.AspNetCore.Mvc;
 using CleanTenant.SharedKernel.Common.Errors;
+using MediatR;
+using Microsoft.AspNetCore.Mvc;
 
 namespace CleanTenant.WebApi.Endpoints;
 
 /// <summary>
-/// Admin endpoint'leri — kullanıcı yönetimi (v0.1.5.b.1: yalnız force-logout).
+/// Admin endpoint'leri. v0.1.6'dan itibaren <see cref="IMediator"/> üzerinden.
 /// </summary>
 public static class UserAdminEndpoints
 {
@@ -15,9 +16,6 @@ public static class UserAdminEndpoints
     {
         var group = routes.MapGroup("/api/v1/users").WithTags("UserAdmin");
 
-        // Tenant Admin veya System operator: hedef kullanıcının tüm session'larını sonlandır.
-        // v0.1.5.b.1'de policy = TenantScope OR SystemScope (System için ayrı endpoint var).
-        // Pragmatik: TenantScope policy yeterli (System scope kontrolü ayrıca handler içinde).
         group.MapPost("/{userUrlCode}/force-logout", ForceLogoutUserAsync)
              .RequireAuthorization(AuthorizationPolicies.TenantScope);
 
@@ -27,11 +25,11 @@ public static class UserAdminEndpoints
     private static async Task<IResult> ForceLogoutUserAsync(
         string userUrlCode,
         [FromBody] ForceLogoutUserRequest request,
-        [FromServices] ForceLogoutUserCommandHandler handler,
+        [FromServices] IMediator mediator,
         CancellationToken cancellationToken)
     {
         var command = new ForceLogoutUserCommand(userUrlCode, request.Reason);
-        var result = await handler.HandleAsync(command, cancellationToken);
+        var result = await mediator.Send(command, cancellationToken);
 
         return result.IsSuccess
             ? Results.Ok(new { message = "Kullanıcının tüm session'ları sonlandırıldı." })
@@ -52,5 +50,4 @@ public static class UserAdminEndpoints
 }
 
 /// <summary>Force-logout isteği gövdesi.</summary>
-/// <param name="Reason">Zorunlu sebep (min 20 karakter).</param>
 public sealed record ForceLogoutUserRequest(string Reason);

@@ -1,3 +1,6 @@
+using CleanTenant.SharedKernel.Common.Results;
+using MediatR;
+
 namespace CleanTenant.Application.Features.System.ForceLogoutUser;
 
 /// <summary>
@@ -9,4 +12,4 @@ namespace CleanTenant.Application.Features.System.ForceLogoutUser;
 /// <param name="Reason">Zorunlu sebep (audit + müşteri şeffaflığı).</param>
 public sealed record ForceLogoutUserCommand(
     string TargetUserUrlCode,
-    string Reason);
+    string Reason) : IRequest<Result>;

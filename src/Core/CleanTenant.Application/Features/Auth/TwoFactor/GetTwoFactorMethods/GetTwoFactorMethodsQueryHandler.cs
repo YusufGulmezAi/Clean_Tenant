@@ -4,10 +4,12 @@ using CleanTenant.SharedKernel.Common.Errors;
 using CleanTenant.SharedKernel.Common.Results;
 using Microsoft.AspNetCore.Identity;
 
+using MediatR;
+
 namespace CleanTenant.Application.Features.Auth.TwoFactor.GetTwoFactorMethods;
 
 /// <summary>Kullanıcının 2FA durumunu özetler.</summary>
-public sealed class GetTwoFactorMethodsQueryHandler
+public sealed class GetTwoFactorMethodsQueryHandler : IRequestHandler<GetTwoFactorMethodsQuery, Result<GetTwoFactorMethodsResult>>
 {
     private readonly UserManager<User> _userManager;
     private readonly ICurrentSessionAccessor _sessionAccessor;
@@ -22,7 +24,7 @@ public sealed class GetTwoFactorMethodsQueryHandler
     }
 
     /// <summary>Sorguyu çalıştırır.</summary>
-    public async Task<Result<GetTwoFactorMethodsResult>> HandleAsync(
+    public async Task<Result<GetTwoFactorMethodsResult>> Handle(
         GetTwoFactorMethodsQuery query,
         CancellationToken cancellationToken)
     {

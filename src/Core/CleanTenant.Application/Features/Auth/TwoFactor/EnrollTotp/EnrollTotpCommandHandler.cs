@@ -4,6 +4,8 @@ using CleanTenant.SharedKernel.Common.Errors;
 using CleanTenant.SharedKernel.Common.Results;
 using Microsoft.AspNetCore.Identity;
 
+using MediatR;
+
 namespace CleanTenant.Application.Features.Auth.TwoFactor.EnrollTotp;
 
 /// <summary>
@@ -11,7 +13,7 @@ namespace CleanTenant.Application.Features.Auth.TwoFactor.EnrollTotp;
 /// ile yeni bir Base32 secret üretip kullanıcıya döner. Bu adımda
 /// <c>User.TwoFactorEnabled</c> değişmez — Confirm akışıyla onaylanır.
 /// </summary>
-public sealed class EnrollTotpCommandHandler
+public sealed class EnrollTotpCommandHandler : IRequestHandler<EnrollTotpCommand, Result<EnrollTotpResult>>
 {
     private const string Issuer = "CleanTenant";
 
@@ -28,7 +30,7 @@ public sealed class EnrollTotpCommandHandler
     }
 
     /// <summary>Enrollment isteğini işler.</summary>
-    public async Task<Result<EnrollTotpResult>> HandleAsync(EnrollTotpCommand command, CancellationToken cancellationToken)
+    public async Task<Result<EnrollTotpResult>> Handle(EnrollTotpCommand command, CancellationToken cancellationToken)
     {
         var session = _sessionAccessor.Current
             ?? throw new InvalidOperationException("ICurrentSessionAccessor.Current null.");

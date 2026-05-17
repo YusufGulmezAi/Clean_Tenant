@@ -4,6 +4,8 @@ using CleanTenant.SharedKernel.Common.Errors;
 using CleanTenant.SharedKernel.Common.Results;
 using Microsoft.AspNetCore.Identity;
 
+using MediatR;
+
 namespace CleanTenant.Application.Features.Auth.TwoFactor.ConfirmTotpEnrollment;
 
 /// <summary>
@@ -14,7 +16,7 @@ namespace CleanTenant.Application.Features.Auth.TwoFactor.ConfirmTotpEnrollment;
 ///   <item>10 adet tek kullanımlık recovery code üretilir, döner.</item>
 /// </list>
 /// </summary>
-public sealed class ConfirmTotpEnrollmentCommandHandler
+public sealed class ConfirmTotpEnrollmentCommandHandler : IRequestHandler<ConfirmTotpEnrollmentCommand, Result<ConfirmTotpEnrollmentResult>>
 {
     private const string AuthenticatorProvider = "Authenticator";
     private const int RecoveryCodeCount = 10;
@@ -32,16 +34,10 @@ public sealed class ConfirmTotpEnrollmentCommandHandler
     }
 
     /// <summary>Confirm isteğini işler.</summary>
-    public async Task<Result<ConfirmTotpEnrollmentResult>> HandleAsync(
+    public async Task<Result<ConfirmTotpEnrollmentResult>> Handle(
         ConfirmTotpEnrollmentCommand command,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(command.Code))
-        {
-            return Result<ConfirmTotpEnrollmentResult>.Failure(
-                Error.Validation("AUTH-2FA-004", "Doğrulama kodu zorunlu."));
-        }
-
         var session = _sessionAccessor.Current
             ?? throw new InvalidOperationException("ICurrentSessionAccessor.Current null.");
 

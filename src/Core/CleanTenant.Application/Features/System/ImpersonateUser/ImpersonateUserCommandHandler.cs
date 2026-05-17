@@ -8,6 +8,8 @@ using CleanTenant.SharedKernel.Time;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
+using MediatR;
+
 namespace CleanTenant.Application.Features.System.ImpersonateUser;
 
 /// <summary>
@@ -23,7 +25,7 @@ namespace CleanTenant.Application.Features.System.ImpersonateUser;
 ///   <item>Yeni JWT döner.</item>
 /// </list>
 /// </summary>
-public sealed class ImpersonateUserCommandHandler
+public sealed class ImpersonateUserCommandHandler : IRequestHandler<ImpersonateUserCommand, Result<TokenPair>>
 {
     private readonly ICatalogDbContext _db;
     private readonly IJwtTokenService _jwtTokenService;
@@ -53,16 +55,10 @@ public sealed class ImpersonateUserCommandHandler
     }
 
     /// <summary>Impersonate isteğini işler.</summary>
-    public async Task<Result<TokenPair>> HandleAsync(
+    public async Task<Result<TokenPair>> Handle(
         ImpersonateUserCommand command,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(command.Reason) || command.Reason.Length < 20)
-        {
-            return Result<TokenPair>.Failure(
-                Error.Validation("SUP-008", "Sebep zorunlu (minimum 20 karakter)."));
-        }
-
         var current = _sessionAccessor.Current
             ?? throw new InvalidOperationException("ICurrentSessionAccessor.Current null.");
 

@@ -1,3 +1,6 @@
+using CleanTenant.SharedKernel.Common.Results;
+using MediatR;
+
 namespace CleanTenant.Application.Features.System.ExitSupportMode;
 
 /// <summary>
@@ -5,4 +8,4 @@ namespace CleanTenant.Application.Features.System.ExitSupportMode;
 /// kaydının <c>EndedAt</c>'i set edilir, operatör orijinal session'ına döner.
 /// Orijinal session TTL doldu ise hata döner; operatör tekrar login olmalı.
 /// </summary>
-public sealed record ExitSupportModeCommand();
+public sealed record ExitSupportModeCommand : IRequest<Result<ExitSupportModeResult>>;

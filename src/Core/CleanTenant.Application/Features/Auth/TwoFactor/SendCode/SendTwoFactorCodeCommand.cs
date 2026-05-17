@@ -1,3 +1,6 @@
+using CleanTenant.SharedKernel.Common.Results;
+using MediatR;
+
 namespace CleanTenant.Application.Features.Auth.TwoFactor.SendCode;
 
 /// <summary>
@@ -6,4 +9,4 @@ namespace CleanTenant.Application.Features.Auth.TwoFactor.SendCode;
 /// </summary>
 /// <param name="ChallengeToken">Login response'unda alınan geçici token.</param>
 /// <param name="Method"><c>"Email"</c> veya <c>"Phone"</c>.</param>
-public sealed record SendTwoFactorCodeCommand(Guid ChallengeToken, string Method);
+public sealed record SendTwoFactorCodeCommand(Guid ChallengeToken, string Method) : IRequest<Result>;

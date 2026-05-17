@@ -1,3 +1,6 @@
+using CleanTenant.SharedKernel.Common.Results;
+using MediatR;
+
 namespace CleanTenant.Application.Features.System.GetSystemSupportSessions;
 
 /// <summary>
@@ -16,4 +19,4 @@ public sealed record GetSystemSupportSessionsQuery(
     string? OperatorUserUrlCode,
     string? TargetTenantUrlCode,
     int Page,
-    int PageSize);
+    int PageSize) : IRequest<Result<IReadOnlyList<SystemSupportSessionDto>>>;

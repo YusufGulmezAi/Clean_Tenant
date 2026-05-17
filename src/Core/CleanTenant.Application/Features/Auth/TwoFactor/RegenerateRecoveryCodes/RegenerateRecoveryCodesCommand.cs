@@ -1,10 +1,13 @@
+using CleanTenant.SharedKernel.Common.Results;
+using MediatR;
+
 namespace CleanTenant.Application.Features.Auth.TwoFactor.RegenerateRecoveryCodes;
 
 /// <summary>
 /// Authenticated kullanıcının kendi recovery code'larını yeniden üret isteği.
 /// Eski tüm kodlar invalidate edilir; istemciye yeni 10 kod döner.
 /// </summary>
-public sealed record RegenerateRecoveryCodesCommand();
+public sealed record RegenerateRecoveryCodesCommand : IRequest<Result<RegenerateRecoveryCodesResult>>;
 
 /// <summary>10 adet yeni recovery code; bir kere döner.</summary>
 public sealed record RegenerateRecoveryCodesResult(IReadOnlyList<string> RecoveryCodes);

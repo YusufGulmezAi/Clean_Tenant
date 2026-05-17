@@ -4,6 +4,8 @@ using CleanTenant.SharedKernel.Common.Results;
 using CleanTenant.SharedKernel.Time;
 using Microsoft.Extensions.Options;
 
+using MediatR;
+
 namespace CleanTenant.Application.Features.Auth.Refresh;
 
 /// <summary>
@@ -17,7 +19,7 @@ namespace CleanTenant.Application.Features.Auth.Refresh;
 /// (aynı <c>sessionId</c>). TTL sliding olarak uzatılır.
 /// </para>
 /// </summary>
-public sealed class RefreshTokenCommandHandler
+public sealed class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCommand, Result<TokenPair>>
 {
     private readonly IRefreshTokenService _refreshTokenService;
     private readonly IAuthSessionStore _sessionStore;
@@ -44,14 +46,8 @@ public sealed class RefreshTokenCommandHandler
     }
 
     /// <summary>Refresh isteğini işler ve yeni token çiftini döner.</summary>
-    public async Task<Result<TokenPair>> HandleAsync(RefreshTokenCommand command, CancellationToken cancellationToken)
+    public async Task<Result<TokenPair>> Handle(RefreshTokenCommand command, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(command.RefreshToken))
-        {
-            return Result<TokenPair>.Failure(
-                Error.Validation("AUTH-005", "Refresh token zorunlu."));
-        }
-
         var rotation = await _refreshTokenService.RotateAsync(
             command.RefreshToken, command.IpAddress, command.UserAgent, cancellationToken);
 

@@ -7,6 +7,8 @@ using CleanTenant.SharedKernel.Time;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
+using MediatR;
+
 namespace CleanTenant.Application.Features.System.ElevateToWrite;
 
 /// <summary>
@@ -14,7 +16,7 @@ namespace CleanTenant.Application.Features.System.ElevateToWrite;
 /// JWT yenilenmiyor — istemci aynı access token'la devam eder.
 /// Redis session in-place mutate edilir, <c>SupportSession.Mode</c> DB'de update.
 /// </summary>
-public sealed class ElevateToWriteCommandHandler
+public sealed class ElevateToWriteCommandHandler : IRequestHandler<ElevateToWriteCommand, Result>
 {
     private readonly ICatalogDbContext _db;
     private readonly IAuthSessionStore _sessionStore;
@@ -38,14 +40,8 @@ public sealed class ElevateToWriteCommandHandler
     }
 
     /// <summary>Elevate-to-write işlemini uygular.</summary>
-    public async Task<Result> HandleAsync(ElevateToWriteCommand command, CancellationToken cancellationToken)
+    public async Task<Result> Handle(ElevateToWriteCommand command, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(command.Reason) || command.Reason.Length < 20)
-        {
-            return Result.Failure(
-                Error.Validation("SUP-005", "Sebep zorunlu (minimum 20 karakter)."));
-        }
-
         var current = _sessionAccessor.Current
             ?? throw new InvalidOperationException("ICurrentSessionAccessor.Current null.");
 

@@ -1,7 +1,10 @@
+using CleanTenant.SharedKernel.Common.Results;
+using MediatR;
+
 namespace CleanTenant.Application.Features.Auth.LogoutAllSessions;
 
 /// <summary>
 /// "Kendi tüm cihazlarımdan çıkış" isteği. Mevcut kullanıcının tüm aktif
 /// Redis session'ları silinir; tüm refresh token zincirleri revoke edilir.
 /// </summary>
-public sealed record LogoutAllSessionsCommand();
+public sealed record LogoutAllSessionsCommand : IRequest<Result>;

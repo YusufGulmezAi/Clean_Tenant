@@ -4,6 +4,8 @@ using CleanTenant.SharedKernel.Common.Errors;
 using CleanTenant.SharedKernel.Common.Results;
 using Microsoft.EntityFrameworkCore;
 
+using MediatR;
+
 namespace CleanTenant.Application.Features.System.ForceLogoutUser;
 
 /// <summary>
@@ -17,7 +19,7 @@ namespace CleanTenant.Application.Features.System.ForceLogoutUser;
 /// AuditInterceptor ile dolacak; v0.1.5.b.1'de yalnızca komut zorunluluğu).
 /// </para>
 /// </summary>
-public sealed class ForceLogoutUserCommandHandler
+public sealed class ForceLogoutUserCommandHandler : IRequestHandler<ForceLogoutUserCommand, Result>
 {
     private readonly ICatalogDbContext _db;
     private readonly IAuthSessionStore _sessionStore;
@@ -32,14 +34,8 @@ public sealed class ForceLogoutUserCommandHandler
     }
 
     /// <summary>Force-logout uygular.</summary>
-    public async Task<Result> HandleAsync(ForceLogoutUserCommand command, CancellationToken cancellationToken)
+    public async Task<Result> Handle(ForceLogoutUserCommand command, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(command.Reason) || command.Reason.Length < 20)
-        {
-            return Result.Failure(
-                Error.Validation("AUTH-012", "Sebep zorunlu (minimum 20 karakter)."));
-        }
-
         var target = await _db.Users
             .AsNoTracking()
             .Where(u => u.UrlCode == command.TargetUserUrlCode)

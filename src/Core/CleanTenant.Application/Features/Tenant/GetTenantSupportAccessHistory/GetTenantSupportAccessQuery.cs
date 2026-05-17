@@ -1,3 +1,6 @@
+using CleanTenant.SharedKernel.Common.Results;
+using MediatR;
+
 namespace CleanTenant.Application.Features.Tenant.GetTenantSupportAccessHistory;
 
 /// <summary>
@@ -12,4 +15,4 @@ public sealed record GetTenantSupportAccessQuery(
     DateTimeOffset? From,
     DateTimeOffset? To,
     int Page,
-    int PageSize);
+    int PageSize) : IRequest<Result<IReadOnlyList<TenantSupportAccessDto>>>;

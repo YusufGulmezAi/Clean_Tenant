@@ -1,3 +1,7 @@
+using CleanTenant.Application.Common.Auth;
+using CleanTenant.SharedKernel.Common.Results;
+using MediatR;
+
 namespace CleanTenant.Application.Features.Auth.TwoFactor.VerifyTwoFactor;
 
 /// <summary>
@@ -17,4 +21,4 @@ public sealed record VerifyTwoFactorCommand(
     string Method,
     string Code,
     string IpAddress,
-    string UserAgent);
+    string UserAgent) : IRequest<Result<TokenPair>>;

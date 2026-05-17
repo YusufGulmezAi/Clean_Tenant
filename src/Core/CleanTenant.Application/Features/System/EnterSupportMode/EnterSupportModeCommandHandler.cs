@@ -8,6 +8,8 @@ using CleanTenant.SharedKernel.Time;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
+using MediatR;
+
 namespace CleanTenant.Application.Features.System.EnterSupportMode;
 
 /// <summary>
@@ -22,7 +24,7 @@ namespace CleanTenant.Application.Features.System.EnterSupportMode;
 ///   <item>Yeni JWT döner.</item>
 /// </list>
 /// </summary>
-public sealed class EnterSupportModeCommandHandler
+public sealed class EnterSupportModeCommandHandler : IRequestHandler<EnterSupportModeCommand, Result<TokenPair>>
 {
     private readonly ICatalogDbContext _db;
     private readonly IJwtTokenService _jwtTokenService;
@@ -55,16 +57,10 @@ public sealed class EnterSupportModeCommandHandler
     }
 
     /// <summary>Enter Support Mode isteğini işler.</summary>
-    public async Task<Result<TokenPair>> HandleAsync(
+    public async Task<Result<TokenPair>> Handle(
         EnterSupportModeCommand command,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(command.Reason) || command.Reason.Length < 20)
-        {
-            return Result<TokenPair>.Failure(
-                Error.Validation("SUP-001", "Sebep zorunlu (minimum 20 karakter)."));
-        }
-
         var current = _sessionAccessor.Current
             ?? throw new InvalidOperationException("ICurrentSessionAccessor.Current null.");
 

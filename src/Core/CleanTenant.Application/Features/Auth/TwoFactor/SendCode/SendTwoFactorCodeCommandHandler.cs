@@ -5,6 +5,8 @@ using CleanTenant.SharedKernel.Common.Errors;
 using CleanTenant.SharedKernel.Common.Results;
 using Microsoft.AspNetCore.Identity;
 
+using MediatR;
+
 namespace CleanTenant.Application.Features.Auth.TwoFactor.SendCode;
 
 /// <summary>
@@ -12,7 +14,7 @@ namespace CleanTenant.Application.Features.Auth.TwoFactor.SendCode;
 /// 2FA doğrulama kodu yollar. Provider TokenProvider'larından kod üretip
 /// <see cref="IEmailSender"/> / <see cref="ISmsSender"/> ile gönderir.
 /// </summary>
-public sealed class SendTwoFactorCodeCommandHandler
+public sealed class SendTwoFactorCodeCommandHandler : IRequestHandler<SendTwoFactorCodeCommand, Result>
 {
     private const string EmailMethod = "Email";
     private const string PhoneMethod = "Phone";
@@ -36,14 +38,8 @@ public sealed class SendTwoFactorCodeCommandHandler
     }
 
     /// <summary>SendCode isteğini işler.</summary>
-    public async Task<Result> HandleAsync(SendTwoFactorCodeCommand command, CancellationToken cancellationToken)
+    public async Task<Result> Handle(SendTwoFactorCodeCommand command, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(command.Method))
-        {
-            return Result.Failure(
-                Error.Validation("AUTH-2FA-002", "Yöntem zorunlu (Email veya Phone)."));
-        }
-
         var challenge = await _challengeStore.GetAsync(command.ChallengeToken, cancellationToken);
         if (challenge is null)
         {

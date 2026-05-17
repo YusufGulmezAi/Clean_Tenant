@@ -1,4 +1,7 @@
+using CleanTenant.Application.Common.Auth;
+using CleanTenant.SharedKernel.Common.Results;
 using CleanTenant.SharedKernel.Context;
+using MediatR;
 
 namespace CleanTenant.Application.Features.Auth.SwitchContext;
 
@@ -25,4 +28,4 @@ public sealed record SwitchContextCommand(
     Guid? TargetCompanyId,
     Guid? TargetUnitId,
     string IpAddress,
-    string UserAgent);
+    string UserAgent) : IRequest<Result<TokenPair>>;

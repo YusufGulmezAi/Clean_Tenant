@@ -72,6 +72,18 @@
     <PackageVersion Include="Testcontainers.Redis" Version="4.7.0" />
   </ItemGroup>
 
+  <ItemGroup Label="MediatR + FluentValidation (v0.1.6)">
+    <!--
+      MediatR 11.x son ücretsiz sürüm (MIT lisans). 12.0.0'dan itibaren
+      Jimmy Bogard ticari lisans modeline geçti — kullanılmıyor.
+      FluentValidation 11.x son ücretsiz sürüm; 12.x ticari.
+    -->
+    <PackageVersion Include="MediatR" Version="11.1.0" />
+    <PackageVersion Include="MediatR.Extensions.Microsoft.DependencyInjection" Version="11.1.0" />
+    <PackageVersion Include="FluentValidation" Version="11.11.0" />
+    <PackageVersion Include="FluentValidation.DependencyInjectionExtensions" Version="11.11.0" />
+  </ItemGroup>
+
   <!--
     İlerleyen alt fazlarda eklenecek paketler:
     - v0.1.4.b: Testcontainers.PostgreSql, Dapper

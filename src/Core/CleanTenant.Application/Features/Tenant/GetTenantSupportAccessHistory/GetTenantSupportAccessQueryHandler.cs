@@ -4,13 +4,15 @@ using CleanTenant.SharedKernel.Common.Errors;
 using CleanTenant.SharedKernel.Common.Results;
 using Microsoft.EntityFrameworkCore;
 
+using MediatR;
+
 namespace CleanTenant.Application.Features.Tenant.GetTenantSupportAccessHistory;
 
 /// <summary>
 /// Mevcut Tenant Admin'in tenant'ına yapılan destek oturumlarının listesini döner.
 /// Operatör bilgisi (e-posta + ad-soyad) DB join'iyle zenginleştirilir.
 /// </summary>
-public sealed class GetTenantSupportAccessQueryHandler
+public sealed class GetTenantSupportAccessQueryHandler : IRequestHandler<GetTenantSupportAccessQuery, Result<IReadOnlyList<TenantSupportAccessDto>>>
 {
     private const int MaxPageSize = 100;
 
@@ -27,7 +29,7 @@ public sealed class GetTenantSupportAccessQueryHandler
     }
 
     /// <summary>Sorguyu çalıştırır.</summary>
-    public async Task<Result<IReadOnlyList<TenantSupportAccessDto>>> HandleAsync(
+    public async Task<Result<IReadOnlyList<TenantSupportAccessDto>>> Handle(
         GetTenantSupportAccessQuery query,
         CancellationToken cancellationToken)
     {

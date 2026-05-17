@@ -1,3 +1,6 @@
+using CleanTenant.SharedKernel.Common.Results;
+using MediatR;
+
 namespace CleanTenant.Application.Features.System.ElevateToWrite;
 
 /// <summary>
@@ -5,4 +8,4 @@ namespace CleanTenant.Application.Features.System.ElevateToWrite;
 /// Mevcut session in-place mutate edilir (JWT yenilenmiyor).
 /// </summary>
 /// <param name="Reason">Zorunlu sebep (min 20 karakter); audit'e işlenir.</param>
-public sealed record ElevateToWriteCommand(string Reason);
+public sealed record ElevateToWriteCommand(string Reason) : IRequest<Result>;

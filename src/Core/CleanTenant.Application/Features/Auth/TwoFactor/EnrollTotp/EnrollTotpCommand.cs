@@ -1,10 +1,13 @@
+using CleanTenant.SharedKernel.Common.Results;
+using MediatR;
+
 namespace CleanTenant.Application.Features.Auth.TwoFactor.EnrollTotp;
 
 /// <summary>
 /// Authenticated kullanıcının kendi hesabı için TOTP enrollment başlat isteği.
 /// Komut gövdesi alanı yok — kim olduğu Bearer JWT'den okunur.
 /// </summary>
-public sealed record EnrollTotpCommand();
+public sealed record EnrollTotpCommand : IRequest<Result<EnrollTotpResult>>;
 
 /// <summary>
 /// Enrollment başlangıç yanıtı. <see cref="Secret"/> kullanıcıya gösterilir ya

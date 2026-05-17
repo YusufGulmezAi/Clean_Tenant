@@ -2,6 +2,8 @@ using CleanTenant.Application.Common.Auth;
 using CleanTenant.SharedKernel.Common.Errors;
 using CleanTenant.SharedKernel.Common.Results;
 
+using MediatR;
+
 namespace CleanTenant.Application.Features.Auth.Logout;
 
 /// <summary>
@@ -17,7 +19,7 @@ namespace CleanTenant.Application.Features.Auth.Logout;
 /// middleware geçtikten sonra çalışır.
 /// </para>
 /// </summary>
-public sealed class LogoutCommandHandler
+public sealed class LogoutCommandHandler : IRequestHandler<LogoutCommand, Result>
 {
     private readonly IAuthSessionStore _sessionStore;
     private readonly IRefreshTokenService _refreshTokenService;
@@ -35,7 +37,7 @@ public sealed class LogoutCommandHandler
     }
 
     /// <summary>Logout isteğini işler.</summary>
-    public async Task<Result> HandleAsync(LogoutCommand command, CancellationToken cancellationToken)
+    public async Task<Result> Handle(LogoutCommand command, CancellationToken cancellationToken)
     {
         var current = _sessionAccessor.Current;
         if (current is null)

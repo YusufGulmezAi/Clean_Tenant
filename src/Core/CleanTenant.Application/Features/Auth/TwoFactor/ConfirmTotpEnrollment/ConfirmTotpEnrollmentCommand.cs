@@ -1,3 +1,6 @@
+using CleanTenant.SharedKernel.Common.Results;
+using MediatR;
+
 namespace CleanTenant.Application.Features.Auth.TwoFactor.ConfirmTotpEnrollment;
 
 /// <summary>
@@ -5,7 +8,7 @@ namespace CleanTenant.Application.Features.Auth.TwoFactor.ConfirmTotpEnrollment;
 /// doğruysa <c>TwoFactorEnabled=true</c> ve 10 recovery code üretilir.
 /// </summary>
 /// <param name="Code">Authenticator app'in ürettiği 6 haneli kod.</param>
-public sealed record ConfirmTotpEnrollmentCommand(string Code);
+public sealed record ConfirmTotpEnrollmentCommand(string Code) : IRequest<Result<ConfirmTotpEnrollmentResult>>;
 
 /// <summary>
 /// Onay yanıtı: 10 recovery code (her biri tek kullanımlık). Bu liste yalnız

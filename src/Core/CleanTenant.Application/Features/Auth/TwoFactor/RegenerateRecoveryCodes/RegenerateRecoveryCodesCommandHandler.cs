@@ -4,13 +4,15 @@ using CleanTenant.SharedKernel.Common.Errors;
 using CleanTenant.SharedKernel.Common.Results;
 using Microsoft.AspNetCore.Identity;
 
+using MediatR;
+
 namespace CleanTenant.Application.Features.Auth.TwoFactor.RegenerateRecoveryCodes;
 
 /// <summary>
 /// 10 yeni recovery code üretir; eski kodları invalidate eder.
 /// Kullanıcı 2FA aktif olmadan recovery üretemez (anlam taşımaz).
 /// </summary>
-public sealed class RegenerateRecoveryCodesCommandHandler
+public sealed class RegenerateRecoveryCodesCommandHandler : IRequestHandler<RegenerateRecoveryCodesCommand, Result<RegenerateRecoveryCodesResult>>
 {
     private const int RecoveryCodeCount = 10;
 
@@ -27,7 +29,7 @@ public sealed class RegenerateRecoveryCodesCommandHandler
     }
 
     /// <summary>İsteği işler.</summary>
-    public async Task<Result<RegenerateRecoveryCodesResult>> HandleAsync(
+    public async Task<Result<RegenerateRecoveryCodesResult>> Handle(
         RegenerateRecoveryCodesCommand command,
         CancellationToken cancellationToken)
     {

@@ -4,13 +4,15 @@ using CleanTenant.SharedKernel.Common.Errors;
 using CleanTenant.SharedKernel.Common.Results;
 using Microsoft.EntityFrameworkCore;
 
+using MediatR;
+
 namespace CleanTenant.Application.Features.Auth.LogoutAllSessions;
 
 /// <summary>
 /// Kullanıcının tüm aktif Redis session'larını siler ve tüm refresh token
 /// zincirlerini (tüm context'ler için) revoke eder.
 /// </summary>
-public sealed class LogoutAllSessionsCommandHandler
+public sealed class LogoutAllSessionsCommandHandler : IRequestHandler<LogoutAllSessionsCommand, Result>
 {
     private readonly IAuthSessionStore _sessionStore;
     private readonly ICatalogDbContext _db;
@@ -28,7 +30,7 @@ public sealed class LogoutAllSessionsCommandHandler
     }
 
     /// <summary>Logout-all işlemini uygular.</summary>
-    public async Task<Result> HandleAsync(LogoutAllSessionsCommand command, CancellationToken cancellationToken)
+    public async Task<Result> Handle(LogoutAllSessionsCommand command, CancellationToken cancellationToken)
     {
         var current = _sessionAccessor.Current;
         if (current is null)

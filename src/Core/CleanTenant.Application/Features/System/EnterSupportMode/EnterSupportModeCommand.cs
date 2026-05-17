@@ -1,3 +1,7 @@
+using CleanTenant.Application.Common.Auth;
+using CleanTenant.SharedKernel.Common.Results;
+using MediatR;
+
 namespace CleanTenant.Application.Features.System.EnterSupportMode;
 
 /// <summary>
@@ -13,4 +17,4 @@ public sealed record EnterSupportModeCommand(
     Guid TargetTenantId,
     string Reason,
     string IpAddress,
-    string UserAgent);
+    string UserAgent) : IRequest<Result<TokenPair>>;
