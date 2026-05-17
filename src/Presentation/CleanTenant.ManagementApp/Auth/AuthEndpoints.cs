@@ -106,10 +106,12 @@ public static class AuthEndpoints
         [FromForm] string identifier,
         [FromForm] string password,
         [FromForm] string? persona,
-        [FromForm] bool rememberMe,
+        [FromForm] bool? rememberMe,
         [FromServices] IMediator mediator,
         CancellationToken cancellationToken)
     {
+        // HTML checkbox işaretsizse form'a hiç eklenmez — null gelir.
+        var remember = rememberMe ?? false;
         var personaSide = (persona ?? "Management").Equals("Portal", StringComparison.OrdinalIgnoreCase)
             ? PersonaSide.Portal
             : PersonaSide.Management;
@@ -135,7 +137,7 @@ public static class AuthEndpoints
 
         // Success → cookie set
         var tokens = login.Tokens!;
-        await SignInWithSessionAsync(httpContext, tokens, rememberMe);
+        await SignInWithSessionAsync(httpContext, tokens, remember);
         return Results.Redirect("/");
     }
 
