@@ -82,11 +82,23 @@
     private bool _isDark;
     private MudTheme _currentTheme = CleanTenantThemes.KurumsalMavi;
 
-    protected override async Task OnInitializedAsync()
+    protected override void OnInitialized()
     {
+        // Prerender + interactive aşamalarının her ikisinde de çalışır;
+        // localStorage'a (JSRuntime) erişim YASAK — default tema'yı göster.
         ThemeService.ThemeChanged += OnThemeChanged;
-        await ThemeService.InitializeAsync();
         ApplyTheme();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Yalnız interactive render aşamasında çağrılır → JSRuntime hazır.
+        // İlk render'dan sonra localStorage'dan kullanıcı tercihini oku ve
+        // tema'yı uygula (ThemeChanged event'i StateHasChanged tetikler).
+        if (firstRender)
+        {
+            await ThemeService.InitializeAsync();
+        }
     }
 
     private void OnThemeChanged()
