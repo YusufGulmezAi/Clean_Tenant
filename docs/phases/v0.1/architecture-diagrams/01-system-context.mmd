@@ -1,0 +1,44 @@
+%% C4 Level 1 — Sistem Bağlamı: CleanTenant ekosistemi
+%% Faz 0 (v0.1.7) — canlı bileşenler düz çizgi; placeholder'lar kesik çizgi.
+graph LR
+    classDef live fill:#d4edda,stroke:#155724,stroke-width:2px,color:#155724
+    classDef placeholder fill:#fff3cd,stroke:#856404,stroke-width:1px,color:#856404,stroke-dasharray: 5 5
+    classDef client fill:#cfe2ff,stroke:#084298,stroke-width:2px,color:#084298
+
+    subgraph Clients["İstemciler"]
+        M[ManagementApp<br/>Blazor Server + MudBlazor]:::client
+        P[PortalApp<br/>Blazor Server + MudBlazor]:::client
+        Mb[MobilApp<br/>MAUI Blazor Hybrid]:::client
+    end
+
+    API[CleanTenant.WebApi<br/>Minimal API + JWT]:::live
+
+    subgraph Data["Veri Katmanı"]
+        Cat[(Catalog DB<br/>PostgreSQL 17)]:::live
+        Main[(Main DB<br/>placeholder)]:::placeholder
+        Log[(Log DB<br/>PostgreSQL 17)]:::live
+        Aud[(Audit DB<br/>PostgreSQL 17)]:::live
+        R[(Redis 8<br/>Session + 2FA)]:::live
+    end
+
+    subgraph External["Harici / Placeholder"]
+        Seq[Seq<br/>Log viewer]:::placeholder
+        SMTP[SMTP Sağlayıcı<br/>Faz 1+]:::placeholder
+        SMS[SMS Sağlayıcı<br/>Faz 1+]:::placeholder
+        Geo[MaxMind GeoLite2<br/>Faz 1+]:::placeholder
+    end
+
+    M -->|HTTPS / JWT Bearer| API
+    P -->|HTTPS / JWT Bearer| API
+    Mb -->|HTTPS / JWT Bearer| API
+
+    API -->|EF Core writes<br/>Dapper reads| Cat
+    API -.->|Faz 1| Main
+    API -->|Serilog Sink| Log
+    API -->|Dapper INSERT<br/>FullAuditInterceptor| Aud
+    API -->|StackExchange.Redis| R
+
+    Log -.->|opsiyonel| Seq
+    API -.->|Faz 1+| SMTP
+    API -.->|Faz 1+| SMS
+    API -.->|Faz 1+ GeoIP| Geo

@@ -1,0 +1,25 @@
+%% 4-DB Mimarisi
+graph TD
+    classDef live fill:#d4edda,stroke:#155724,stroke-width:2px
+    classDef placeholder fill:#fff3cd,stroke:#856404,stroke-width:1px,stroke-dasharray: 5 5
+
+    API[WebApi]
+
+    subgraph "PostgreSQL Container (compose)"
+        Cat[(Catalog DB<br/>users, tenants, roles,<br/>support_sessions vb. 16 tablo)]:::live
+        Main[(Main DB<br/>tenant business data<br/>Faz 1+'da doldurulur)]:::placeholder
+        Log[(Log DB<br/>logs tablosu)]:::live
+        Aud[(Audit DB<br/>audit_entries tablosu)]:::live
+    end
+
+    API -->|EF Core write CatalogDbContext| Cat
+    API -->|Dapper read - sık| Cat
+    API -.->|Faz 1 — Tenant business| Main
+
+    API -->|Serilog PostgreSQL Sink| Log
+    API -->|Dapper INSERT FullAuditInterceptor| Aud
+
+    Cat -.->|migration only| CatM[Migrations:<br/>InitialCatalog, AddUserTckn, AddUserVkn]
+    Aud -.->|migration only| AudM[Migration:<br/>InitialAudit]
+    Log -.->|migration only| LogM[Migration:<br/>InitialLog Serilog şeması]
+    Main -.->|Faz 1| MainM[Migration: Faz 1]

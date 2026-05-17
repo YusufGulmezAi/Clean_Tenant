@@ -1,0 +1,44 @@
+%% Audit DB — audit_entries tablosu (v0.1.7)
+%% 35+ denormalize alan: kullanıcı + zaman + environment + lokasyon + request + değişiklik
+erDiagram
+    AUDIT_ENTRIES {
+        guid Id PK "UUID v7"
+        datetimeoffset Timestamp "UTC, microsecond"
+        guid UserId "denormalize"
+        string UserEmail "denormalize"
+        string UserFullName "denormalize"
+        guid TenantId
+        string TenantName "denormalize"
+        string ScopeLevel
+        guid CompanyId
+        guid UnitId
+        string PersonaSide
+        jsonb RolesJson "active scope roles"
+        bool IsSystemSession
+        guid SupportSessionId "if Support Mode"
+        guid ImpersonatedByUserId "if FullImpersonation"
+        string IpAddress
+        string UserAgent "raw"
+        string BrowserName "UAParser"
+        string BrowserVersion
+        string OperatingSystem "UAParser"
+        string DeviceType "Desktop/Mobile/Tablet/Bot"
+        string AcceptLanguage
+        string Referer
+        string Country "GeoIP - Faz 1+"
+        string City "GeoIP - Faz 1+"
+        string TraceId "W3C TraceContext"
+        string CorrelationId
+        string RequestPath
+        string RequestMethod
+        string EnvironmentName "Dev/Test/Demo/Prod"
+        string MachineName
+        string ApplicationName
+        string ApplicationVersion
+        int ProcessId
+        int ThreadId
+        string EntityType "short class name"
+        guid EntityId
+        smallint Action "Create/Update/Delete"
+        jsonb ChangesJson "delta with PII REDACTED"
+    }

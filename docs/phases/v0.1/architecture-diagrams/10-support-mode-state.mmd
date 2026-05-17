@@ -1,0 +1,26 @@
+%% Support Mode State Diyagramı — System operatörünün durumları
+stateDiagram-v2
+    [*] --> SystemScope: Login (Management persona)
+
+    SystemScope --> SupportReadOnly: POST /system/support/enter\n{tenantId, reason}\n→ YENİ JWT, OriginalSessionId saklanır
+
+    SupportReadOnly --> SupportWriteEnabled: POST /system/support/elevate\n{reason}\n→ JWT YENILENMEZ, session in-place mutate
+
+    SupportReadOnly --> FullImpersonation: POST /system/support/impersonate\n{targetUserUrlCode, reason}\n→ YENİ JWT, sub=hedef, ImpersonatedBy=operatör
+    SupportWriteEnabled --> FullImpersonation: POST /system/support/impersonate
+
+    SupportReadOnly --> SystemScope: POST /system/support/exit\n→ orijinal session'a YENİ JWT
+    SupportWriteEnabled --> SystemScope: POST /system/support/exit
+    FullImpersonation --> SystemScope: POST /system/support/exit\n(operatör session'a)
+
+    SystemScope --> [*]: logout
+
+    note right of SupportReadOnly
+        Her başarılı Catalog write
+        SupportSession.WriteActionCount++
+    end note
+
+    note right of FullImpersonation
+        AuthSession.ImpersonatedBy
+        audit kaydında saklanır
+    end note

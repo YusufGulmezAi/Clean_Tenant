@@ -1,0 +1,40 @@
+%% Login + 2FA akışı (Email yöntemi örnek)
+sequenceDiagram
+    autonumber
+    actor U as Kullanıcı
+    participant API as WebApi
+    participant LH as LoginCommand<br/>Handler
+    participant CS as RedisTwoFactor<br/>ChallengeStore
+    participant UM as UserManager
+    participant ES as IEmailSender
+    participant VH as VerifyTwoFactor<br/>Handler
+    participant Fin as LoginFinalizer
+
+    Note over U,Fin: TwoFactorEnabled=true kullanıcı
+    U->>API: POST /api/v1/auth/login
+    API->>LH: Send
+    LH->>UM: CheckPasswordAsync ✓
+    LH->>UM: GetValidTwoFactorProvidersAsync
+    UM-->>LH: ["Authenticator","Email"]
+    LH->>CS: StoreAsync(challenge, ttl=5min)
+    LH-->>API: LoginResult.TwoFactorRequired
+    API-->>U: 200 OK {challengeToken, methods}
+
+    U->>API: POST /api/v1/auth/2fa/send-code<br/>{challengeToken, method="Email"}
+    API->>UM: GenerateTwoFactorTokenAsync(user,"Email")
+    UM-->>API: code
+    API->>ES: SendAsync(email, code)
+    ES-->>U: e-posta ile kod
+
+    U->>API: POST /api/v1/auth/2fa/verify<br/>{challengeToken, method, code}
+    API->>VH: Send
+    VH->>CS: GetAsync(challengeToken)
+    CS-->>VH: TwoFactorChallenge
+    VH->>UM: VerifyTwoFactorTokenAsync ✓
+    VH->>CS: DeleteAsync(challengeToken)
+    VH->>Fin: FinalizeAsync(user, persona, ...)
+    Fin-->>VH: TokenPair
+    VH-->>API: Result.Success
+    API-->>U: 200 OK {access, refresh, sessionId}
+
+    Note over LH: System scope kullanıcı + TwoFactorEnabled=false<br/>→ AUTH-2FA-ENROLLMENT-REQUIRED (422)

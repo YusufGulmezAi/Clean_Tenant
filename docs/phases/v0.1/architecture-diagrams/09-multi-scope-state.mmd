@@ -1,0 +1,38 @@
+%% Multi-Scope + Persona — Bir sekme/context'in scope geçiş durumları
+stateDiagram-v2
+    [*] --> Anonymous
+
+    state "Persona Seçimi" as Pers
+    Anonymous --> Pers: POST /auth/login<br/>(persona zorunlu)
+
+    state "Management Persona" as Mgmt {
+        [*] --> SystemScope
+        SystemScope --> TenantScope: switch-context\n(Management→Tenant)
+        TenantScope --> SystemScope: switch-context\n(Tenant→System)
+        TenantScope --> CompanyScope: switch-context\n(Tenant→Company)
+        CompanyScope --> TenantScope: switch-context\n(Company→Tenant)
+        CompanyScope --> SystemScope: switch-context\n(Company→System)
+    }
+
+    state "Portal Persona" as Portal {
+        [*] --> UnitScope1
+        UnitScope1 --> UnitScope2: switch-context\n(Unit↔Unit)
+    }
+
+    Pers --> Mgmt: persona=Management\nve System/Tenant/Company yetki var
+    Pers --> Portal: persona=Portal\nve Unit yetki var
+    Pers --> AuthError: AUTH-004\npersona için scope yok
+
+    Mgmt --> [*]: logout
+    Portal --> [*]: logout
+    AuthError --> [*]
+
+    note right of Mgmt
+        Management persona Unit'e
+        geçemez (cross-persona yok)
+    end note
+
+    note right of Portal
+        Portal persona System/Tenant/Company
+        scope'a geçemez
+    end note

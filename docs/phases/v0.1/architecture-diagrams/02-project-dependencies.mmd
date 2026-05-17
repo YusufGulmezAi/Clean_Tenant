@@ -1,0 +1,72 @@
+%% C4 Level 2 — 17 proje arası bağımlılık grafı
+graph TD
+    classDef core fill:#d4edda,stroke:#155724,stroke-width:2px
+    classDef infra fill:#cfe2ff,stroke:#084298,stroke-width:2px
+    classDef pres fill:#f8d7da,stroke:#842029,stroke-width:2px
+    classDef tool fill:#e2e3e5,stroke:#41464b,stroke-width:1px
+    classDef test fill:#fff3cd,stroke:#856404,stroke-width:1px
+
+    subgraph Core
+        SK[SharedKernel<br/>Result, BaseEntity, Time]:::core
+        Dom[Domain<br/>Entity'ler, Auditing]:::core
+        App[Application<br/>CQRS, Validators, Pipeline]:::core
+    end
+
+    subgraph Infrastructure
+        Per[Infrastructure.Persistence<br/>EF Core, Dapper, Interceptors]:::infra
+        Idn[Infrastructure.Identity<br/>JWT, RefreshToken, AuditAccessor]:::infra
+        Cac[Infrastructure.Caching<br/>Redis sessions, 2FA challenge]:::infra
+        LogI[Infrastructure.Logging<br/>Serilog config]:::infra
+        BG[Infrastructure.BackgroundJobs<br/>boş - Faz 1.9]:::infra
+    end
+
+    subgraph Presentation
+        Web[WebApi<br/>Minimal API]:::pres
+        Mgmt[ManagementApp<br/>Blazor Server]:::pres
+        Por[PortalApp<br/>Blazor Server]:::pres
+        Mob[MobilApp<br/>MAUI Hybrid]:::pres
+    end
+
+    subgraph Tools
+        Mig[MigrationRunner<br/>CLI]:::tool
+    end
+
+    subgraph Tests
+        TDom[Domain.UnitTests]:::test
+        TApp[Application.UnitTests]:::test
+        TInf[Infrastructure.IntegrationTests<br/>Testcontainers PG]:::test
+        TWeb[WebApi.IntegrationTests<br/>Testcontainers PG+Redis]:::test
+    end
+
+    Dom --> SK
+    App --> Dom
+    App --> SK
+
+    Per --> App
+    Idn --> Per
+    Cac --> App
+    LogI --> App
+
+    Web --> App
+    Web --> Per
+    Web --> Idn
+    Web --> Cac
+    Web --> LogI
+    Web --> BG
+
+    Mgmt --> App
+    Mgmt --> Per
+    Mgmt --> Idn
+    Por --> App
+
+    Mob -.->|HTTP only| Web
+
+    Mig --> Per
+    Mig --> Idn
+
+    TDom --> Dom
+    TApp --> App
+    TInf --> Per
+    TInf --> Idn
+    TInf --> Cac
+    TWeb --> Web

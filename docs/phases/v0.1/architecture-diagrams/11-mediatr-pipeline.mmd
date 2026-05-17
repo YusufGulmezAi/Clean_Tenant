@@ -1,0 +1,26 @@
+%% MediatR Pipeline — Endpoint → Handler akışı
+flowchart LR
+    classDef behave fill:#cfe2ff,stroke:#084298,stroke-width:2px
+    classDef error fill:#f8d7da,stroke:#842029,stroke-width:1px
+    classDef success fill:#d4edda,stroke:#155724,stroke-width:1px
+
+    EP[Endpoint<br/>mediator.Send command] --> AB
+
+    subgraph Pipeline["Pipeline (DI registration sırası)"]
+        AB[1 AuthorizationBehavior<br/>RequirePermission attribute oku<br/>SessionPermissionChecker]:::behave
+        VB[2 ValidationBehavior<br/>tüm IValidator T'yi çalıştır<br/>çoklu ihlal toplanır]:::behave
+        LB[3 LoggingBehavior<br/>Information seviyede<br/>Request user elapsed]:::behave
+    end
+
+    H[Handler.Handle<br/>iş mantığı]:::success
+    R[(Result veya<br/>Result&lt;T&gt;)]
+
+    AB -->|attribute yok ya da<br/>permission OK| VB
+    AB -->|permission yok| F1[ResultFactoryHelper<br/>Forbidden<br/>AUTH-PERMISSION-DENIED]:::error
+    VB -->|validator yok ya da<br/>tüm validator pass| LB
+    VB -->|validation ihlali| F2[ResultFactoryHelper<br/>Validation<br/>VAL-001 vb]:::error
+    LB --> H
+    H --> R
+    F1 --> R
+    F2 --> R
+    R --> EPR[Endpoint response<br/>Results.Ok<br/>veya errors map]

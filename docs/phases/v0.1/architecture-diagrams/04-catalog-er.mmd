@@ -1,0 +1,127 @@
+%% Catalog DB — Entity Relationship Diyagramı (v0.1.7)
+erDiagram
+    USERS ||--o{ USER_ROLE_ASSIGNMENTS : "has"
+    USERS ||--o{ REFRESH_TOKENS : "owns"
+    USERS ||--o{ SUPPORT_SESSIONS : "as operator"
+
+    TENANTS ||--o{ USER_ROLE_ASSIGNMENTS : "scope"
+    TENANTS ||--o| TENANT_CONNECTIONS : "(if dedicated DB)"
+    TENANTS ||--o{ SUPPORT_SESSIONS : "as target"
+
+    ROLES ||--o{ USER_ROLE_ASSIGNMENTS : "assigned"
+    ROLES ||--o{ ROLE_PERMISSIONS : "grants"
+    PERMISSIONS ||--o{ ROLE_PERMISSIONS : "granted by"
+
+    USERS {
+        guid Id PK
+        string UrlCode "9-char Base58, unique"
+        string Email "citext, unique"
+        string UserName
+        string FirstName
+        string LastName
+        string PasswordHash "[Sensitive]"
+        string SecurityStamp "[Sensitive]"
+        string Tckn "char(11), TR ID"
+        bool TcknVerified
+        string Vkn "char(10), TR Tax ID"
+        bool VknVerified
+        string PhoneNumber
+        bool PhoneNumberConfirmed
+        bool EmailConfirmed
+        bool TwoFactorEnabled
+        datetimeoffset LastLoginAt
+        string LastLoginIp
+        uint RowVersion "xmin"
+    }
+
+    TENANTS {
+        guid Id PK
+        string UrlCode "9-char Base58, unique"
+        string Name "citext, unique"
+        string LegalName
+        smallint Status "TenantStatus enum"
+        smallint BillingTier "Free/Standard/Enterprise"
+        bool HasDedicatedDatabase
+        string DatabaseSchemaName "if dedicated"
+    }
+
+    TENANT_CONNECTIONS {
+        guid Id PK
+        guid TenantId FK
+        string ConnectionStringEncrypted "DataProtection in Faz 1+"
+        bool IsActive
+    }
+
+    ROLES {
+        guid Id PK
+        string UrlCode
+        string Name
+        string NormalizedName "unique with Scope"
+        smallint Scope "ScopeLevel enum"
+        string Description
+        bool IsBuiltIn "7 System roles"
+    }
+
+    PERMISSIONS {
+        guid Id PK
+        string Code "e.g. Tenant.Read"
+        string Description
+        string Module "grouping"
+    }
+
+    ROLE_PERMISSIONS {
+        guid Id PK
+        guid RoleId FK
+        guid PermissionId FK
+    }
+
+    USER_ROLE_ASSIGNMENTS {
+        guid Id PK
+        guid UserId FK
+        guid RoleId FK
+        smallint ScopeLevel "CHECK enforces cardinality"
+        guid TenantId FK "null at System"
+        guid CompanyId FK "Faz 1+"
+        guid UnitId FK "Faz 1+"
+        datetimeoffset AssignedAt
+        guid AssignedBy
+        datetimeoffset ExpiresAt
+        bool IsActive
+    }
+
+    REFRESH_TOKENS {
+        guid Id PK
+        guid UserId FK
+        guid ContextId "tab/persona id"
+        string TokenHash "[Sensitive] SHA-256"
+        datetimeoffset ExpiresAt
+        bool IsRevoked
+        string RevokedReason
+        datetimeoffset RevokedAt
+        string ReplacedByTokenHash "rotation chain"
+        string IpAddress
+        string UserAgent
+    }
+
+    SUPPORT_SESSIONS {
+        guid Id PK
+        string UrlCode
+        guid OperatorUserId FK
+        guid TargetTenantId FK
+        guid TargetCompanyId
+        guid TargetUserId "if FullImpersonation"
+        smallint Mode "ReadOnly/Write/FullImpersonation"
+        string Reason "CHECK min 20 chars"
+        datetimeoffset StartedAt
+        datetimeoffset EndedAt
+        int WriteActionCount "auto-incremented by FullAuditInterceptor"
+        bool CustomerNotified
+        string IpAddress
+        string UserAgent
+    }
+
+    URL_CODE_REGISTRY {
+        string UrlCode PK
+        string EntityType
+        guid EntityId
+    }

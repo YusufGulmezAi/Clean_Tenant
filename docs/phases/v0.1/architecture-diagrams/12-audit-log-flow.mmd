@@ -1,0 +1,32 @@
+%% Audit + Log akışı — FullAuditInterceptor + Serilog Enricher paralel
+sequenceDiagram
+    autonumber
+    participant H as Command<br/>Handler
+    participant Cat as CatalogDbContext
+    participant AI as AuditingInterceptor
+    participant FI as FullAuditInterceptor
+    participant DB as Catalog DB
+    participant Aud as Audit DB
+    participant SL as Serilog
+    participant En as AuditMetadata<br/>Enricher
+    participant Log as Log DB
+
+    H->>Cat: SaveChangesAsync
+    Cat->>AI: SavingChangesAsync
+    AI->>AI: CreatedAt/UpdatedAt set<br/>UUID v7 yarat<br/>Soft-delete dönüşümü
+    Cat->>FI: SavingChangesAsync
+    FI->>FI: AuditMetadataAccessor.Capture<br/>ChangeTracker'dan entries topla<br/>delta JSON üret PII redact<br/>SupportSession.WriteActionCount++
+
+    Cat->>DB: INSERT/UPDATE (transaction)
+    DB-->>Cat: success
+
+    Cat->>FI: SavedChangesAsync
+    FI->>Aud: Dapper batch INSERT<br/>audit_entries
+
+    Note over FI,Aud: Catalog başarılıydı ama<br/>Audit başarısızsa Serilog'a kritik hata
+
+    Note over H,Log: Paralel olarak her log çağrısı
+    H->>SL: Log.Information(message, args)
+    SL->>En: Enrich(logEvent)
+    En->>En: HTTP scope'tan IAuditMetadataAccessor<br/>30+ property ekle
+    SL->>Log: PostgreSQL Sink INSERT logs

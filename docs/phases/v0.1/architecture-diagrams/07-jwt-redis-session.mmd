@@ -1,0 +1,28 @@
+%% Hibrit JWT + Redis Session — Login + Her HTTP İsteği akışı
+sequenceDiagram
+    autonumber
+    actor U as Kullanıcı
+    participant API as WebApi<br/>(AuthEndpoints)
+    participant Med as IMediator
+    participant LH as LoginCommand<br/>Handler
+    participant DB as Catalog DB
+    participant Fin as LoginFinalizer
+    participant R as Redis
+    participant JS as JwtTokenService
+    participant RT as RefreshToken<br/>Service
+
+    Note over U,RT: Login Akışı (2FA'sız)
+    U->>API: POST /api/v1/auth/login<br/>{identifier, password, persona}
+    API->>Med: mediator.Send(LoginCommand)
+    Med->>LH: ValidationBehavior → Handle()
+    LH->>DB: UserManager.CheckPassword
+    DB-->>LH: User
+    LH->>Fin: FinalizeAsync(user, persona, ip, ua)
+    Fin->>DB: Scope + Roles + Permissions lookup
+    Fin->>R: StoreAsync(AuthSession)<br/>ct:session:{sid}
+    R-->>Fin: OK
+    Fin->>JS: IssueToken(session) — thin JWT
+    Fin->>RT: CreateAsync(refresh chain)
+    Fin-->>LH: TokenPair
+    LH-->>API: Result.Success
+    API-->>U: 200 OK {access, refresh, sessionId, scope}

@@ -1,0 +1,28 @@
+%% Clean Architecture katmanları — bağımlılık yönü (içe doğru)
+graph TD
+    classDef core fill:#d4edda,stroke:#155724,stroke-width:2px
+    classDef app fill:#cfe2ff,stroke:#084298,stroke-width:2px
+    classDef infra fill:#fff3cd,stroke:#856404,stroke-width:2px
+    classDef pres fill:#f8d7da,stroke:#842029,stroke-width:2px
+
+    subgraph "Domain (en iç katman)"
+        DomDesc["• Entity'ler (User, Tenant, SupportSession, AuditEntry)<br/>• Domain enum'ları (ScopeLevel, SupportSessionMode)<br/>• Auditing/SensitiveAttribute<br/>• Dış bağımlılık YOK"]:::core
+    end
+
+    subgraph "Application"
+        AppDesc["• CQRS — Command/Query + Handler + Validator<br/>• MediatR IRequest contract'ları<br/>• Pipeline Behavior'lar (Auth → Validation → Logging)<br/>• Common/Auth, Common/Auditing, Common/Authorization<br/>• ICatalogDbContext, IAuditMetadataAccessor, IPermissionChecker interface'leri"]:::app
+    end
+
+    subgraph "Infrastructure (4 alt proje)"
+        InfraDesc["• Persistence: EF Core CatalogDbContext + AuditDbContext + LogDbContext<br/>  Interceptor'lar (AuditingInterceptor, FullAuditInterceptor, UrlCodeGeneratingInterceptor)<br/>  Dapper raw INSERT (Audit DB)<br/>• Identity: JWT, RefreshToken, HttpUserContext, SessionPermissionChecker,<br/>  HttpAuditMetadataAccessor, Authorization policy handler'ları<br/>• Caching: Redis sessions, 2FA challenge store<br/>• Logging: Serilog config + AuditMetadataEnricher"]:::infra
+    end
+
+    subgraph "Presentation"
+        PresDesc["• WebApi (Minimal API endpoints, IMediator pattern)<br/>• ManagementApp (Faz 1)<br/>• PortalApp (Faz 1)<br/>• MobilApp (HTTP only)"]:::pres
+    end
+
+    PresDesc -->|kullanır| InfraDesc
+    PresDesc -->|kullanır| AppDesc
+    InfraDesc -->|implement eder| AppDesc
+    AppDesc -->|kullanır| DomDesc
+    InfraDesc -.->|EF entity map| DomDesc

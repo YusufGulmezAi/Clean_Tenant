@@ -1,0 +1,13 @@
+%% Log DB — logs tablosu (Serilog PostgreSQL Sink yazar)
+erDiagram
+    LOGS {
+        bigserial Id PK
+        datetimeoffset Timestamp "timestamptz, indexed DESC"
+        smallint Level "Verbose=0..Fatal=5, indexed"
+        text Message "rendered"
+        text MessageTemplate
+        text Exception
+        jsonb Properties "30+ enricher property"
+        string TraceId "indexed"
+        string CorrelationId
+    }
