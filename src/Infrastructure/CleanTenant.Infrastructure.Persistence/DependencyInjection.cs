@@ -8,6 +8,7 @@ using CleanTenant.Infrastructure.Persistence.Catalog;
 using CleanTenant.Infrastructure.Persistence.Context;
 using CleanTenant.Infrastructure.Persistence.Interceptors;
 using CleanTenant.Infrastructure.Persistence.Log;
+using CleanTenant.Infrastructure.Persistence.Main;
 using CleanTenant.Infrastructure.Persistence.MultiTenancy;
 using CleanTenant.Infrastructure.Persistence.Seeding;
 using CleanTenant.SharedKernel.Context;
@@ -164,6 +165,47 @@ public static class DependencyInjection
                 .UseSnakeCaseNamingConvention()
                 .ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning));
         });
+        return services;
+    }
+
+    /// <summary>
+    /// v0.2.3.a — Main DB için EF Core DbContext'i kayıt eder. Tenant iş varlıkları
+    /// (Company, ileride Building/Unit/Invoice) buradadır. Global query filter
+    /// <see cref="ITenantContext"/> üzerinden <c>tenant_id</c> izolasyonu uygular.
+    /// </summary>
+    /// <remarks>
+    /// <para>Interceptor zinciri Catalog ile aynı: AuditingInterceptor +
+    /// UrlCodeGeneratingInterceptor + (audit conn varsa) FullAuditInterceptor.</para>
+    /// <para>Hibrit multi-tenancy: shared-mode default (HasDedicatedDatabase=false
+    /// tenant'lar bu paylaşılan DB'ye yazar). Dedicated DB tenant'ları için
+    /// runtime connection resolver Faz 1.X+'a ertelendi.</para>
+    /// </remarks>
+    public static IServiceCollection AddMainPersistence(
+        this IServiceCollection services,
+        string connectionString,
+        string? auditConnectionString = null)
+    {
+        services.AddDbContext<MainDbContext>((sp, options) =>
+        {
+            var interceptors = new List<IInterceptor>
+            {
+                sp.GetRequiredService<AuditingInterceptor>(),
+                sp.GetRequiredService<UrlCodeGeneratingInterceptor>(),
+            };
+            if (!string.IsNullOrWhiteSpace(auditConnectionString))
+            {
+                interceptors.Add(sp.GetRequiredService<FullAuditInterceptor>());
+            }
+
+            options
+                .UseNpgsql(connectionString, npg => npg.MigrationsAssembly(typeof(MainDbContext).Assembly.GetName().Name))
+                .UseSnakeCaseNamingConvention()
+                .ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning))
+                .AddInterceptors(interceptors);
+        });
+
+        services.AddScoped<IMainDbContext>(sp => sp.GetRequiredService<MainDbContext>());
+
         return services;
     }
 }

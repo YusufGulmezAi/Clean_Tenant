@@ -29,9 +29,10 @@ public static class ServiceCollectionExtensions
             ?? throw new InvalidOperationException("ConnectionStrings:Catalog bulunamadı.");
         var redisConnection = configuration.GetConnectionString("Redis")
             ?? throw new InvalidOperationException("ConnectionStrings:Redis bulunamadı.");
-        // Audit ve Log DB bağlantıları opsiyonel — yoksa interceptor/sink kayıt edilmez.
+        // Audit, Log ve Main DB bağlantıları opsiyonel — yoksa ilgili context/interceptor kayıt edilmez.
         var auditConnection = configuration.GetConnectionString("Audit");
         var logConnection = configuration.GetConnectionString("Log");
+        var mainConnection = configuration.GetConnectionString("Main");
 
         services.AddOpenApi();
         services.AddApplicationServices();
@@ -47,6 +48,12 @@ public static class ServiceCollectionExtensions
         if (!string.IsNullOrWhiteSpace(logConnection))
         {
             services.AddLogPersistence(logConnection);
+        }
+        // v0.2.3.a — Main DB (tenant iş varlıkları). Shared-mode default; conn string yoksa
+        // Companies handler'ları çözümlenemez (Faz 1.X'te dedicated DB resolver eklenecek).
+        if (!string.IsNullOrWhiteSpace(mainConnection))
+        {
+            services.AddMainPersistence(mainConnection, auditConnection);
         }
 
         // Enum'lar JSON request/response'larda string olarak okunup yazılsın

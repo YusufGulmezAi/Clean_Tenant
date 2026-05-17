@@ -7,6 +7,86 @@ Bu dosya, Faz 1 (UI başlangıç + ManagementApp) kapsamında yapılan tüm alt-
 
 ---
 
+## v0.2.3.a — 2026-05-17 — Main DbContext Altyapısı + Company Entity
+
+### Kapsam Ayrımı (v0.2.3 → 0.2.3.a + 0.2.3.b)
+- v0.2.3 başlangıçta tek alt-faz planlanmıştı; kullanıcı onayıyla **iki parçaya** ayrıldı.
+- **v0.2.3.a (bu kayıt):** Main DB infrastructure — entity, DbContext, EF configuration, migration, DI extension, test fixture genişletme, davranış testleri. CRUD yok.
+- **v0.2.3.b (sonraki):** CreateCompany / UpdateCompany / DeleteCompany / GetCompanies / GetCompanyByUrlCode CQRS handler'ları + validator'lar + WebApi endpoint'leri + ManagementApp Companies sayfaları.
+
+### Mimari Karar: Main DB — Tenant İş Varlıkları İçin Ayrı DbContext
+- Catalog (Identity + Tenant registry) tek DbContext'ti; Main DB iş verileri için ayrı kayıt.
+- 4-DB hibrit mimari netleşti: Catalog + Audit + Log (mevcut) + **Main** (yeni).
+- Shared-mode default: tüm tenant'lar tek Main DB'yi paylaşır; dedicated DB tenant'ları için runtime connection resolver Faz 1.X+'a ertelendi.
+
+### Mimari Karar: Global Query Filter via Reflection
+- `MainDbContext.OnModelCreating` her `ITenantScoped` entity'sine reflection ile `HasQueryFilter(e => e.TenantId == _tenantContext.TenantId)` uygular.
+- Cross-tenant erişim (System scope) bilinçli olarak `IgnoreQueryFilters()` ile yapılır.
+- `_tenantContext.TenantId` null ise (henüz seçilmemiş context) filter `null == null` üretir; PostgreSQL'de bu false → boş sonuç döner. Yani System scope'ta `IgnoreQueryFilters` zorunlu.
+
+### Mimari Karar: Company Minimal Skeleton
+- Kullanıcı kararı: "Minimal başla — UrlCode + TenantId + Name + LegalName? + Vkn? + Email? + Phone? + Status."
+- Building/Unit/Invoice ileride; Company her ikisinin de parent'ı olacak.
+- VKN formatı DB CHECK constraint ile dayatılır (`^[1-9][0-9]{9}$`); Application validator (v0.2.3.b) ek FluentValidation katmanı ekler.
+- Name `citext` (case-insensitive) + tenant içinde unique (`is_deleted = false` filtreli partial unique index).
+
+### Eklenen Dosyalar (10 yeni dosya)
+
+**Domain:**
+- [CompanyStatus.cs](../../../src/Core/CleanTenant.Domain/Tenant/Companies/CompanyStatus.cs) — `Active=1, Suspended=2, Closed=3`.
+- [Company.cs](../../../src/Core/CleanTenant.Domain/Tenant/Companies/Company.cs) — `BaseEntity + IAggregateRoot + IHasUrlCode + ITenantScoped`.
+
+**Application:**
+- [IMainDbContext.cs](../../../src/Core/CleanTenant.Application/Common/Persistence/IMainDbContext.cs) — `DbSet<Company> Companies` + `SaveChangesAsync`.
+
+**Infrastructure.Persistence:**
+- [Main/MainDbContext.cs](../../../src/Infrastructure/CleanTenant.Infrastructure.Persistence/Main/MainDbContext.cs) — sealed DbContext + reflection global query filter.
+- [Main/Configurations/CompanyConfiguration.cs](../../../src/Infrastructure/CleanTenant.Infrastructure.Persistence/Main/Configurations/CompanyConfiguration.cs) — IEntityTypeConfiguration: citext Name + `ck_company_vkn_format` CHECK + xmin RowVersion.
+- [Main/MainDbContextDesignTimeFactory.cs](../../../src/Infrastructure/CleanTenant.Infrastructure.Persistence/Main/MainDbContextDesignTimeFactory.cs) — internal IDesignTimeDbContextFactory (EF CLI migration için, ScopeLevel.None tenant context'i ile).
+- `Main/Migrations/20260517192249_InitialMain.cs` + `Designer` + `MainDbContextModelSnapshot.cs` — EF Core CLI tarafından üretildi.
+- [DependencyInjection.cs](../../../src/Infrastructure/CleanTenant.Infrastructure.Persistence/DependencyInjection.cs) — yeni `AddMainPersistence(connectionString, auditConnectionString?)` extension method. Interceptor zinciri Catalog ile aynı: Auditing + UrlCodeGenerating + (opsiyonel) FullAudit.
+
+### Program.cs Bağlamaları
+- **WebApi** [ServiceCollectionExtensions.cs](../../../src/Presentation/CleanTenant.WebApi/Configuration/ServiceCollectionExtensions.cs): `ConnectionStrings:Main` opsiyonel okunur; varsa `AddMainPersistence` çağrılır.
+- **ManagementApp** [Program.cs](../../../src/Presentation/CleanTenant.ManagementApp/Program.cs): aynı pattern; v0.2.2'deki in-process IMediator zinciri Main DB'yi de görür.
+- `.env.development.example` zaten `ConnectionStrings__Main` taşıyordu (placeholder); ek değişiklik gerekmedi.
+
+### Test Eklemeleri (11 yeni test)
+
+**Domain.UnitTests (5 yeni):**
+- [CompanyTests.cs](../../../tests/CleanTenant.Domain.UnitTests/Tenant/Companies/CompanyTests.cs):
+  - Default constructor empty string + `Guid.Empty` + default status.
+  - `ITenantScoped + IAggregateRoot + IHasUrlCode + BaseEntity` marker compliance.
+  - `CompanyStatus` enum değerleri stable (1/2/3 numerik) — Theory ile 3 InlineData.
+
+**Infrastructure.IntegrationTests (6 yeni):**
+- [MainDbContextTests.cs](../../../tests/CleanTenant.Infrastructure.IntegrationTests/Main/MainDbContextTests.cs):
+  - Company eklendiğinde UrlCode otomatik üretilir (9-char Base58).
+  - Global query filter aktif tenant dışındaki kayıtları gizler.
+  - `IgnoreQueryFilters()` cross-tenant erişimi geri açar.
+  - VKN CHECK constraint geçersiz format için ihlal eder.
+  - Aynı tenant içinde aynı Name unique index ile engellenir.
+  - Company yaratıldığında Audit DB'ye Create kaydı yazılır.
+
+**Fixture Genişletme:**
+- [PostgresFixture.cs](../../../tests/CleanTenant.Infrastructure.IntegrationTests/Fixtures/PostgresFixture.cs): üçüncü DB `cleantenant_main` provision + extension'lar + migration. `TenantContext` mock'u testlerin tenant kimliği set etmesi için public.
+- Catalog'un `SystemTenantContext` placeholder kayıtı test container'ında override edilir.
+
+### Doğrulama
+- ✓ `dotnet build CleanTenant.slnx` — 0 uyarı / 0 hata.
+- ✓ `dotnet test CleanTenant.slnx --no-build` — **190 test başarılı** (Faz 0'ın 146 + ManagementApp bUnit 33 + Domain +5 + Infrastructure +6).
+  - 17 Application unit + 75 Domain unit + 31 Infrastructure integration + 34 WebApi integration + 33 ManagementApp bUnit.
+
+### Bilinen Sınırlar
+- **MigrationRunner Main desteği yok.** Şu an yalnız Catalog migrate eder; Main migration'ları test container'ında otomatik uygulanır, prod/dev için Faz 1.X'te `--db <Catalog|Main|Audit|Log>` argümanı eklenecek.
+- **System scope cross-tenant okuması manuel.** Global filter `null == tenantId` false döndüğü için System scope query'lerin `IgnoreQueryFilters()` çağırması zorunlu — bunu MediatR pipeline (v0.2.3.b) için unutmayalım.
+- **Companies CRUD handler yok.** v0.2.3.b'de eklenecek.
+
+### Sonraki Adım
+**v0.2.3.b — Companies CRUD:** 5 handler (Create/Update/Delete/GetList/GetByUrlCode) + FluentValidation'lar + WebApi `CompanyEndpoints.cs` (5 route) + ManagementApp Companies UI (liste + form). Tenant onboarding wizard'ında (v0.2.4) ilk şirket yaratma akışı bu handler'ları çağıracak.
+
+---
+
 ## v0.2.2 — 2026-05-17 — Auth Ekranları (Login + 2FA Challenge + 2FA Enrollment)
 
 ### Mimari Karar: In-process MediatR

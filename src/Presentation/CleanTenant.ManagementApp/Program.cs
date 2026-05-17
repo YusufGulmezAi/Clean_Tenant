@@ -35,6 +35,7 @@ var redisConnection = builder.Configuration.GetConnectionString("Redis")
     ?? throw new InvalidOperationException("ConnectionStrings:Redis bulunamadı.");
 var auditConnection = builder.Configuration.GetConnectionString("Audit");
 var logConnection = builder.Configuration.GetConnectionString("Log");
+var mainConnection = builder.Configuration.GetConnectionString("Main");
 
 // ─── Backend services — WebApi ile aynı pipeline (in-process IMediator) ───
 builder.Services.AddApplicationServices();
@@ -49,6 +50,11 @@ if (!string.IsNullOrWhiteSpace(auditConnection))
 if (!string.IsNullOrWhiteSpace(logConnection))
 {
     builder.Services.AddLogPersistence(logConnection);
+}
+// v0.2.3.a — Main DB (tenant iş varlıkları). Companies sayfaları bu context'e bağlıdır.
+if (!string.IsNullOrWhiteSpace(mainConnection))
+{
+    builder.Services.AddMainPersistence(mainConnection, auditConnection);
 }
 
 // ─── UI services ───
