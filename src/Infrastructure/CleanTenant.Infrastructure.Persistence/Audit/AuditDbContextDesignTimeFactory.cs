@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace CleanTenant.Infrastructure.Persistence.Audit;
 
@@ -18,6 +19,7 @@ internal sealed class AuditDbContextDesignTimeFactory : IDesignTimeDbContextFact
         var options = new DbContextOptionsBuilder<AuditDbContext>()
             .UseNpgsql(connectionString, npg => npg.MigrationsAssembly(typeof(AuditDbContext).Assembly.GetName().Name))
             .UseSnakeCaseNamingConvention()
+            .ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning))
             .Options;
 
         return new AuditDbContext(options);

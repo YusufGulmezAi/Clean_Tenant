@@ -15,6 +15,10 @@ x86/
 [Ll]ogs/
 *.binlog
 
+# Source-tree Log/ namespace (Persistence.Log) should not match the [Ll]og/ build rule above
+!src/Infrastructure/CleanTenant.Infrastructure.Persistence/Log/
+!src/Infrastructure/CleanTenant.Infrastructure.Persistence/Log/**
+
 # .NET tools
 .dotnet/
 .vs/

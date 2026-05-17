@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace CleanTenant.Infrastructure.Persistence.Catalog;
 
@@ -30,6 +31,7 @@ internal sealed class CatalogDbContextDesignTimeFactory : IDesignTimeDbContextFa
         var options = new DbContextOptionsBuilder<CatalogDbContext>()
             .UseNpgsql(connectionString)
             .UseSnakeCaseNamingConvention()
+            .ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning))
             .Options;
 
         return new CatalogDbContext(options);

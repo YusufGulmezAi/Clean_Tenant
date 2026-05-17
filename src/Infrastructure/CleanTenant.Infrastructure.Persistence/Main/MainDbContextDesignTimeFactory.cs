@@ -1,6 +1,7 @@
 using CleanTenant.SharedKernel.Context;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace CleanTenant.Infrastructure.Persistence.Main;
 
@@ -16,6 +17,7 @@ internal sealed class MainDbContextDesignTimeFactory : IDesignTimeDbContextFacto
         var options = new DbContextOptionsBuilder<MainDbContext>()
             .UseNpgsql(connectionString, npg => npg.MigrationsAssembly(typeof(MainDbContext).Assembly.GetName().Name))
             .UseSnakeCaseNamingConvention()
+            .ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning))
             .Options;
 
         // Design-time için boş tenant context (migration üretiminde filter çalışmaz)
