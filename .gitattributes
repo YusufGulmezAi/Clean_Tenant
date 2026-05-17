@@ -1,0 +1,52 @@
+# CleanTenant - Git dosya öznitelikleri
+
+# Varsayılan: metin dosyalarında otomatik satır sonu normalizasyonu
+* text=auto eol=lf
+
+# Kod dosyaları LF satır sonu (cross-platform tutarlılık)
+*.cs       text eol=lf
+*.cshtml   text eol=lf
+*.razor    text eol=lf
+*.json     text eol=lf
+*.xml      text eol=lf
+*.yml      text eol=lf
+*.yaml     text eol=lf
+*.md       text eol=lf
+*.css      text eol=lf
+*.js       text eol=lf
+*.ts       text eol=lf
+*.html     text eol=lf
+
+# MSBuild ve proje dosyaları LF
+*.csproj   text eol=lf
+*.props    text eol=lf
+*.targets  text eol=lf
+
+# Windows-özel dosyalar CRLF (PowerShell ve Solution dosyaları)
+*.sln      text eol=crlf
+*.ps1      text eol=crlf
+*.psm1     text eol=crlf
+*.psd1     text eol=crlf
+*.bat      text eol=crlf
+*.cmd      text eol=crlf
+
+# Shell script'leri LF
+*.sh       text eol=lf
+
+# Binary dosyalar
+*.png      binary
+*.jpg      binary
+*.jpeg     binary
+*.gif      binary
+*.ico      binary
+*.svg      binary
+*.pdf      binary
+*.dll      binary
+*.exe      binary
+*.pdb      binary
+*.snk      binary
+*.nupkg    binary
+*.zip      binary
+
+# Linguist hint (GitHub'da dil dağılımı doğru hesaplansın)
+*.razor    linguist-language=Razor

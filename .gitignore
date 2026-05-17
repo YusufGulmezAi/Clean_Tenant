@@ -1,0 +1,117 @@
+# CleanTenant - .NET / Visual Studio / Rider / VS Code projeleri için ignore listesi
+
+############################################################
+# Build çıktıları
+############################################################
+bin/
+obj/
+out/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Bb]uild/
+[Ll]og/
+[Ll]ogs/
+*.binlog
+
+# .NET tools
+.dotnet/
+.vs/
+
+# NuGet
+*.nupkg
+*.snupkg
+*.nuget.props
+*.nuget.targets
+*.lock.json
+.nuget/
+packages/
+!packages/build/
+**/packages/*
+!**/packages/build/
+
+# Coverage çıktıları
+*.coverage
+*.coveragexml
+coverage*.xml
+coverage*.json
+TestResults/
+[Cc]overage/
+
+############################################################
+# Sırlar ve ortam dosyaları
+############################################################
+.env
+.env.*
+!.env.*.example
+secrets.json
+appsettings.Local.json
+appsettings.*.Local.json
+
+# User secrets
+**/UserSecrets/
+
+############################################################
+# IDE / editör dosyaları
+############################################################
+
+# Visual Studio
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.userprefs
+*.pidb
+*.svclog
+*.scc
+
+# Rider / IntelliJ
+.idea/
+*.iml
+
+# VS Code
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+############################################################
+# OS dosyaları
+############################################################
+.DS_Store
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+
+############################################################
+# MAUI / Mobil platform çıktıları
+############################################################
+**/Resources/raw/
+**/Platforms/Android/Resources/raw/
+**/Platforms/iOS/Resources/
+local.properties
+
+############################################################
+# Docker
+############################################################
+*.pid
+
+############################################################
+# Geçici dosyalar
+############################################################
+*.tmp
+*.temp
+*.bak
+*.swp
+*~
+
+############################################################
+# CleanTenant proje-özel
+############################################################
+# Memory snapshot'ları takip et (proje izlenebilirliği için repo'da kalır)
+!docs/memory-snapshots/
+
+# Hangfire local DB cache
+hangfire-data/

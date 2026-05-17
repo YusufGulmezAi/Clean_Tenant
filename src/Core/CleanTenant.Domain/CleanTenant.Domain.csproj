@@ -1,0 +1,22 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\CleanTenant.SharedKernel\CleanTenant.SharedKernel.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      ASP.NET Core Identity'nin IdentityUser<TKey> ve IdentityRole<TKey> base sınıfları
+      Domain entity'lerinde miras alındığı için bu paket Domain'e bağımlandı.
+      Saflık ödünü kabul; alternatif (manuel User/Role yazımı) çok büyük tekrar.
+    -->
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

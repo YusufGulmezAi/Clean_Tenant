@@ -1,0 +1,51 @@
+# CleanTenant — Demo Ortam Override'ı
+#
+# Satış / paydaş gösterimleri için. Dev'e benzer ama:
+# - Portlar internal-only (ters proxy ile dışarı açılır).
+# - Seq dahil (demo sırasında log gösterimi için).
+# - Resource limit'ler tanımlı (host stabil kalsın).
+
+services:
+
+  postgres:
+    ports:
+      - "${POSTGRES_PORT:-5632}:5432"
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+
+  redis:
+    ports:
+      - "${REDIS_PORT:-6579}:6379"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  seq:
+    image: datalust/seq:latest
+    container_name: ${COMPOSE_PROJECT_NAME:-cleantenant}-seq
+    environment:
+      ACCEPT_EULA: "Y"
+      SEQ_FIRSTRUN_ADMINPASSWORDHASH: ${SEQ_ADMIN_PASSWORD_HASH}
+      TZ: UTC
+    ports:
+      - "${SEQ_PORT:-5541}:80"
+    volumes:
+      - seq-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - cleantenant-net
+
+volumes:
+  seq-data:
+    name: ${COMPOSE_PROJECT_NAME:-cleantenant}-seq-data

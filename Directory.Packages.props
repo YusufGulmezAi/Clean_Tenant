@@ -1,0 +1,86 @@
+<Project>
+
+  <!--
+    Tüm NuGet paket sürümlerinin merkezi yönetimi (Central Package Management).
+    Bu dosyaya yazılan sürümler, projelerdeki PackageReference satırlarına
+    otomatik olarak uygulanır. Hiçbir csproj dosyasında Version="..." yazılmaz.
+
+    Yeni paket eklerken: bu dosyaya bir PackageVersion satırı ekle,
+    ilgili csproj'a yalnızca <PackageReference Include="..." /> ekle.
+  -->
+
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+  <ItemGroup Label="ASP.NET Core ve API araçları">
+    <!-- Built-in OpenAPI desteği; Scalar veya Swashbuckle yerine .NET 10 yerleşik -->
+    <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.7" />
+  </ItemGroup>
+
+  <ItemGroup Label="Test çatısı (xUnit + runners)">
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageVersion Include="xunit" Version="2.9.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.4" />
+    <PackageVersion Include="coverlet.collector" Version="6.0.4" />
+  </ItemGroup>
+
+  <ItemGroup Label="Test araçları (assertion + mock)">
+    <!--
+      FluentAssertions v8'den itibaren ücretli (Cherry Picker Software).
+      Son Apache-2.0 sürümü v6.12.x; bu sürüm pin'lendi.
+      Dependabot v7+ PR açmasın diye .github/dependabot.yml'da ignore listesi tutulacak (v0.1.11'de).
+    -->
+    <PackageVersion Include="FluentAssertions" Version="6.12.2" />
+    <PackageVersion Include="NSubstitute" Version="5.3.0" />
+  </ItemGroup>
+
+  <ItemGroup Label="MAUI (Hibrit mobil uygulama)">
+    <!--
+      MauiVersion property'si MAUI SDK (workload) tarafından otomatik set edilir.
+      Yüklü workload manifest sürümüyle hizalanır, böylece workload ile uyumsuz
+      bir NuGet sürümü çekilmez.
+    -->
+    <PackageVersion Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
+    <PackageVersion Include="Microsoft.AspNetCore.Components.WebView.Maui" Version="$(MauiVersion)" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Debug" Version="10.0.7" />
+  </ItemGroup>
+
+  <ItemGroup Label="EF Core + ASP.NET Core Identity + Npgsql (v0.1.4.a)">
+    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.7" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.7" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.7" />
+    <PackageVersion Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.7" />
+    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.0" />
+    <PackageVersion Include="EFCore.NamingConventions" Version="10.0.0" />
+  </ItemGroup>
+
+  <ItemGroup Label="Hosting + Cache + CLI + Testcontainers (v0.1.4.b)">
+    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.7" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.0.7" />
+    <PackageVersion Include="Microsoft.Extensions.Caching.Memory" Version="10.0.7" />
+    <PackageVersion Include="System.CommandLine" Version="2.0.0-rc.1.25451.107" />
+    <PackageVersion Include="Testcontainers.PostgreSql" Version="4.7.0" />
+  </ItemGroup>
+
+  <ItemGroup Label="JWT + Redis (v0.1.5.a)">
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.7" />
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.7" />
+    <PackageVersion Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.5.0" />
+    <PackageVersion Include="StackExchange.Redis" Version="2.8.16" />
+    <PackageVersion Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="10.0.7" />
+    <PackageVersion Include="Testcontainers.Redis" Version="4.7.0" />
+  </ItemGroup>
+
+  <!--
+    İlerleyen alt fazlarda eklenecek paketler:
+    - v0.1.4.b: Testcontainers.PostgreSql, Dapper
+    - v0.1.5: Microsoft.AspNetCore.Authentication.JwtBearer, OtpNet
+    - v0.1.6: MediatR, FluentValidation 11.x (12.x ücretli; ignore!)
+    - v0.1.7: Serilog, Serilog.AspNetCore, Serilog.Sinks.PostgreSQL
+    - v0.1.8: StackExchange.Redis veya Microsoft.Extensions.Caching.StackExchangeRedis
+    - v0.1.9: Hangfire, Hangfire.PostgreSql
+    - v0.1.10: bUnit, WireMock.Net, Bogus, OWASP ZAP CI
+  -->
+
+</Project>

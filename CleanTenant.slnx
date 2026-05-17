@@ -1,0 +1,30 @@
+<Solution>
+  <Folder Name="/src/" />
+  <Folder Name="/src/Core/">
+    <Project Path="src/Core/CleanTenant.Application/CleanTenant.Application.csproj" />
+    <Project Path="src/Core/CleanTenant.Domain/CleanTenant.Domain.csproj" />
+    <Project Path="src/Core/CleanTenant.SharedKernel/CleanTenant.SharedKernel.csproj" />
+  </Folder>
+  <Folder Name="/src/Infrastructure/">
+    <Project Path="src/Infrastructure/CleanTenant.Infrastructure.BackgroundJobs/CleanTenant.Infrastructure.BackgroundJobs.csproj" />
+    <Project Path="src/Infrastructure/CleanTenant.Infrastructure.Caching/CleanTenant.Infrastructure.Caching.csproj" />
+    <Project Path="src/Infrastructure/CleanTenant.Infrastructure.Identity/CleanTenant.Infrastructure.Identity.csproj" />
+    <Project Path="src/Infrastructure/CleanTenant.Infrastructure.Logging/CleanTenant.Infrastructure.Logging.csproj" />
+    <Project Path="src/Infrastructure/CleanTenant.Infrastructure.Persistence/CleanTenant.Infrastructure.Persistence.csproj" />
+  </Folder>
+  <Folder Name="/src/Presentation/">
+    <Project Path="src/Presentation/CleanTenant.ManagementApp/CleanTenant.ManagementApp.csproj" />
+    <Project Path="src/Presentation/CleanTenant.MobilApp/CleanTenant.MobilApp.csproj" />
+    <Project Path="src/Presentation/CleanTenant.PortalApp/CleanTenant.PortalApp.csproj" />
+    <Project Path="src/Presentation/CleanTenant.WebApi/CleanTenant.WebApi.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/CleanTenant.Application.UnitTests/CleanTenant.Application.UnitTests.csproj" />
+    <Project Path="tests/CleanTenant.Domain.UnitTests/CleanTenant.Domain.UnitTests.csproj" />
+    <Project Path="tests/CleanTenant.Infrastructure.IntegrationTests/CleanTenant.Infrastructure.IntegrationTests.csproj" />
+    <Project Path="tests/CleanTenant.WebApi.IntegrationTests/CleanTenant.WebApi.IntegrationTests.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/CleanTenant.MigrationRunner/CleanTenant.MigrationRunner.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,47 @@
+# CleanTenant — Development Ortam Override'ı
+#
+# Geliştirici makinesinde çalışacak konfigürasyon:
+# - Tüm portlar host'a expose edilir (DB IDE'leri / araçları bağlanabilsin).
+# - Seq servisi eklenir (yerel log inceleme).
+# - Volume'lar persist eder; env-reset ile silinir.
+
+services:
+
+  postgres:
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+
+  redis:
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+
+  # ----------------------------------------------------------------------
+  # Seq — Yerel log inceleme arayüzü. Sadece Dev/Demo'da kullanılır.
+  # Erişim: http://localhost:${SEQ_PORT}
+  # İlk giriş için admin şifresi SEQ_ADMIN_PASSWORD_HASH ortam değişkeninden
+  # gelir (hash üretimi için .env.development.example yorum satırlarına bakın).
+  # ----------------------------------------------------------------------
+  seq:
+    image: datalust/seq:latest
+    container_name: ${COMPOSE_PROJECT_NAME:-cleantenant}-seq
+    environment:
+      ACCEPT_EULA: "Y"
+      SEQ_FIRSTRUN_ADMINPASSWORDHASH: ${SEQ_ADMIN_PASSWORD_HASH}
+      TZ: UTC
+    ports:
+      - "${SEQ_PORT:-5341}:80"
+    volumes:
+      - seq-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - cleantenant-net
+
+volumes:
+  seq-data:
+    name: ${COMPOSE_PROJECT_NAME:-cleantenant}-seq-data

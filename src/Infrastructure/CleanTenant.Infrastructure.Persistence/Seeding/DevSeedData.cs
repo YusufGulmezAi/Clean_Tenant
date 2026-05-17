@@ -1,0 +1,155 @@
+using CleanTenant.Domain.Identity.Authorization;
+using CleanTenant.Domain.Identity.Tenants;
+using CleanTenant.Domain.Identity.Users;
+using CleanTenant.Infrastructure.Persistence.Catalog;
+using CleanTenant.SharedKernel.Context;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+
+namespace CleanTenant.Infrastructure.Persistence.Seeding;
+
+/// <summary>
+/// <para>
+/// Development ortamı için ek seed verisi. Permission ve built-in rollere ek
+/// olarak şu kayıtları idempotent şekilde oluşturur:
+/// <list type="bullet">
+///   <item>Geliştirici System admin kullanıcı (Yusuf Gülmez)</item>
+///   <item>Yusuf'a Developer rol ataması (System scope)</item>
+///   <item>Bir demo tenant (Shared mode)</item>
+/// </list>
+/// </para>
+/// <para>
+/// <b>Şifre kaynağı:</b> <c>SEED_ADMIN_PASSWORD</c> environment değişkeni
+/// (.env.development'tan yüklenir). Şifre policy min 8 + complexity'yi
+/// karşılamalıdır; aksi takdirde Identity validation hata verir.
+/// </para>
+/// </summary>
+public sealed class DevSeedData
+{
+    private const string AdminEmail = "yusuf.gulmez.ai@gmail.com";
+    private const string AdminFirstName = "YUSUF";
+    private const string AdminLastName = "GÜLMEZ";
+    private const string DemoTenantName = "Acme Sites Ltd.";
+
+    private readonly CatalogDbContext _db;
+    private readonly UserManager<User> _userManager;
+    private readonly ILogger<DevSeedData> _logger;
+
+    /// <summary>DI bağımlılıklarını alır.</summary>
+    public DevSeedData(
+        CatalogDbContext db,
+        UserManager<User> userManager,
+        ILogger<DevSeedData> logger)
+    {
+        _db = db;
+        _userManager = userManager;
+        _logger = logger;
+    }
+
+    /// <summary>Development seed senaryosunu idempotent şekilde uygular.</summary>
+    public async Task SeedAsync(CancellationToken cancellationToken = default)
+    {
+        var password = Environment.GetEnvironmentVariable("SEED_ADMIN_PASSWORD")
+            ?? throw new InvalidOperationException(
+                "SEED_ADMIN_PASSWORD environment değişkeni eksik. .env.development içine ekleyin.");
+
+        await EnsureAdminUserAsync(password);
+        await EnsureDemoTenantAsync(cancellationToken);
+    }
+
+    private async Task EnsureAdminUserAsync(string password)
+    {
+        var existing = await _userManager.FindByEmailAsync(AdminEmail);
+        if (existing is not null)
+        {
+            _logger.LogInformation("Dev admin kullanıcı zaten mevcut: {Email}", AdminEmail);
+            await EnsureDeveloperRoleAssignmentAsync(existing.Id);
+            return;
+        }
+
+        var user = new User
+        {
+            UserName = AdminEmail,
+            Email = AdminEmail,
+            EmailConfirmed = true,
+            FirstName = AdminFirstName,
+            LastName = AdminLastName,
+            TwoFactorEnabled = false, // Dev'de pratik; production zorunlu olacak
+        };
+
+        var result = await _userManager.CreateAsync(user, password);
+        if (!result.Succeeded)
+        {
+            throw new InvalidOperationException(
+                $"Dev admin kullanıcı oluşturulamadı. Hatalar: "
+                + string.Join(", ", result.Errors.Select(e => e.Description)));
+        }
+
+        _logger.LogInformation("Dev admin kullanıcı oluşturuldu: {Email}", AdminEmail);
+        await EnsureDeveloperRoleAssignmentAsync(user.Id);
+    }
+
+    private async Task EnsureDeveloperRoleAssignmentAsync(Guid userId)
+    {
+        var developerRole = await _db.Roles
+            .AsNoTracking()
+            .Where(r => r.NormalizedName == "DEVELOPER" && r.Scope == ScopeLevel.System)
+            .Select(r => r.Id)
+            .FirstOrDefaultAsync();
+
+        if (developerRole == Guid.Empty)
+        {
+            throw new InvalidOperationException(
+                "Developer built-in rolü bulunamadı. SeedCoreCatalogAsync çalıştırılmış olmalı.");
+        }
+
+        var alreadyAssigned = await _db.UserRoleAssignments
+            .AsNoTracking()
+            .AnyAsync(a => a.UserId == userId
+                        && a.RoleId == developerRole
+                        && a.ScopeLevel == ScopeLevel.System);
+
+        if (alreadyAssigned)
+        {
+            return;
+        }
+
+        _db.UserRoleAssignments.Add(new UserRoleAssignment
+        {
+            UserId = userId,
+            RoleId = developerRole,
+            ScopeLevel = ScopeLevel.System,
+            AssignedAt = DateTimeOffset.UtcNow,
+            IsActive = true,
+        });
+
+        await _db.SaveChangesAsync();
+        _logger.LogInformation("Dev admin'e Developer (System) rolü atandı.");
+    }
+
+    private async Task EnsureDemoTenantAsync(CancellationToken cancellationToken)
+    {
+        var exists = await _db.Tenants
+            .AsNoTracking()
+            .AnyAsync(t => t.Name == DemoTenantName, cancellationToken);
+
+        if (exists)
+        {
+            _logger.LogInformation("Demo tenant zaten mevcut: {Name}", DemoTenantName);
+            return;
+        }
+
+        _db.Tenants.Add(new Tenant
+        {
+            Name = DemoTenantName,
+            LegalName = "Acme Site Yönetim Limited Şirketi",
+            Status = TenantStatus.Active,
+            BillingTier = BillingTier.Standard,
+            HasDedicatedDatabase = false,
+        });
+
+        await _db.SaveChangesAsync(cancellationToken);
+        _logger.LogInformation("Demo tenant oluşturuldu: {Name}", DemoTenantName);
+    }
+}

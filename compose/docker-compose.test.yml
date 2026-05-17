@@ -1,0 +1,14 @@
+# CleanTenant — Test Ortam Override'ı
+#
+# CI ve manuel QA için. Seq yok (log dump CI çıktısından okunur).
+# Portlar host'a expose edilir ki manuel QA'da DB araçları bağlanabilsin.
+
+services:
+
+  postgres:
+    ports:
+      - "${POSTGRES_PORT:-5532}:5432"
+
+  redis:
+    ports:
+      - "${REDIS_PORT:-6479}:6379"

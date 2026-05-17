@@ -1,0 +1,23 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\CleanTenant.Domain\CleanTenant.Domain.csproj" />
+    <ProjectReference Include="..\CleanTenant.SharedKernel\CleanTenant.SharedKernel.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      ICatalogDbContext interface'i DbSet<T> property'leri sergilediği için
+      Application katmanı EF Core'a abstract düzeyde bağlanır. Pratik karar;
+      tamamen abstract repository pattern over-engineering olurdu.
+    -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

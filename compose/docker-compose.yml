@@ -1,0 +1,80 @@
+# CleanTenant — Docker Compose Temel Tanım
+#
+# Bu dosya tüm ortamlar (Development / Test / Demo / Production) için ortak
+# servisleri tanımlar. Her ortamın kendine özgü override dosyası
+# (docker-compose.<env>.yml) port mapping, ek servis (Seq) ve kaynak limiti
+# gibi ortam-özel ayarları üzerine ekler.
+#
+# Çalıştırma:
+#   docker compose --env-file .env.<env> -f compose/docker-compose.yml \
+#                  -f compose/docker-compose.<env>.yml up -d
+# Pratikte scripts/env-up.ps1 kullanılır.
+
+name: ${COMPOSE_PROJECT_NAME:-cleantenant}
+
+services:
+
+  # ----------------------------------------------------------------------
+  # PostgreSQL — Catalog, Main, Log, Audit veritabanlarını barındırır.
+  # 4 veritabanı tek instance içinde mantıksal olarak ayrılmıştır.
+  # Init script'leri compose/postgres-init/ altındadır.
+  # ----------------------------------------------------------------------
+  postgres:
+    image: postgres:17-alpine
+    container_name: ${COMPOSE_PROJECT_NAME:-cleantenant}-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: postgres
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C.UTF-8"
+      TZ: UTC
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - cleantenant-net
+
+  # ----------------------------------------------------------------------
+  # Redis — Distributed cache, idempotency key store, localization cache,
+  # MediatR CachingBehavior backend'i, rate limiter persistence.
+  # ----------------------------------------------------------------------
+  redis:
+    image: redis:8-alpine
+    container_name: ${COMPOSE_PROJECT_NAME:-cleantenant}-redis
+    command: >
+      redis-server
+      --requirepass ${REDIS_PASSWORD}
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --appendonly yes
+    environment:
+      TZ: UTC
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a $$REDIS_PASSWORD --no-auth-warning ping | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - cleantenant-net
+
+volumes:
+  postgres-data:
+    name: ${COMPOSE_PROJECT_NAME:-cleantenant}-postgres-data
+  redis-data:
+    name: ${COMPOSE_PROJECT_NAME:-cleantenant}-redis-data
+
+networks:
+  cleantenant-net:
+    name: ${COMPOSE_PROJECT_NAME:-cleantenant}-net
+    driver: bridge

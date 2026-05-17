@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Core\CleanTenant.Application\CleanTenant.Application.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\CleanTenant.Infrastructure.Persistence\CleanTenant.Infrastructure.Persistence.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\CleanTenant.Infrastructure.Identity\CleanTenant.Infrastructure.Identity.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\CleanTenant.Infrastructure.Logging\CleanTenant.Infrastructure.Logging.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\CleanTenant.Infrastructure.Caching\CleanTenant.Infrastructure.Caching.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\CleanTenant.Infrastructure.BackgroundJobs\CleanTenant.Infrastructure.BackgroundJobs.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
+  </PropertyGroup>
+
+</Project>

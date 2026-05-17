@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="FluentAssertions" />
+    <PackageReference Include="NSubstitute" />
+    <PackageReference Include="Testcontainers.PostgreSql" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+    <Using Include="FluentAssertions" />
+    <Using Include="NSubstitute" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Infrastructure\CleanTenant.Infrastructure.Persistence\CleanTenant.Infrastructure.Persistence.csproj" />
+    <ProjectReference Include="..\..\src\Infrastructure\CleanTenant.Infrastructure.Identity\CleanTenant.Infrastructure.Identity.csproj" />
+    <ProjectReference Include="..\..\src\Infrastructure\CleanTenant.Infrastructure.Logging\CleanTenant.Infrastructure.Logging.csproj" />
+    <ProjectReference Include="..\..\src\Infrastructure\CleanTenant.Infrastructure.Caching\CleanTenant.Infrastructure.Caching.csproj" />
+    <ProjectReference Include="..\..\src\Infrastructure\CleanTenant.Infrastructure.BackgroundJobs\CleanTenant.Infrastructure.BackgroundJobs.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,66 @@
+<Project>
+
+  <!--
+    Tüm CleanTenant projeleri için ortak derleme ve dil ayarları.
+    Bu dosya, kök dizinden başlayarak tüm csproj'ları otomatik olarak etkiler.
+    Her proje ilk olarak bu PropertyGroup'ları yükler, sonra kendi csproj'unu.
+  -->
+
+  <PropertyGroup Label="Dil ve Derleme">
+    <!-- C# en son dil seviyesi; .NET 10 ile gelen tüm özelliklere erişim -->
+    <LangVersion>latest</LangVersion>
+    <!-- Nullable reference type'lar zorunlu; ?? operatörleri çalışır, null-forgiving disiplinli kullanılır -->
+    <Nullable>enable</Nullable>
+    <!-- Sık kullanılan namespace'ler implicit using olarak gelir (System, System.Collections.Generic, vb.) -->
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Hiçbir uyarıya tahammül yok; uyarı = derleme hatası -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- XML dokümantasyon dosyası üretilir; eksik dokümantasyonlar CS1591 ile uyarıya dönüşür -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- .editorconfig kuralları derleme sırasında dayatılır -->
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <!-- En son .NET analyzer kurallarını çalıştır -->
+    <AnalysisLevel>latest</AnalysisLevel>
+    <!-- Tavsiye edilen analyzer kuralları (tüm kuralları açmak agresif olabilir; sonradan sıkılaştırılabilir) -->
+    <AnalysisMode>Recommended</AnalysisMode>
+    <!--
+      Genel proje-bazlı suppression listesi:
+        CA1000 — Generic tipte static method (Result<T>.Success/Failure factory pattern'i için zorunlu).
+        CA1716 — Tip adı yabancı dil keyword'ü ile çakışıyor ("Error" VB.NET'te); biz yalnız C# kullanıyoruz.
+        CA1711 — Tip adı belirli sözcükle bitiyor ("Permission" CA'ya göre rezerve, ama bizim domain'imizde doğal isim).
+        CA1848 — LoggerMessage delegate (mikro-performans; okunabilirlik öncelikli).
+        CA1873 — Pahalı log argümanı uyarısı (mikro-performans).
+        CA1862 — String karşılaştırma StringComparison ile (EF LINQ-to-SQL'de pratik değil).
+    -->
+    <NoWarn>$(NoWarn);CA1000;CA1716;CA1711;CA1848;CA1873;CA1862</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Central Package Management">
+    <!-- NuGet paket sürümleri Directory.Packages.props'ta merkezi olarak yönetilir -->
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <!-- Transitive (dolaylı) bağımlılıkların da merkezi sürüm pin'lemesine tabi olması -->
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Test projeleri için yumuşatmalar"
+                 Condition="$(MSBuildProjectName.EndsWith('Tests'))">
+    <!-- Test projeleri NuGet paketi olarak yayınlanmaz -->
+    <IsPackable>false</IsPackable>
+    <!-- Test sınıflarına XML doc zorunluluğu uygulanmaz (tests/* için pratik bir taviz) -->
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <!--
+      Test projelerine ek suppression'lar:
+        CA1707 — alt çizgili metod isimleri (test convention: When_X_then_Y).
+        CA1515 — internal yerine private member (test sınıfı yardımcıları için).
+    -->
+    <NoWarn>$(NoWarn);CA1707;CA1515</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Assembly meta verileri">
+    <Company>CleanTenant</Company>
+    <Authors>CleanTenant Team</Authors>
+    <Copyright>© 2026 CleanTenant</Copyright>
+    <NeutralLanguage>tr-TR</NeutralLanguage>
+  </PropertyGroup>
+
+</Project>

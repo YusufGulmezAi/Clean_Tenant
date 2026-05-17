@@ -1,0 +1,41 @@
+# CleanTenant — Production Ortam Override'ı
+#
+# - Postgres ve Redis portları yalnız internal network'te; dış dünyaya
+#   açılmaz (ters proxy gerekirse expose edilir, host port'a bind yok).
+# - Resource limit'ler aggressive; OOM/CPU sınırı kesin.
+# - Seq YOK — production'da Serilog → Log DB sink yeterli; merkezî log
+#   sistemi (örn. Loki, ELK) deployment'a göre eklenir.
+# - logging driver json-file boyut sınırlı (disk dolmasın).
+
+services:
+
+  postgres:
+    # Port mapping yok — sadece compose network'unden erişilir.
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '1.0'
+          memory: 1G
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  redis:
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
