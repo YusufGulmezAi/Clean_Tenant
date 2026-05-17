@@ -33,6 +33,14 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!--
+      EF Core CLI Migrations/ altındaki .cs dosyalarını üretir; bu generated
+      kodlar zaman zaman analyzer kurallarını (CA1822 — instance method static,
+      CA1825 — Array.Empty<T>(), CA1861 — sabit dizi argümanı static readonly)
+      tetikler. .editorconfig [**/Migrations/*.cs] glob'u her IDE / `dotnet run`
+      kombinasyonunda etkinleşmiyor; csproj seviyesinde NoWarn kesin etki eder.
+    -->
+    <NoWarn>$(NoWarn);CA1822;CA1825;CA1861</NoWarn>
   </PropertyGroup>
 
 </Project>
