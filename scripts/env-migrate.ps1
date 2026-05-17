@@ -59,7 +59,7 @@ Write-Host "  Catalog connection  : $env:ConnectionStrings__Catalog"
 Write-Host ""
 
 # Catalog DB
-Write-Host "[1/1] Catalog DB migration uygulanıyor..." -ForegroundColor Cyan
+Write-Host "[1/4] Catalog DB migration uygulanıyor..." -ForegroundColor Cyan
 dotnet ef database update `
     --project $persistenceProject `
     --context CatalogDbContext `
@@ -70,10 +70,41 @@ if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
 
-# İlerideki DbContext'ler (Main, Log, Audit) buraya eklenecek:
-# Write-Host "[2/4] Main DB migration uygulanıyor..." -ForegroundColor Cyan
-# dotnet ef database update --project $persistenceProject --context MainDbContext --no-build
-# ...
+# Main DB (v0.2.3.a)
+Write-Host "[2/4] Main DB migration uygulanıyor..." -ForegroundColor Cyan
+dotnet ef database update `
+    --project $persistenceProject `
+    --context MainDbContext `
+    --no-build
+
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "Main migration başarısız (exit $LASTEXITCODE)."
+    exit $LASTEXITCODE
+}
+
+# Audit DB (v0.1.7)
+Write-Host "[3/4] Audit DB migration uygulanıyor..." -ForegroundColor Cyan
+dotnet ef database update `
+    --project $persistenceProject `
+    --context AuditDbContext `
+    --no-build
+
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "Audit migration başarısız (exit $LASTEXITCODE)."
+    exit $LASTEXITCODE
+}
+
+# Log DB (v0.1.7) — Serilog sink doğrudan yazar ama şema migration ile kurulur
+Write-Host "[4/4] Log DB migration uygulanıyor..." -ForegroundColor Cyan
+dotnet ef database update `
+    --project $persistenceProject `
+    --context LogDbContext `
+    --no-build
+
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "Log migration başarısız (exit $LASTEXITCODE)."
+    exit $LASTEXITCODE
+}
 
 Write-Host ""
 Write-Host "Tamam. Migration'lar uygulandı." -ForegroundColor Green
