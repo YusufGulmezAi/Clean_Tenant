@@ -1,0 +1,111 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+@*
+    v0.2.2.b — 6 haneli OTP kod giriş bileşeni.
+    Her hane ayrı bir input kutucuğunda; rakam girildiğinde otomatik sonraki kutuya
+    geçer, Backspace boş kutuda iken önceki kutuyu siler ve oraya odaklanır.
+    Yapıştırma (paste) tüm kutulara dağıtılır.
+
+    Kullanım:
+        <OtpCodeInput Length="6" Value="@_code" ValueChanged="@(v => _code = v)"
+                      Disabled="@_busy" />
+        <button disabled="@(_code.Length < 6)">...</button>
+
+    Davranış: ValueChanged her hane girişinden sonra çağrılır; consumer
+    Value.Length == Length kontrolüyle "form tamam mı" sorusunu yanıtlar.
+*@
+
+<div id="@_containerId" class="d-flex justify-center" style="gap: 0.5rem;">
+    @for (int i = 0; i < Length; i++)
+    {
+        var index = i;
+        <input type="text"
+               inputmode="numeric"
+               pattern="[0-9]*"
+               maxlength="1"
+               data-otp-index="@index"
+               value="@_digits[index]"
+               disabled="@Disabled"
+               @oninput="@(e => OnDigitInput(index, e.Value?.ToString()))"
+               autocomplete="one-time-code"
+               style="width: 48px; height: 56px; text-align: center; font-size: 1.5rem; border: 1px solid rgba(0,0,0,0.23); border-radius: 6px; background-color: transparent;" />
+    }
+</div>
+
+@code {
+    /// <summary>Kaç haneli OTP. Default 6 (TOTP standardı).</summary>
+    [Parameter] public int Length { get; set; } = 6;
+
+    /// <summary>Mevcut değer; consumer two-way bind ile takip eder.</summary>
+    [Parameter] public string Value { get; set; } = string.Empty;
+
+    /// <summary>Değer değiştiğinde çağrılır.</summary>
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+
+    /// <summary>Kutuları devre dışı bırak (busy / submitted state'lerinde).</summary>
+    [Parameter] public bool Disabled { get; set; }
+
+    private readonly string _containerId = $"otp-{Guid.NewGuid():N}";
+    private string[] _digits = [];
+
+    protected override void OnInitialized()
+    {
+        _digits = new string[Length];
+        SyncDigitsFromValue();
+    }
+
+    protected override void OnParametersSet()
+    {
+        // Parent component Value'yu reset edebilir (örn. form clear).
+        if (_digits.Length != Length)
+        {
+            _digits = new string[Length];
+        }
+        SyncDigitsFromValue();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // JS interop ile focus geçişi + Backspace + paste davranışlarını bağla.
+            await JS.InvokeVoidAsync("cleantenant.otpInput.setup", _containerId);
+        }
+    }
+
+    private async Task OnDigitInput(int index, string? raw)
+    {
+        // Sadece tek rakam; non-digit göz ardı edilir.
+        var digit = (raw ?? string.Empty).Where(char.IsDigit).LastOrDefault();
+        _digits[index] = digit == default(char) ? string.Empty : digit.ToString();
+
+        var joined = string.Concat(_digits);
+        if (joined != Value)
+        {
+            Value = joined;
+            await ValueChanged.InvokeAsync(joined);
+        }
+    }
+
+    private void SyncDigitsFromValue()
+    {
+        var current = Value ?? string.Empty;
+        for (int i = 0; i < Length; i++)
+        {
+            _digits[i] = i < current.Length ? current[i].ToString() : string.Empty;
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("cleantenant.otpInput.teardown", _containerId);
+        }
+        catch (JSDisconnectedException)
+        {
+            // SignalR circuit kapanmışsa cleanup mümkün değil — sessiz geç.
+        }
+    }
+}

@@ -7,6 +7,66 @@ Bu dosya, Faz 1 (UI başlangıç + ManagementApp) kapsamında yapılan tüm alt-
 
 ---
 
+## v0.2.2.b — 2026-05-18 — UX İyileştirme + Markalama (Login + 2FA + Layout)
+
+### Kapsam
+v0.2.2.a sonrası kullanıcı testinde tespit edilen UX eksikleri:
+1. Login sayfasındaki teknik metinler ve "CleanTenant" başlığı
+2. 2FA kod giriş alanlarında tek input yerine 6 ayrı kutucuk + auto-focus + Backspace geri + paste
+3. Recovery code'ları kullanıcının kaybetmemesi için TXT olarak indirme
+4. MainLayout statik SSR olduğu için drawer/dark toggle butonları + cascading reactivity çalışmıyordu
+
+### Mimari Karar: Markalama
+- Login + 2FA Enrollment ekranlarında "CleanTenant" → **"Toplu Yapı Yönetimi"** (kullanıcı talebi).
+- Login sayfasındaki "Yönetim Paneline Giriş" + "E-posta, TCKN/YKN, VKN veya cep telefonunuzla giriş yapabilirsiniz." paragrafları kaldırıldı — gereksiz teknik metin.
+
+### Mimari Karar: 6 Kutucuk OTP Pattern (DRY)
+- Yeni reusable Razor component **`OtpCodeInput.razor`** (InteractiveServer sayfalar için).
+- Statik SSR sayfaları (TwoFactorChallenge) için **JS modülü `cleantenant.otpForm`** (saf HTML + hidden field birleştirme + buton aktif/pasif).
+- JS davranışları (her iki pattern'da ortak):
+  - Otomatik focus geçişi (rakam girilince sonraki kutu)
+  - Backspace boş kutuda → önceki kutuyu sil ve oraya odaklan
+  - Sol/Sağ ok ile gezinti
+  - Paste (clipboard) → 6 hanenin tamamına dağıt
+  - Hepsi dolunca submit butonu aktif (statik form'da JS, Razor'da `Disabled="@(_code.Length < 6)"`)
+- Recovery code modunda (TwoFactorChallenge) 6 kutucuk yerine XXXXX-XXXXX serbest text (Identity'nin recovery code formatı).
+
+### Mimari Karar: Recovery Codes TXT İndirme
+- JS modülü `cleantenant.downloadTextFile(filename, content)` — Blob + temp `<a download>` + revoke.
+- Razor component IJSRuntime ile çağırır; recovery code listesi + header (kullanıcı, tarih, uyarı) txt'e yazılır.
+- Filename: `cleantenant-recovery-codes-{yyyyMMdd-HHmm}.txt`.
+
+### Mimari Karar: MainLayout InteractiveServer
+- `@rendermode InteractiveServer` eklendi. Drawer toggle + dark toggle + cascading state artık çalışır.
+- Cascade etkisi: tüm sayfalar (zaten `@rendermode InteractiveServer` taşıyanlar + diğerleri) MainLayout altında interactive olur. EmptyLayout kullanan auth sayfaları (Login/2FA Challenge/Pre-auth) etkilenmez — onlar statik SSR + form post pattern'ı.
+
+### Eklenen Dosyalar (3 yeni)
+- [wwwroot/js/cleantenant.js](../../../src/Presentation/CleanTenant.ManagementApp/wwwroot/js/cleantenant.js) — `otpInput`, `otpForm`, `downloadTextFile` JS modülleri. App.razor'da global yüklenir.
+- [Components/Shared/OtpCodeInput.razor](../../../src/Presentation/CleanTenant.ManagementApp/Components/Shared/OtpCodeInput.razor) — Reusable bileşen (InteractiveServer için), `IAsyncDisposable` ile JS cleanup.
+
+### Güncellenen Dosyalar
+- [Components/App.razor](../../../src/Presentation/CleanTenant.ManagementApp/Components/App.razor) — `cleantenant.js` script tag eklendi.
+- [Components/_Imports.razor](../../../src/Presentation/CleanTenant.ManagementApp/Components/_Imports.razor) — `Components.Shared` using.
+- [Pages/Login.razor](../../../src/Presentation/CleanTenant.ManagementApp/Components/Pages/Login.razor) — başlık + iki paragraf değişikliği.
+- [Pages/TwoFactorChallenge.razor](../../../src/Presentation/CleanTenant.ManagementApp/Components/Pages/TwoFactorChallenge.razor) — 6 kutucuk + recovery toggle + JS bind (hidden `code` field'ı submit'te dolar).
+- [Pages/TwoFactorEnrollmentPreAuth.razor](../../../src/Presentation/CleanTenant.ManagementApp/Components/Pages/TwoFactorEnrollmentPreAuth.razor) — `OtpCodeInput` + recovery codes TXT indir butonu.
+- [Pages/Settings/TwoFactorEnrollment.razor](../../../src/Presentation/CleanTenant.ManagementApp/Components/Pages/Settings/TwoFactorEnrollment.razor) — `OtpCodeInput` + TXT indir butonu.
+- [Components/Layout/MainLayout.razor](../../../src/Presentation/CleanTenant.ManagementApp/Components/Layout/MainLayout.razor) — `@rendermode InteractiveServer`.
+- [tests/.../bUnitTests/Components/LoginTests.cs](../../../tests/CleanTenant.ManagementApp.bUnitTests/Components/LoginTests.cs) — "Yönetim Paneline Giriş" assertion'ı yeni başlığa (Toplu Yapı Yönetimi) güncellendi.
+
+### Doğrulama
+- ✓ `dotnet build CleanTenant.slnx` — 0 uyarı / 0 hata.
+- ✓ `dotnet test CleanTenant.slnx --no-build` — **196 test başarılı** (Sürekli 196).
+
+### Çözülmemiş Konular (Sonraki Adım)
+- **AUTH-002 raporu (kullanıcı):** Seed admin parolası eşleşmiyor — `.env.development`'taki `SEED_ADMIN_PASSWORD` ile login formuna yazılan parola aynı olmalı. Identity lockout (5 yanlış sonrası 15dk) ihtimali için `aspnet_users.lockout_end` kontrolü.
+- **NavMenu disabled linkler** (Faz 1.4/1.5/1.6 etiketli): Tıklanmaz olmaları doğru davranış — sayfalar henüz yok.
+
+### Sonraki Adım
+**v0.2.3.b — Companies CRUD** (sıra geri döndü). UX akışı stabil, asıl iş ekranlarına geçilir.
+
+---
+
 ## v0.2.2.a — 2026-05-18 — Pre-auth 2FA Enrollment Akışı
 
 ### Sorun

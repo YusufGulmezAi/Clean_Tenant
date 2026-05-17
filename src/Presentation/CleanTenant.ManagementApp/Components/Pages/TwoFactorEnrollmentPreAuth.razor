@@ -5,6 +5,7 @@
 @implements IDisposable
 @inject MediatR.IMediator Mediator
 @inject NavigationManager Navigation
+@inject IJSRuntime JS
 
 @*
     v0.2.2.a — Pre-auth 2FA enrollment.
@@ -67,11 +68,14 @@
         </MudPaper>
 
         <MudText Typo="Typo.h6" Class="mb-2">2. Uygulamanın verdiği 6 haneli kodu girin</MudText>
-        <MudTextField @bind-Value="_confirmCode" Label="Kod" Variant="Variant.Outlined"
-                      Placeholder="123456" MaxLength="6" Class="mb-3" />
+        <div class="mb-3">
+            <OtpCodeInput Value="@_confirmCode"
+                          ValueChanged="@(v => _confirmCode = v)"
+                          Disabled="@_busy" />
+        </div>
 
         <MudButton Color="Color.Primary" Variant="Variant.Filled" FullWidth="true"
-                   OnClick="@ConfirmAsync" Disabled="@(_busy || string.IsNullOrWhiteSpace(_confirmCode))">
+                   OnClick="@ConfirmAsync" Disabled="@(_busy || _confirmCode.Length < 6)">
             Onayla
         </MudButton>
 
@@ -99,6 +103,13 @@
                 </MudItem>
             }
         </MudGrid>
+
+        <MudButton Color="Color.Secondary" Variant="Variant.Outlined" FullWidth="true"
+                   StartIcon="@Icons.Material.Filled.Download"
+                   OnClick="@DownloadRecoveryCodesAsync"
+                   Class="mb-3">
+            Kurtarma kodlarını TXT olarak indir
+        </MudButton>
 
         <MudCheckBox T="bool" @bind-Value="_savedAcknowledged" Color="Color.Primary" Class="mt-2">
             Recovery kodlarını güvenli bir yere kaydettim.
@@ -227,6 +238,15 @@
         {
             _busy = false;
         }
+    }
+
+    private async Task DownloadRecoveryCodesAsync()
+    {
+        if (_recoveryCodes.Count == 0) return;
+        var header = $"CleanTenant — Toplu Yapı Yönetimi · 2FA Kurtarma Kodları\nKullanıcı: {_email}\nTarih: {DateTimeOffset.Now:yyyy-MM-dd HH:mm}\n\nHer kod tek kullanımlıktır. Güvenli bir yerde saklayın.\n\n";
+        var content = header + string.Join(Environment.NewLine, _recoveryCodes);
+        var filename = $"cleantenant-recovery-codes-{DateTimeOffset.Now:yyyyMMdd-HHmm}.txt";
+        await JS.InvokeVoidAsync("cleantenant.downloadTextFile", filename, content);
     }
 
     private static string GenerateQrCodePngBase64(string otpAuthUri)

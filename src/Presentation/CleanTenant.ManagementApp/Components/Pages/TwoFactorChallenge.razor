@@ -44,6 +44,7 @@
             <div class="mb-3">
                 <label for="method" class="d-block mb-1" style="font-weight: 500;">Yöntem</label>
                 <select id="method" name="method"
+                        onchange="window.cleantenant.challengeMethodSwitch && window.cleantenant.challengeMethodSwitch(this.value)"
                         style="width: 100%; padding: 10px; border: 1px solid rgba(0,0,0,0.23); border-radius: 4px; font-size: 1rem;">
                     <option value="Authenticator">Authenticator (TOTP)</option>
                     <option value="Email">E-posta kodu</option>
@@ -52,20 +53,83 @@
                 </select>
             </div>
 
-            <div class="mb-4">
-                <label for="code" class="d-block mb-1" style="font-weight: 500;">
-                    Kod (6 hane veya XXXXX-XXXXX)
-                </label>
-                <input id="code" name="code" type="text" required
-                       autocomplete="one-time-code" autofocus
-                       style="width: 100%; padding: 10px; border: 1px solid rgba(0,0,0,0.23); border-radius: 4px; font-size: 1rem;" />
+            @* 6 haneli OTP modu (Authenticator/Email/Phone için) *@
+            <div id="challenge-otp" class="mb-4" style="display: block;">
+                <label class="d-block mb-2" style="font-weight: 500;">6 haneli kod</label>
+                <div id="challenge-otp-inputs" class="d-flex justify-center" style="gap: 0.5rem;">
+                    @for (int i = 0; i < 6; i++)
+                    {
+                        var idx = i;
+                        <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1"
+                               data-otp-index="@idx" autocomplete="one-time-code"
+                               style="width: 48px; height: 56px; text-align: center; font-size: 1.5rem; border: 1px solid rgba(0,0,0,0.23); border-radius: 6px;" />
+                    }
+                </div>
             </div>
 
+            @* Recovery kodu modu (XXXXX-XXXXX serbest metin) — JS toggle eder *@
+            <div id="challenge-recovery" class="mb-4" style="display: none;">
+                <label for="recovery-code" class="d-block mb-1" style="font-weight: 500;">
+                    Recovery kodu (XXXXX-XXXXX)
+                </label>
+                <input id="recovery-code" name="recovery-code-display" type="text" autocomplete="one-time-code"
+                       placeholder="ABCDE-FGHIJ"
+                       style="width: 100%; padding: 10px; border: 1px solid rgba(0,0,0,0.23); border-radius: 4px; font-size: 1rem; font-family: monospace;"
+                       oninput="window.cleantenant.challengeSyncRecovery && window.cleantenant.challengeSyncRecovery(this.value)" />
+            </div>
+
+            @* Hidden field: cleantenant.js form submit'inde dolduracak (OTP veya recovery'den) *@
+            <input id="challenge-code" name="code" type="hidden" value="" />
+
             <button type="submit"
-                    style="width: 100%; padding: 12px; background-color: var(--mud-palette-primary); color: white; border: none; border-radius: 4px; font-size: 1rem; font-weight: 500; cursor: pointer;">
+                    id="challenge-submit"
+                    disabled
+                    style="width: 100%; padding: 12px; background-color: var(--mud-palette-primary); color: white; border: none; border-radius: 4px; font-size: 1rem; font-weight: 500; cursor: pointer; opacity: 0.5;">
                 Doğrula
             </button>
         </form>
+
+        <script>
+            (function() {
+                // 6 haneli OTP setup (Authenticator default seçili)
+                window.cleantenant.otpForm.init('challenge-otp-inputs', 'code', 'challenge-submit');
+
+                // Method değişimi: 6 kutucuk vs serbest metin görünür/gizli
+                window.cleantenant.challengeMethodSwitch = function(method) {
+                    var otpDiv = document.getElementById('challenge-otp');
+                    var recoveryDiv = document.getElementById('challenge-recovery');
+                    var submitBtn = document.getElementById('challenge-submit');
+                    var hidden = document.getElementById('challenge-code');
+                    if (method === 'RecoveryCode') {
+                        otpDiv.style.display = 'none';
+                        recoveryDiv.style.display = 'block';
+                        // Recovery için en az 5 karakter kontrolü
+                        var rv = document.getElementById('recovery-code').value || '';
+                        hidden.value = rv;
+                        submitBtn.disabled = rv.replace(/[^A-Za-z0-9]/g,'').length < 5;
+                        submitBtn.style.opacity = submitBtn.disabled ? '0.5' : '1';
+                    } else {
+                        otpDiv.style.display = 'block';
+                        recoveryDiv.style.display = 'none';
+                        // OTP form state'i tekrar değerlendir
+                        var inputs = document.querySelectorAll('#challenge-otp-inputs input[data-otp-index]');
+                        var val = Array.from(inputs).map(function(i){return i.value || '';}).join('');
+                        hidden.value = val;
+                        submitBtn.disabled = val.length < 6;
+                        submitBtn.style.opacity = submitBtn.disabled ? '0.5' : '1';
+                    }
+                };
+
+                window.cleantenant.challengeSyncRecovery = function(value) {
+                    var hidden = document.getElementById('challenge-code');
+                    var submitBtn = document.getElementById('challenge-submit');
+                    hidden.value = value || '';
+                    var clean = (value || '').replace(/[^A-Za-z0-9]/g,'');
+                    submitBtn.disabled = clean.length < 5;
+                    submitBtn.style.opacity = submitBtn.disabled ? '0.5' : '1';
+                };
+            })();
+        </script>
 
         <MudDivider Class="my-4" />
 

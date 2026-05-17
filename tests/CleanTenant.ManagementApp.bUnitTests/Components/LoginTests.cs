@@ -13,8 +13,7 @@ public sealed class LoginTests : MudTestContextBase
     {
         var cut = RenderComponent<Login>();
 
-        cut.Markup.Should().Contain("CleanTenant");
-        cut.Markup.Should().Contain("Yönetim Paneline Giriş");
+        cut.Markup.Should().Contain("Toplu Yapı Yönetimi");
         cut.Markup.Should().Contain("action=\"/auth/sign-in\"");
         cut.Markup.Should().Contain("name=\"identifier\"");
         cut.Markup.Should().Contain("name=\"password\"");
