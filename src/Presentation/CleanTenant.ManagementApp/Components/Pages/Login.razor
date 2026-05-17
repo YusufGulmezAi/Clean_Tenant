@@ -81,6 +81,8 @@
         "AUTH-001" or "AUTH-009" => Severity.Warning,
         "AUTH-002" or "AUTH-003" => Severity.Error,
         "AUTH-2FA-ENROLLMENT-REQUIRED" => Severity.Info,
+        "AUTH-2FA-ENROLL-CHALLENGE-NOT-FOUND" => Severity.Warning,
+        "AUTH-2FA-ENROLL-NOT-VERIFIED" => Severity.Warning,
         "AUTH-004" => Severity.Error,
         _ => Severity.Error,
     };
@@ -92,7 +94,11 @@
         "AUTH-003" => "Hesap geçici olarak kilitli (çok fazla başarısız deneme).",
         "AUTH-004" => "Bu kullanıcı için Management persona'sında erişilebilir bir scope yok.",
         "AUTH-009" => "Kimlik tipi tanınamadı — geçerli bir e-posta/TCKN/VKN/telefon girin.",
-        "AUTH-2FA-ENROLLMENT-REQUIRED" => "System hesabınız için 2FA enrollment zorunlu. Lütfen önce bir yöntem aktif edin.",
+        // v0.2.2.a öncesi error — sistem normalde otomatik enrollment sayfasına
+        // yönlendirir; bu mesaj yalnız edge case'lerde (tutarsız 2FA durumu) görünür.
+        "AUTH-2FA-ENROLLMENT-REQUIRED" => "2FA aktivasyon gerekli. Sayfaya yönlendirilirken bir sorun oluştu — tekrar giriş yapın.",
+        "AUTH-2FA-ENROLL-CHALLENGE-NOT-FOUND" => "Enrollment süresi doldu veya iptal edildi. Lütfen tekrar giriş yapın.",
+        "AUTH-2FA-ENROLL-NOT-VERIFIED" => "Enrollment doğrulanmadan tamamlanamaz — kodu girip onaylamalısınız.",
         _ => $"Bilinmeyen hata: {code}",
     };
 }

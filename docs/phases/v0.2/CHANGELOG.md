@@ -7,6 +7,76 @@ Bu dosya, Faz 1 (UI başlangıç + ManagementApp) kapsamında yapılan tüm alt-
 
 ---
 
+## v0.2.2.a — 2026-05-18 — Pre-auth 2FA Enrollment Akışı
+
+### Sorun
+- Memory `rules_identity` kuralı: System scope kullanıcıları için 2FA enrollment **zorunlu**.
+- v0.2.2 sonrası System user ilk login'de `AUTH-2FA-ENROLLMENT-REQUIRED` error fırlatılıyor, enrollment'a köprü yok — kullanıcı `/login`'de tıkanır.
+- v0.2.2 CHANGELOG'da bu zaten "Açık Konular → Faz 1.X+" olarak ertelenmişti; dev admin testi sırasında zorunlu hale geldi (kullanıcı raporu).
+
+### Mimari Karar: Pre-auth Enrollment Challenge (Redis, 10dk TTL)
+- Yeni `PreAuthEnrollmentChallenge` entity: token + UserId + Email + ContextId + Persona + IpAddress + UserAgent + IssuedAt + VerifiedAt.
+- Login akışı System scope + 2FA disabled tespit ederse → challenge oluşturulup Redis'e yazılır + token istemciye döner.
+- Pre-auth state: token tek başına yetki aracı (kullanıcı henüz authenticated değil, cookie/JWT yok).
+- Akış: Start (QR + secret) → Complete (kod doğrula + 2FA enable + recovery codes) → Finalize (cookie set + TokenPair).
+- VerifiedAt set olmadan finalize reddedilir (atlatma engeli).
+
+### Mimari Karar: LoginStatus.EnrollmentRequired
+- `LoginResult`'a 3. discriminator değer: `Success / TwoFactorRequired / EnrollmentRequired`.
+- Yeni `PreAuthEnrollmentChallengeResponse` record (token + ExpiresAt + Email).
+- Eski `Error.Failure("AUTH-2FA-ENROLLMENT-REQUIRED", ...)` → artık `Result<LoginResult>.Success(LoginStatus.EnrollmentRequired, ...)` (akış başarılı, istemci yeni adıma yönlendirilir).
+
+### Eklenen Dosyalar (12 yeni dosya)
+
+**Application:**
+- [PreAuthEnrollmentChallenge.cs](../../../src/Core/CleanTenant.Application/Common/Auth/PreAuthEnrollmentChallenge.cs)
+- [IPreAuthEnrollmentStore.cs](../../../src/Core/CleanTenant.Application/Common/Auth/IPreAuthEnrollmentStore.cs)
+- `Features/Auth/TwoFactor/PreAuthEnrollment/`:
+  - [StartPreAuthEnrollmentQuery.cs](../../../src/Core/CleanTenant.Application/Features/Auth/TwoFactor/PreAuthEnrollment/StartPreAuthEnrollmentQuery.cs) + Handler
+  - [CompletePreAuthEnrollmentCommand.cs](../../../src/Core/CleanTenant.Application/Features/Auth/TwoFactor/PreAuthEnrollment/CompletePreAuthEnrollmentCommand.cs) + Handler
+  - [FinalizePreAuthEnrollmentCommand.cs](../../../src/Core/CleanTenant.Application/Features/Auth/TwoFactor/PreAuthEnrollment/FinalizePreAuthEnrollmentCommand.cs) + Handler
+
+**Infrastructure:**
+- [RedisPreAuthEnrollmentStore.cs](../../../src/Infrastructure/CleanTenant.Infrastructure.Caching/TwoFactor/RedisPreAuthEnrollmentStore.cs) — `ct:2fa:preauth-enroll:{token}` key pattern, JSON serialize, 10dk TTL, UpdateAsync kalan TTL'yi korur.
+
+**Presentation:**
+- [TwoFactorEnrollmentPreAuth.razor](../../../src/Presentation/CleanTenant.ManagementApp/Components/Pages/TwoFactorEnrollmentPreAuth.razor) — InteractiveServer + EmptyLayout + AllowAnonymous. State machine: Loading → QrCode → RecoveryCodes; finalize için HTML form post (cookie set HttpContext gerektirir).
+
+### Güncellenen Dosyalar
+- [LoginResult.cs](../../../src/Core/CleanTenant.Application/Common/Auth/LoginResult.cs) — `LoginStatus.EnrollmentRequired` + `PreAuthEnrollmentChallengeResponse` record + `LoginResult.EnrollmentChallenge` opsiyonel alan (geriye uyumlu).
+- [LoginCommandHandler.cs](../../../src/Core/CleanTenant.Application/Features/Auth/Login/LoginCommandHandler.cs) — System scope + 2FA disabled tespitinde `IssueEnrollmentChallengeAsync` çağrılır; eski error fırlatılmaz.
+- [Caching DependencyInjection.cs](../../../src/Infrastructure/CleanTenant.Infrastructure.Caching/DependencyInjection.cs) — `IPreAuthEnrollmentStore` scoped kayıt.
+- [WebApi TwoFactorEndpoints.cs](../../../src/Presentation/CleanTenant.WebApi/Endpoints/TwoFactorEndpoints.cs) — 3 yeni anonim endpoint: `/api/v1/auth/2fa/enroll-pre-auth/{start|complete|finalize}` (mobile + integration test için).
+- [ManagementApp AuthEndpoints.cs](../../../src/Presentation/CleanTenant.ManagementApp/Auth/AuthEndpoints.cs) — `SignInAsync` `EnrollmentRequired` durumunda `/2fa/enroll-pre-auth?token=...` redirect; yeni `/auth/2fa/enroll-pre-auth/finalize` form-post endpoint (cookie set + redirect /).
+- [Login.razor](../../../src/Presentation/CleanTenant.ManagementApp/Components/Pages/Login.razor) — eski `AUTH-2FA-ENROLLMENT-REQUIRED` mesajı yeniden yazıldı (artık normal akışta tetiklenmez, edge case fallback); yeni `AUTH-2FA-ENROLL-CHALLENGE-NOT-FOUND` ve `AUTH-2FA-ENROLL-NOT-VERIFIED` mesajları eklendi.
+
+### Yeni Error Code'ları
+- `AUTH-2FA-ENROLL-CHALLENGE-NOT-FOUND` (401) — Token bulunamadı veya süresi doldu.
+- `AUTH-2FA-ENROLL-NOT-VERIFIED` (403) — Finalize çağrıldı ama Complete adımı geçilmedi.
+- `AUTH-2FA-NOT-ACTIVATED` (422) — Defansif: Complete OK ama user.TwoFactorEnabled hâlâ false.
+
+### Test Eklemeleri (6 yeni integration test)
+
+[PreAuthEnrollmentTests.cs](../../../tests/CleanTenant.WebApi.IntegrationTests/TwoFactor/PreAuthEnrollmentTests.cs):
+1. Login_System_user_2FA_disabled_EnrollmentRequired_donmeli
+2. Start_secret_ve_otpauth_uri_donmeli
+3. Bilinmeyen_challenge_token_start_da_401_donmeli
+4. Yanlis_kod_complete_da_401_donmeli
+5. Dogrulanmamis_challenge_finalize_403_donmeli
+6. Tam_akis_start_complete_finalize_token_donmeli — Start → manuel RFC 6238 TOTP → Complete → Finalize → TokenPair + ikinci finalize 401 (replay engeli) + user.TwoFactorEnabled=true doğrulama.
+
+**RFC 6238 TOTP yardımcısı:** ASP.NET Identity'nin `AuthenticatorTokenProvider.GenerateAsync` boş döndüğü için (kod authenticator app'ten gelir) test'te manuel TOTP hesaplama (Base32 decode + HMAC-SHA1 + counter). `#pragma warning disable CA5350` — RFC 6238 standartı HMAC-SHA1 zorunlu kılar.
+
+### Doğrulama
+- ✓ `dotnet build CleanTenant.slnx` — 0 uyarı / 0 hata.
+- ✓ `dotnet test CleanTenant.slnx --no-build` — **196 test başarılı** (190 + 6 yeni).
+  - 17 Application unit + 75 Domain unit + 31 Infrastructure integration + **40 WebApi integration** (34 + 6 yeni) + 33 ManagementApp bUnit.
+
+### Sonraki Adım
+**v0.2.3.b — Companies CRUD:** 5 handler + WebApi endpoint'leri + ManagementApp Companies UI. Auth akışı artık uçtan uca tamam — System dev admin login + enrollment + dashboard erişimi mümkün.
+
+---
+
 ## v0.2.3.a — 2026-05-17 — Main DbContext Altyapısı + Company Entity
 
 ### Kapsam Ayrımı (v0.2.3 → 0.2.3.a + 0.2.3.b)

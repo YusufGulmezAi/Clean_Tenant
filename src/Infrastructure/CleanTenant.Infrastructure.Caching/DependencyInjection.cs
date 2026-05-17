@@ -30,6 +30,9 @@ public static class DependencyInjection
         // v0.1.5.c — 2FA login challenge store'u (5 dk TTL).
         services.AddScoped<ITwoFactorChallengeStore, RedisTwoFactorChallengeStore>();
 
+        // v0.2.2.a — System scope kullanıcıları için pre-auth 2FA enrollment store (10 dk TTL).
+        services.AddScoped<IPreAuthEnrollmentStore, RedisPreAuthEnrollmentStore>();
+
         return services;
     }
 }

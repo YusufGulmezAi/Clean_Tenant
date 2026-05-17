@@ -2,6 +2,7 @@ using System.Security.Claims;
 using CleanTenant.Application.Common.Auth;
 using CleanTenant.Application.Features.Auth.Login;
 using CleanTenant.Application.Features.Auth.Logout;
+using CleanTenant.Application.Features.Auth.TwoFactor.PreAuthEnrollment;
 using CleanTenant.Application.Features.Auth.TwoFactor.SendCode;
 using CleanTenant.Application.Features.Auth.TwoFactor.VerifyTwoFactor;
 using MediatR;
@@ -46,6 +47,15 @@ public static class AuthEndpoints
               .AllowAnonymous();
 
         routes.MapPost("/auth/2fa/send-code", Send2FaCodeAsync)
+              .DisableAntiforgery()
+              .AllowAnonymous();
+
+        // v0.2.2.a — Pre-auth 2FA enrollment finalize.
+        // Sayfa (TwoFactorEnrollmentPreAuth.razor) InteractiveServer modunda
+        // Start + Complete'i IMediator ile in-process çağırır; finalize ise
+        // cookie set'lemesi için HttpContext'e ulaşan bir endpoint olmalı —
+        // bu yüzden form post pattern'i kullanılır (Login.razor gibi).
+        routes.MapPost("/auth/2fa/enroll-pre-auth/finalize", FinalizePreAuthEnrollmentAsync)
               .DisableAntiforgery()
               .AllowAnonymous();
 
@@ -124,7 +134,6 @@ public static class AuthEndpoints
         if (result.IsFailure)
         {
             var error = result.FirstError;
-            // AUTH-2FA-ENROLLMENT-REQUIRED akışını login sayfası ele alır
             return Results.Redirect($"/login?error={Uri.EscapeDataString(error.Code)}");
         }
 
@@ -135,9 +144,44 @@ public static class AuthEndpoints
             return Results.Redirect($"/2fa/challenge?token={token:N}");
         }
 
+        // v0.2.2.a — System scope kullanıcısı + 2FA yok → pre-auth enrollment sayfasına
+        if (login.Status == LoginStatus.EnrollmentRequired)
+        {
+            var token = login.EnrollmentChallenge!.ChallengeToken;
+            return Results.Redirect($"/2fa/enroll-pre-auth?token={token:N}");
+        }
+
         // Success → cookie set
         var tokens = login.Tokens!;
         await SignInWithSessionAsync(httpContext, tokens, remember);
+        return Results.Redirect("/");
+    }
+
+    private static async Task<IResult> FinalizePreAuthEnrollmentAsync(
+        HttpContext httpContext,
+        [FromForm] string token,
+        [FromServices] IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParseExact(token, "N", out var challengeToken) &&
+            !Guid.TryParse(token, out challengeToken))
+        {
+            return Results.Redirect("/login?error=AUTH-2FA-ENROLL-CHALLENGE-NOT-FOUND");
+        }
+
+        var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        var ua = httpContext.Request.Headers.UserAgent.ToString();
+
+        var result = await mediator.Send(
+            new FinalizePreAuthEnrollmentCommand(challengeToken, ip, ua),
+            cancellationToken);
+
+        if (result.IsFailure)
+        {
+            return Results.Redirect($"/login?error={Uri.EscapeDataString(result.FirstError.Code)}");
+        }
+
+        await SignInWithSessionAsync(httpContext, result.Value!, rememberMe: false);
         return Results.Redirect("/");
     }
 

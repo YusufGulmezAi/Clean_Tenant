@@ -18,7 +18,8 @@ namespace CleanTenant.Application.Features.Auth.Login;
 ///   <item>UserManager ile kullanıcı bul + lockout kontrol.</item>
 ///   <item>Şifre doğrulama.</item>
 ///   <item>2FA aktifse → <see cref="TwoFactorChallenge"/> üret ve istemciye yönlendir.</item>
-///   <item>2FA aktif değil ama System scope rolü var → <c>AUTH-2FA-ENROLLMENT-REQUIRED</c>.</item>
+///   <item>2FA aktif değil ama System scope rolü var → <see cref="PreAuthEnrollmentChallenge"/>
+///   üret ve <see cref="LoginStatus.EnrollmentRequired"/> döndür (v0.2.2.a).</item>
 ///   <item>Diğer durum → <see cref="LoginFinalizer"/> ile TokenPair üret.</item>
 /// </list>
 /// </summary>
@@ -27,10 +28,17 @@ public sealed class LoginCommandHandler : IRequestHandler<LoginCommand, Result<L
     /// <summary>2FA challenge için kısa TTL — istemcinin kod girmek için makul süresi.</summary>
     public static readonly TimeSpan TwoFactorChallengeTtl = TimeSpan.FromMinutes(5);
 
+    /// <summary>
+    /// Pre-auth enrollment challenge TTL. QR tarama + ilk kod + recovery code
+    /// okuma + tamamlama akışına yetecek makul süre.
+    /// </summary>
+    public static readonly TimeSpan PreAuthEnrollmentChallengeTtl = TimeSpan.FromMinutes(10);
+
     private readonly UserManager<User> _userManager;
     private readonly ICatalogDbContext _db;
     private readonly LoginFinalizer _finalizer;
     private readonly ITwoFactorChallengeStore _challengeStore;
+    private readonly IPreAuthEnrollmentStore _enrollmentStore;
     private readonly IClock _clock;
 
     /// <summary>DI bağımlılıklarını alır.</summary>
@@ -39,12 +47,14 @@ public sealed class LoginCommandHandler : IRequestHandler<LoginCommand, Result<L
         ICatalogDbContext db,
         LoginFinalizer finalizer,
         ITwoFactorChallengeStore challengeStore,
+        IPreAuthEnrollmentStore enrollmentStore,
         IClock clock)
     {
         _userManager = userManager;
         _db = db;
         _finalizer = finalizer;
         _challengeStore = challengeStore;
+        _enrollmentStore = enrollmentStore;
         _clock = clock;
     }
 
@@ -88,12 +98,10 @@ public sealed class LoginCommandHandler : IRequestHandler<LoginCommand, Result<L
             return await IssueTwoFactorChallengeAsync(user, command, cancellationToken);
         }
 
-        // System scope rolü olup 2FA hiç açmamış kullanıcı → enrollment zorunlu
+        // System scope rolü olup 2FA hiç açmamış kullanıcı → pre-auth enrollment challenge
         if (await _finalizer.HasSystemScopeAsync(user.Id, cancellationToken))
         {
-            return Result<LoginResult>.Failure(
-                Error.Failure("AUTH-2FA-ENROLLMENT-REQUIRED",
-                    "System hesaplar için 2FA zorunlu — önce bir yöntem (TOTP / E-posta / SMS) aktif edin."));
+            return await IssueEnrollmentChallengeAsync(user, command, cancellationToken);
         }
 
         // Normal akış
@@ -103,6 +111,37 @@ public sealed class LoginCommandHandler : IRequestHandler<LoginCommand, Result<L
         return finalize.IsSuccess
             ? Result<LoginResult>.Success(new LoginResult(LoginStatus.Success, finalize.Value, null))
             : Result<LoginResult>.Failure(finalize.FirstError);
+    }
+
+    private async Task<Result<LoginResult>> IssueEnrollmentChallengeAsync(
+        User user,
+        LoginCommand command,
+        CancellationToken cancellationToken)
+    {
+        var now = _clock.UtcNow;
+        var challengeToken = Guid.CreateVersion7(now);
+        var challenge = new PreAuthEnrollmentChallenge
+        {
+            ChallengeToken = challengeToken,
+            UserId = user.Id,
+            Email = user.Email ?? user.UserName ?? string.Empty,
+            ContextId = command.ContextId ?? Guid.CreateVersion7(now),
+            Persona = command.Persona,
+            IpAddress = command.IpAddress,
+            UserAgent = command.UserAgent,
+            IssuedAt = now,
+            VerifiedAt = null,
+        };
+
+        await _enrollmentStore.StoreAsync(challenge, PreAuthEnrollmentChallengeTtl, cancellationToken);
+
+        var response = new PreAuthEnrollmentChallengeResponse(
+            challengeToken,
+            now.Add(PreAuthEnrollmentChallengeTtl),
+            challenge.Email);
+
+        return Result<LoginResult>.Success(
+            new LoginResult(LoginStatus.EnrollmentRequired, null, null, response));
     }
 
     private async Task<Result<LoginResult>> IssueTwoFactorChallengeAsync(

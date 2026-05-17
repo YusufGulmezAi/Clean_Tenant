@@ -2,6 +2,7 @@ using CleanTenant.Application.Features.Auth.TwoFactor.ConfirmTotpEnrollment;
 using CleanTenant.Application.Features.Auth.TwoFactor.DisableTotp;
 using CleanTenant.Application.Features.Auth.TwoFactor.EnrollTotp;
 using CleanTenant.Application.Features.Auth.TwoFactor.GetTwoFactorMethods;
+using CleanTenant.Application.Features.Auth.TwoFactor.PreAuthEnrollment;
 using CleanTenant.Application.Features.Auth.TwoFactor.RegenerateRecoveryCodes;
 using CleanTenant.Application.Features.Auth.TwoFactor.SendCode;
 using CleanTenant.Application.Features.Auth.TwoFactor.VerifyTwoFactor;
@@ -24,6 +25,12 @@ public static class TwoFactorEndpoints
 
         group.MapPost("/verify", VerifyAsync).AllowAnonymous();
         group.MapPost("/send-code", SendCodeAsync).AllowAnonymous();
+
+        // v0.2.2.a — Pre-auth enrollment (System scope kullanıcı + 2FA yok).
+        // Kullanıcı henüz authenticated değil; tek başına challenge token taşır.
+        group.MapPost("/enroll-pre-auth/start", PreAuthStartAsync).AllowAnonymous();
+        group.MapPost("/enroll-pre-auth/complete", PreAuthCompleteAsync).AllowAnonymous();
+        group.MapPost("/enroll-pre-auth/finalize", PreAuthFinalizeAsync).AllowAnonymous();
 
         group.MapPost("/enroll/totp", EnrollTotpAsync).RequireAuthorization();
         group.MapPost("/enroll/totp/confirm", ConfirmTotpAsync).RequireAuthorization();
@@ -60,6 +67,44 @@ public static class TwoFactorEndpoints
 
         return result.IsSuccess
             ? Results.Ok(new { message = "Kod gönderildi." })
+            : Results.Json(new { errors = result.Errors }, statusCode: MapErrorTypeToStatus(result.FirstError.Type));
+    }
+
+    private static async Task<IResult> PreAuthStartAsync(
+        [FromBody] PreAuthStartRequest request,
+        [FromServices] IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new StartPreAuthEnrollmentQuery(request.ChallengeToken), cancellationToken);
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : Results.Json(new { errors = result.Errors }, statusCode: MapErrorTypeToStatus(result.FirstError.Type));
+    }
+
+    private static async Task<IResult> PreAuthCompleteAsync(
+        [FromBody] PreAuthCompleteRequest request,
+        [FromServices] IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(
+            new CompletePreAuthEnrollmentCommand(request.ChallengeToken, request.Code), cancellationToken);
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : Results.Json(new { errors = result.Errors }, statusCode: MapErrorTypeToStatus(result.FirstError.Type));
+    }
+
+    private static async Task<IResult> PreAuthFinalizeAsync(
+        [FromBody] PreAuthFinalizeRequest request,
+        [FromServices] IMediator mediator,
+        HttpContext httpContext,
+        CancellationToken cancellationToken)
+    {
+        var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        var ua = httpContext.Request.Headers.UserAgent.ToString();
+        var result = await mediator.Send(
+            new FinalizePreAuthEnrollmentCommand(request.ChallengeToken, ip, ua), cancellationToken);
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
             : Results.Json(new { errors = result.Errors }, statusCode: MapErrorTypeToStatus(result.FirstError.Type));
     }
 
@@ -135,3 +180,12 @@ public sealed record SendTwoFactorCodeRequest(Guid ChallengeToken, string Method
 
 /// <summary>TOTP confirm isteği gövdesi.</summary>
 public sealed record ConfirmTotpRequest(string Code);
+
+/// <summary>Pre-auth enrollment start isteği gövdesi (v0.2.2.a).</summary>
+public sealed record PreAuthStartRequest(Guid ChallengeToken);
+
+/// <summary>Pre-auth enrollment complete isteği gövdesi (v0.2.2.a).</summary>
+public sealed record PreAuthCompleteRequest(Guid ChallengeToken, string Code);
+
+/// <summary>Pre-auth enrollment finalize isteği gövdesi (v0.2.2.a).</summary>
+public sealed record PreAuthFinalizeRequest(Guid ChallengeToken);
