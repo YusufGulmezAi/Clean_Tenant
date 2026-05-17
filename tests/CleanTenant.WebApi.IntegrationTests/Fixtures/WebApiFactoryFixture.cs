@@ -24,6 +24,12 @@ namespace CleanTenant.WebApi.IntegrationTests.Fixtures;
 /// container'lara yönlendirir; gerekli init (extension'lar, migration, seed
 /// kullanıcı) yapar.
 /// </para>
+/// <para>
+/// v0.1.5.c'den itibaren test admin <b>2FA enrolled</b> olarak seed edilir
+/// (System kullanıcılarda 2FA zorunlu). Login akışı challenge dönerse fixture
+/// UserManager üzerinden gerçek TOTP kodu üretip <c>/2fa/verify</c> akışını
+/// yürütür — testler bunu görmeden Bearer'lı client alır.
+/// </para>
 /// </summary>
 public sealed class WebApiFactoryFixture : WebApplicationFactory<Program>, IAsyncLifetime
 {
@@ -32,6 +38,9 @@ public sealed class WebApiFactoryFixture : WebApplicationFactory<Program>, IAsyn
 
     /// <summary>Test admin kullanıcı şifresi (policy uyumlu).</summary>
     public const string TestAdminPassword = "TestPass-2026!";
+
+    private const string AuthenticatorProvider = "Authenticator";
+    private const string EmailProvider = "Email";
 
     private readonly PostgreSqlContainer _pg = new PostgreSqlBuilder()
         .WithImage("postgres:17-alpine")
@@ -103,15 +112,65 @@ public sealed class WebApiFactoryFixture : WebApplicationFactory<Program>, IAsyn
         return tenant.Id;
     }
 
-    /// <summary>Bearer header'la önceden authenticate edilmiş HttpClient.</summary>
+    /// <summary>
+    /// Login + 2FA verify akışını yürütüp Bearer header'la authenticate edilmiş
+    /// HttpClient döner. Test admin System scope'unda olduğu için 2FA zorunlu;
+    /// fixture TOTP kodu üretip otomatik verify eder.
+    /// </summary>
     public async Task<(HttpClient Client, string AccessToken, string RefreshToken)> CreateAuthenticatedClientAsync()
     {
         var client = CreateClient();
-        var loginBody = new { identifier = TestAdminEmail, password = TestAdminPassword, persona = "Management", contextId = (Guid?)null };
-        var response = await client.PostAsJsonAsync("/api/v1/auth/login", loginBody);
-        response.EnsureSuccessStatusCode();
-        var tokens = await response.Content.ReadFromJsonAsync<TokenResponse>();
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokens!.AccessToken);
+        var loginBody = new
+        {
+            identifier = TestAdminEmail,
+            password = TestAdminPassword,
+            persona = "Management",
+            contextId = (Guid?)null,
+        };
+
+        var loginResponse = await client.PostAsJsonAsync("/api/v1/auth/login", loginBody);
+        loginResponse.EnsureSuccessStatusCode();
+
+        var loginResult = await loginResponse.Content.ReadFromJsonAsync<LoginResponseShape>();
+        loginResult.Should().NotBeNull();
+
+        TokenResponse tokens;
+        if (string.Equals(loginResult!.Status, "Success", StringComparison.OrdinalIgnoreCase))
+        {
+            tokens = loginResult.Tokens
+                ?? throw new InvalidOperationException("Login başarılı ama tokens null.");
+        }
+        else
+        {
+            // 2FA challenge — fixture TOTP üretip verify eder
+            var challenge = loginResult.Challenge
+                ?? throw new InvalidOperationException("Challenge yok.");
+
+            // AuthenticatorTokenProvider sunucuda TOTP üretemez (secret yalnız
+            // kullanıcının authenticator app'inde). Test fixture'ı için Email
+            // provider'ı kullanıyoruz — TotpSecurityStampBasedTokenProvider'dan
+            // türediği için sunucu kodu üretebilir.
+            string code;
+            using (var scope = Services.CreateScope())
+            {
+                var userManager = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
+                var admin = await userManager.FindByEmailAsync(TestAdminEmail)
+                    ?? throw new InvalidOperationException("Test admin bulunamadı.");
+                code = await userManager.GenerateTwoFactorTokenAsync(admin, EmailProvider);
+            }
+
+            var verifyBody = new
+            {
+                challengeToken = challenge.ChallengeToken,
+                method = EmailProvider,
+                code,
+            };
+            var verifyResponse = await client.PostAsJsonAsync("/api/v1/auth/2fa/verify", verifyBody);
+            verifyResponse.EnsureSuccessStatusCode();
+            tokens = (await verifyResponse.Content.ReadFromJsonAsync<TokenResponse>())!;
+        }
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokens.AccessToken);
         return (client, tokens.AccessToken, tokens.RefreshToken);
     }
 
@@ -146,7 +205,7 @@ public sealed class WebApiFactoryFixture : WebApplicationFactory<Program>, IAsyn
         db.Roles.Add(role);
         await db.SaveChangesAsync();
 
-        // Test admin kullanıcı
+        // Test admin kullanıcı (System scope) — 2FA enrolled
         var user = new User
         {
             UserName = TestAdminEmail,
@@ -154,10 +213,13 @@ public sealed class WebApiFactoryFixture : WebApplicationFactory<Program>, IAsyn
             EmailConfirmed = true,
             FirstName = "Test",
             LastName = "Admin",
-            TwoFactorEnabled = false,
         };
         var result = await userManager.CreateAsync(user, TestAdminPassword);
         result.Succeeded.Should().BeTrue();
+
+        // System kullanıcısı için 2FA zorunlu — TOTP enrollment'ı seed sırasında yap
+        await userManager.ResetAuthenticatorKeyAsync(user);
+        await userManager.SetTwoFactorEnabledAsync(user, true);
 
         db.UserRoleAssignments.Add(new UserRoleAssignment
         {
@@ -170,7 +232,19 @@ public sealed class WebApiFactoryFixture : WebApplicationFactory<Program>, IAsyn
         await db.SaveChangesAsync();
     }
 
-    /// <summary>Login response yapısı (test serializasyon için).</summary>
+    /// <summary>Login response polimorfik yapısı (Status discriminator).</summary>
+    private sealed record LoginResponseShape(
+        string Status,
+        TokenResponse? Tokens,
+        ChallengeResponseShape? Challenge);
+
+    /// <summary>2FA challenge response yapısı.</summary>
+    private sealed record ChallengeResponseShape(
+        Guid ChallengeToken,
+        DateTimeOffset ExpiresAt,
+        IReadOnlyList<string> AvailableMethods);
+
+    /// <summary>Login / verify başarı response yapısı.</summary>
     private sealed record TokenResponse(
         string AccessToken,
         DateTimeOffset AccessTokenExpiresAt,

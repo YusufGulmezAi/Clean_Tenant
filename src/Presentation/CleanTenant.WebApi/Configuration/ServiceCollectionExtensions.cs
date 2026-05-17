@@ -13,13 +13,16 @@ public static class ServiceCollectionExtensions
 {
     /// <summary>
     /// CleanTenant WebApi'nin tüm bağımlılıklarını tek çağrıda kayıt eder:
-    /// OpenAPI, Persistence (Catalog), Redis cache, Identity (JWT bearer + session).
+    /// OpenAPI, Persistence (Catalog), Redis cache, Identity (JWT bearer + session),
+    /// notification sender'ları (Console default; Production'da gerçek sağlayıcı zorunlu).
     /// </summary>
     /// <param name="services">DI servis koleksiyonu.</param>
     /// <param name="configuration">Bağlantı string'leri ve JWT/Session ayarları için.</param>
+    /// <param name="environment">Sender provider guard'ı için (Production'da Console reddedilir).</param>
     public static IServiceCollection AddCleanTenantApi(
         this IServiceCollection services,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        IHostEnvironment environment)
     {
         var catalogConnection = configuration.GetConnectionString("Catalog")
             ?? throw new InvalidOperationException("ConnectionStrings:Catalog bulunamadı.");
@@ -30,6 +33,7 @@ public static class ServiceCollectionExtensions
         services.AddCatalogPersistence(catalogConnection);
         services.AddRedisCache(redisConnection);
         services.AddIdentityServices(configuration);
+        services.AddCleanTenantNotifications(configuration, environment);
 
         // Enum'lar JSON request/response'larda string olarak okunup yazılsın
         // (örn. "Management"/"Portal", "ReadOnly"/"WriteEnabled" gibi).

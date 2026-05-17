@@ -1,5 +1,6 @@
 using CleanTenant.Infrastructure.Persistence;
 using CleanTenant.Infrastructure.Persistence.Catalog;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -50,6 +51,10 @@ public sealed class PostgresFixture : IAsyncLifetime
 
         var services = new ServiceCollection();
         services.AddLogging(b => b.AddProvider(NullLoggerProvider.Instance));
+        // v0.1.5.c: Identity'nin AddDefaultTokenProviders zinciri
+        // DataProtectorTokenProvider'ı kayıt ediyor, bu da IDataProtectionProvider'a
+        // bağımlı. Test fixture'ında bunu açıkça kayıt etmek gerek.
+        services.AddDataProtection();
         services.AddCatalogPersistence(ConnectionString);
         Services = services.BuildServiceProvider();
 

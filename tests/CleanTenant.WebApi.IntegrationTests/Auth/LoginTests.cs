@@ -15,20 +15,23 @@ public sealed class LoginTests
     }
 
     [Fact]
-    public async Task Gecerli_credentials_token_pair_donmeli()
+    public async Task Gecerli_credentials_2FA_challenge_donmeli()
     {
+        // v0.1.5.c: TestAdmin System scope'unda + 2FA enrolled. Login direkt
+        // TokenPair değil, challenge döner. Status="TwoFactorRequired".
         var client = _fixture.CreateClient();
         var body = new { identifier = WebApiFactoryFixture.TestAdminEmail, password = WebApiFactoryFixture.TestAdminPassword, persona = "Management", contextId = (Guid?)null };
 
         var response = await client.PostAsJsonAsync("/api/v1/auth/login", body);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-        var json = await response.Content.ReadFromJsonAsync<LoginResponse>();
+        var json = await response.Content.ReadFromJsonAsync<LoginShape>();
         json.Should().NotBeNull();
-        json!.AccessToken.Should().NotBeNullOrEmpty();
-        json.RefreshToken.Should().NotBeNullOrEmpty();
-        json.SessionId.Should().NotBe(Guid.Empty);
-        json.ContextId.Should().NotBe(Guid.Empty);
+        json!.Status.Should().Be("TwoFactorRequired");
+        json.Tokens.Should().BeNull();
+        json.Challenge.Should().NotBeNull();
+        json.Challenge!.ChallengeToken.Should().NotBe(Guid.Empty);
+        json.Challenge.AvailableMethods.Should().Contain("Authenticator");
     }
 
     [Fact]
@@ -76,11 +79,21 @@ public sealed class LoginTests
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
-    private sealed record LoginResponse(
+    private sealed record LoginShape(
+        string Status,
+        TokenShape? Tokens,
+        ChallengeShape? Challenge);
+
+    private sealed record TokenShape(
         string AccessToken,
         DateTimeOffset AccessTokenExpiresAt,
         string RefreshToken,
         DateTimeOffset RefreshTokenExpiresAt,
         Guid SessionId,
         Guid ContextId);
+
+    private sealed record ChallengeShape(
+        Guid ChallengeToken,
+        DateTimeOffset ExpiresAt,
+        IReadOnlyList<string> AvailableMethods);
 }

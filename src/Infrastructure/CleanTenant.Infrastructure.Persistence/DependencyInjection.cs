@@ -84,9 +84,11 @@ public static class DependencyInjection
             })
             .AddRoles<Role>()
             .AddRoleManager<RoleManager<Role>>()
-            .AddEntityFrameworkStores<CatalogDbContext>();
-            // AddDefaultTokenProviders() — 2FA wiring v0.1.5'te eklenecek
-            // (TOTP/Email/SMS token provider'ları).
+            .AddEntityFrameworkStores<CatalogDbContext>()
+            // v0.1.5.c — 2FA için 3 sağlayıcı: AuthenticatorTokenProvider (TOTP),
+            // EmailTokenProvider, PhoneNumberTokenProvider. Recovery code üretimini
+            // de bu zincir sağlar (GenerateNewTwoFactorRecoveryCodesAsync).
+            .AddDefaultTokenProviders();
 
         // ---- Multi-Tenancy ----
         services.AddMemoryCache();

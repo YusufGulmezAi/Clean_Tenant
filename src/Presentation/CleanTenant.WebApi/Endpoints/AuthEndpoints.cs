@@ -76,6 +76,8 @@ public static class AuthEndpoints
         var command = new LoginCommand(request.Identifier, request.Password, request.Persona, request.ContextId, ip, ua);
         var result = await handler.HandleAsync(command, cancellationToken);
 
+        // v0.1.5.c — Sonuç polimorfik: Success → TokenPair, TwoFactorRequired → challenge.
+        // İstemci LoginResult.Status alanına bakar.
         return result.IsSuccess
             ? Results.Ok(result.Value)
             : Results.Json(new { errors = result.Errors }, statusCode: MapErrorTypeToStatus(result.FirstError.Type));

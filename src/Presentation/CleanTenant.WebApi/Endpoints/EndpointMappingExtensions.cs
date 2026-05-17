@@ -11,6 +11,7 @@ public static class EndpointMappingExtensions
     {
         app.MapHealthEndpoints();
         app.MapAuthEndpoints();
+        app.MapTwoFactorEndpoints();
         app.MapUserAdminEndpoints();
         app.MapSystemEndpoints();
         app.MapTenantAuditEndpoints();

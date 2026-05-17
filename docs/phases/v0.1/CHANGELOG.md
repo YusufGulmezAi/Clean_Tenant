@@ -4,6 +4,114 @@ Bu dosya, Faz v0.1 (Temel Altyapı) kapsamında yapılan tüm alt-faz değişikl
 
 ---
 
+## v0.1.5.c — 2026-05-17 — 2FA İskeleti (TOTP + E-posta + SMS + Recovery)
+
+### Mimari Karar: Login Response Polimorfizmi
+- `LoginResult { Status, Tokens?, Challenge? }` ile istemci tek tipi deserialize eder.
+- `Status="Success"` → mevcut `TokenPair`; `Status="TwoFactorRequired"` → `TwoFactorChallengeResponse` (token + TTL + aktif yöntemler).
+- HTTP status hep 200 — 2FA challenge'da bile (REST'çe değil ama istemci dallanması basit).
+
+### Mimari Karar: Challenge Store
+- 5 dk TTL'li Redis store (`ct:2fa:challenge:{token}`) — server-side revocable.
+- Verify'da kullanılır kullanılmaz silinir (replay engelleme).
+- TwoFactorChallenge taşır: UserId, Persona, ContextId, IP, UserAgent, IssuedAt, AvailableMethods.
+
+### Mimari Karar: System Kullanıcıları İçin 2FA Zorunlu
+- LoginCommandHandler: kullanıcının System scope rolü varsa **ve** `TwoFactorEnabled=false` ise → `AUTH-2FA-ENROLLMENT-REQUIRED` (422).
+- En az bir yöntem yeterli (TOTP / E-posta / SMS). Tüm yöntemleri kapatma denenirse son yöntem System kullanıcısında reddedilir (`AUTH-2FA-LAST-METHOD-LOCK`).
+
+### Identity Wiring
+- `AddIdentityCore<User>` zincirine `AddDefaultTokenProviders()` eklendi → 4 sağlayıcı kayıt edildi: TOTP (`Authenticator`), E-posta, SMS (Phone), DataProtector.
+- `Microsoft.AspNetCore.App` framework reference Persistence projesine eklendi (AddDefaultTokenProviders bu paketteki extension method'a bağımlı).
+- `Microsoft.Extensions.Caching.Memory` + `Configuration.EnvironmentVariables` PackageReference'ları kaldırıldı (artık FrameworkReference'tan geliyor).
+
+### Sender Soyutlamaları
+- `IEmailSender` + `ISmsSender` (`Application/Common/Notifications/`) — generic, sadece 2FA için değil; Faz 1'de email confirmation, password reset gibi senaryolarda da kullanılacak.
+- `ConsoleEmailSender` + `ConsoleSmsSender` — log'a yazar, gerçek sağlayıcı v0.1.5.c kapsamında yok.
+- **Production guard:** `AddCleanTenantNotifications(IConfiguration, IHostEnvironment)` — Production'da `Email:Provider=Console` veya `Sms:Provider=Console` → `InvalidOperationException`. Sessiz hata yok.
+
+### Application Katmanına Eklenenler (16 yeni dosya)
+**Common/Auth:**
+- `LoginResult.cs` — polimorfik login sonuç tipi + `LoginStatus` enum + `TwoFactorChallengeResponse`.
+- `TwoFactorChallenge.cs` — sunucu tarafı challenge bağlamı.
+- `ITwoFactorChallengeStore.cs` — challenge persist abstraction.
+
+**Common/Notifications:**
+- `IEmailSender.cs`, `ISmsSender.cs`.
+
+**Features/Auth/Login:**
+- `LoginFinalizer.cs` — şifre+(2FA) doğrulamasından sonra ortak finalize akışı (scope seçimi, role+permission yükleme, Redis session + JWT + refresh). Hem `LoginCommandHandler` (2FA'sız) hem `VerifyTwoFactorCommandHandler` bunu çağırır.
+- `LoginCommandHandler.cs` — 2FA dallanma + System enrollment kontrolü ile yeniden yazıldı.
+
+**Features/Auth/TwoFactor/** (7 alt-klasör):
+- `VerifyTwoFactor/` — Command + Handler. Method "Authenticator"/"Email"/"Phone"/"RecoveryCode"; challenge token tek kullanımlık.
+- `SendCode/` — Email/SMS provider'larından kod üretip `IEmailSender`/`ISmsSender` ile gönderir.
+- `EnrollTotp/` — `ResetAuthenticatorKeyAsync` + secret + `otpauth://totp/CleanTenant:{email}?secret=...&issuer=CleanTenant&digits=6&period=30` URI.
+- `ConfirmTotpEnrollment/` — Kullanıcı kodu doğrulanır, `TwoFactorEnabled=true`, 10 recovery code üretilir.
+- `DisableTotp/` — AuthenticatorKey silinir (`SetAuthenticationTokenAsync(..., null)`). Son yöntemse + System ise reddedilir.
+- `RegenerateRecoveryCodes/` — `GenerateNewTwoFactorRecoveryCodesAsync(user, 10)` ile yenile.
+- `GetTwoFactorMethods/` — durum: enabled + aktif provider listesi + geri kalan recovery code sayısı.
+
+### Infrastructure
+- `Infrastructure.Caching/TwoFactor/RedisTwoFactorChallengeStore.cs` — `ITwoFactorChallengeStore` Redis implementasyonu.
+- `Infrastructure.Identity/Notifications/ConsoleEmailSender.cs`, `ConsoleSmsSender.cs`.
+- `Infrastructure.Identity/DependencyInjection.cs`:
+  - `LoginFinalizer` + 7 yeni 2FA handler scoped olarak kayıt edildi.
+  - `AddCleanTenantNotifications(IConfiguration, IHostEnvironment)` extension method'u eklendi — Production guard + sender registration.
+- `Infrastructure.Caching/DependencyInjection.cs` — `ITwoFactorChallengeStore` scoped kayıt.
+
+### WebApi
+- `Endpoints/TwoFactorEndpoints.cs` (yeni dosya, 7 endpoint):
+  | Endpoint | Auth | Açıklama |
+  |---|---|---|
+  | `POST /api/v1/auth/2fa/verify` | Anonim | Challenge token + kod ile login finalize |
+  | `POST /api/v1/auth/2fa/send-code` | Anonim | Email/SMS yöntemiyle kod gönderim |
+  | `POST /api/v1/auth/2fa/enroll/totp` | Bearer | TOTP enrollment başlat (secret + QR URI) |
+  | `POST /api/v1/auth/2fa/enroll/totp/confirm` | Bearer | Kod ile onayla, 10 recovery code döner |
+  | `POST /api/v1/auth/2fa/disable/totp` | Bearer | TOTP kapat (son yöntemse System için reddedilir) |
+  | `POST /api/v1/auth/2fa/recovery-codes/regenerate` | Bearer | 10 yeni recovery code |
+  | `GET  /api/v1/auth/2fa/methods` | Bearer | Aktif yöntemler + recovery code sayısı |
+- `Configuration/ServiceCollectionExtensions.cs` — `AddCleanTenantApi` imzası `IHostEnvironment` parametresi alacak şekilde genişledi.
+- `Program.cs` — `builder.Environment` da geçirilir.
+- `EndpointMappingExtensions.cs` — `MapTwoFactorEndpoints` map'lendi.
+
+### Test Fixture'a Eklenenler
+- `WebApiFactoryFixture.SeedAsync` — test admin artık 2FA enrolled olarak seed (System scope kullanıcı; `ResetAuthenticatorKeyAsync` + `SetTwoFactorEnabledAsync(true)`).
+- `CreateAuthenticatedClientAsync` — login → challenge → fixture `UserManager.GenerateTwoFactorTokenAsync(admin, "Email")` ile kod üret → `/2fa/verify` → Bearer client.
+- **Önemli teknik karar:** Authenticator (TOTP) sağlayıcısı sunucuda kod üretemez (secret yalnız kullanıcı app'inde) — fixture Email yöntemini kullanır; production akışında her iki yöntem de geçerli.
+- `Infrastructure.IntegrationTests/Fixtures/PostgresFixture.cs` — `AddDataProtection()` eklendi (DataProtectorTokenProvider bağımlılığı).
+
+### Eklenen Test'ler
+**`Auth/LoginTests.Gecerli_credentials_2FA_challenge_donmeli`** — eski "TokenPair dönmeli" testi yeni davranışa göre güncellendi.
+
+**`TwoFactor/TwoFactorTests` (10 yeni test):**
+1. `Login_2FA_aktif_kullaniciyi_challenge_a_yonlendirmeli`
+2. `Yanlis_2FA_kodu_401_donmeli`
+3. `SendCode_email_yontemi_200_donmeli`
+4. `SendCode_desteklenmeyen_yontem_403_donmeli`
+5. `Bilinmeyen_challenge_token_401_donmeli`
+6. `Authenticated_kullanici_GetMethods_durumunu_okuyabilmeli`
+7. `Authenticated_kullanici_RegenerateRecoveryCodes_uretebilmeli` (10 benzersiz kod)
+8. `EnrollTotp_secret_ve_qrUri_donmeli`
+9. `DisableTotp_Email_aktif_iken_200_donmeli` (last-method-lock değil)
+10. `Bearer_olmadan_enroll_totp_401_donmeli`
+
+### Doğrulama
+- ✓ `dotnet build` — 17 proje / 0 uyarı / 0 hata.
+- ✓ `dotnet test` — **126 test başarılı** (70 Domain + 21 Infrastructure + 34 WebApi + 1 placeholder).
+
+### Açık Konular (sonraki alt fazlarda)
+- **AuthenticatorTokenProvider sunucu tarafı TOTP üretmez** — bu doğru bir tasarım kararı (secret app'te). Test fixture Email yöntemiyle çalışıyor, gerçek istemci TOTP akışı için kullanıcı kendi authenticator app'inden kod okur.
+- **`Email:Provider=Smtp` / `Sms:Provider=Twilio` gerçek implementasyonları** Faz 1'de eklenecek; şu an yalnız Console.
+- **Recovery code login akışı (loginsiz)** — recovery code ile login için ayrı bir akış yok; kullanıcı önce şifreyle login olur (challenge alır), sonra `/2fa/verify` method=RecoveryCode ile gönderir. Test edilmedi (UI/UX Faz 1'de).
+- **System için TOTP zorunluluğu** — şu an "en az bir yöntem" yeterli (kullanıcı kararıyla bağlı kalındı); ileride güvenlik kuralı sıkılaştırılabilir.
+- **2FA login bildirimi (yeni cihaz)** — rules_identity.md "Login Bildirimi" bölümü; v0.1.7 audit interceptor ile devreye girecek.
+
+### Sonraki Adım
+**v0.1.6 — MediatR Pipeline + FluentValidation + Permission Checker:** Tüm command/query handler'lar MediatR pipeline'ı altında çalışır, `[Behavior]`'lar (ValidationBehavior, AuthorizationBehavior, LoggingBehavior) eklenir, `IPermissionChecker` Redis session permission'larını sorgular. Inline validation'lar FluentValidator'a taşınır.
+
+---
+
 ## v0.1.5.b.2 — 2026-05-17 — Support Mode (Enter / Exit / Elevate / Impersonate)
 
 ### Mimari Karar: Yeni Session vs In-Place Mutation

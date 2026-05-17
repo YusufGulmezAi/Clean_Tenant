@@ -4,7 +4,7 @@ using CleanTenant.WebApi.Endpoints;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Configuration.AddCleanTenantEnvironmentMappings();
-builder.Services.AddCleanTenantApi(builder.Configuration);
+builder.Services.AddCleanTenantApi(builder.Configuration, builder.Environment);
 
 var app = builder.Build();
 

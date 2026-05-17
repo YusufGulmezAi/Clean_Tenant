@@ -1,5 +1,6 @@
 using CleanTenant.Application.Common.Auth;
 using CleanTenant.Infrastructure.Caching.Sessions;
+using CleanTenant.Infrastructure.Caching.TwoFactor;
 using Microsoft.Extensions.DependencyInjection;
 using StackExchange.Redis;
 
@@ -25,6 +26,9 @@ public static class DependencyInjection
 
         services.AddSingleton<SessionKeyBuilder>();
         services.AddScoped<IAuthSessionStore, RedisAuthSessionStore>();
+
+        // v0.1.5.c — 2FA login challenge store'u (5 dk TTL).
+        services.AddScoped<ITwoFactorChallengeStore, RedisTwoFactorChallengeStore>();
 
         return services;
     }
