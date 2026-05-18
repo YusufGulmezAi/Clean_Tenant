@@ -1,3 +1,4 @@
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using CleanTenant.Application.Common.Auth;
 using CleanTenant.Application.Features.Auth.Login;
@@ -22,6 +23,9 @@ public static class AuthEndpoints
 {
     /// <summary>SessionLookupMiddleware'in Redis lookup için kullandığı JWT claim adı.</summary>
     public const string SidClaim = "sid";
+
+    /// <summary>v0.2.3.c — UserId claim adı (JWT'nin "sub" claim'i; ClaimTypes.NameIdentifier'a da yazılır).</summary>
+    public const string UserIdClaim = "user_id";
 
     /// <summary>Sekme/persona context kimliği claim adı.</summary>
     public const string ContextIdClaim = "ctx";
@@ -349,9 +353,17 @@ public static class AuthEndpoints
         TokenPair tokens,
         bool rememberMe)
     {
+        // v0.2.3.c — UserId'i JWT'nin "sub" claim'inden çek (TokenPair'da UserId
+        // field'ı yok). NameIdentifier'a SessionId yazmak yanlıştı (önceki bug);
+        // standart davranış UserId'i NameIdentifier'a, SessionId'i SidClaim'e taşır.
+        var jwtHandler = new JwtSecurityTokenHandler();
+        var jwt = jwtHandler.ReadJwtToken(tokens.AccessToken);
+        var userIdValue = jwt.Subject; // "sub" claim
+
         var claims = new List<Claim>
         {
-            new(ClaimTypes.NameIdentifier, tokens.SessionId.ToString()),
+            new(ClaimTypes.NameIdentifier, userIdValue),
+            new(UserIdClaim, userIdValue),
             new(SidClaim, tokens.SessionId.ToString("N")),
             new(ContextIdClaim, tokens.ContextId.ToString("N")),
             new(ScopeClaim, tokens.CurrentScope.Level.ToString()),

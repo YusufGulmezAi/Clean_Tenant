@@ -180,8 +180,10 @@
         var user = authState.User;
         if (user?.Identity?.IsAuthenticated != true) return;
 
-        // Kullanıcı id'sini sub claim'inden veya nameidentifier'dan oku
-        var userIdStr = user.FindFirst("sub")?.Value
+        // v0.2.3.c — UserId claim'i: AuthEndpoints "user_id" + NameIdentifier'a yazar.
+        // "sub" JWT'de var, cookie scheme'da yok — legacy fallback.
+        var userIdStr = user.FindFirst("user_id")?.Value
+                     ?? user.FindFirst("sub")?.Value
                      ?? user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
         if (!Guid.TryParse(userIdStr, out _userId))
         {

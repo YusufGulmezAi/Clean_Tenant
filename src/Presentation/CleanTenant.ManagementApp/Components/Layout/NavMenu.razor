@@ -50,7 +50,8 @@
                 {
                     if (Matches("Yönetim " + tenant.Name) || Matches(tenant.UrlCode))
                     {
-                        <MudNavLink Icon="@Icons.Material.Filled.Domain"
+                        <MudNavLink Href="javascript:void(0)"
+                                    Icon="@Icons.Material.Filled.Domain"
                                     OnClick="@(() => OnTenantClick(tenant.Id))">
                             @tenant.Name
                         </MudNavLink>
@@ -66,7 +67,8 @@
                 {
                     if (Matches("Site " + company.Name) || Matches(company.UrlCode))
                     {
-                        <MudNavLink Icon="@Icons.Material.Filled.Apartment"
+                        <MudNavLink Href="javascript:void(0)"
+                                    Icon="@Icons.Material.Filled.Apartment"
                                     OnClick="@(() => OnCompanyClick(company.TenantId, company.Id))">
                             @company.Name
                             <MudText Typo="Typo.caption" Color="Color.Default" Style="margin-left: 6px;">@company.TenantName</MudText>
@@ -111,7 +113,8 @@
                 {
                     if (Matches("Site " + company.Name) || Matches(company.UrlCode))
                     {
-                        <MudNavLink Icon="@Icons.Material.Filled.Apartment"
+                        <MudNavLink Href="javascript:void(0)"
+                                    Icon="@Icons.Material.Filled.Apartment"
                                     OnClick="@(() => OnCompanyClick(company.TenantId, company.Id))">
                             @company.Name
                         </MudNavLink>
