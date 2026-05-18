@@ -1,5 +1,8 @@
+using System.Security.Claims;
 using CleanTenant.Application.Common.Auth;
 using CleanTenant.Infrastructure.Identity.Context;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
@@ -47,14 +50,20 @@ public sealed class SessionLookupMiddleware
         var sidClaim = context.User.FindFirst(JwtClaimNames.SessionId)?.Value;
         if (string.IsNullOrEmpty(sidClaim) || !Guid.TryParse(sidClaim, out var sessionId))
         {
-            await Reject(context, "invalid_session_claim", "Geçersiz session claim'i.");
+            if (await HandleMissingSessionAsync(context, "invalid_session_claim", "Geçersiz session claim'i."))
+            {
+                await _next(context);
+            }
             return;
         }
 
         var session = await sessionStore.GetAsync(sessionId, context.RequestAborted);
         if (session is null)
         {
-            await Reject(context, "session_revoked_or_expired", "Oturum revoke edilmiş veya süresi dolmuş.");
+            if (await HandleMissingSessionAsync(context, "session_revoked_or_expired", "Oturum revoke edilmiş veya süresi dolmuş."))
+            {
+                await _next(context);
+            }
             return;
         }
 
@@ -69,14 +78,35 @@ public sealed class SessionLookupMiddleware
     }
 
     /// <summary>
-    /// 401 yanıtı yazar. <paramref name="code"/> ASCII-safe makine kodu (header'a),
-    /// <paramref name="message"/> Türkçe açıklama (response body'sine).
+    /// Session bulunamadığında çağrılır. Davranış kullanılan auth scheme'ine göre değişir:
+    /// <list type="bullet">
+    ///   <item><b>Cookie auth (Blazor / Razor sayfa):</b> auth cookie'sini sil (revoke),
+    ///   ClaimsPrincipal'i anonymize et, pipeline'a devam — kimliği gerektiren endpoint'lerde
+    ///   ASP.NET Authorization handler 401 → Cookie middleware <c>LoginPath</c>'e yönlendirir.
+    ///   Anonim path'lerde (Login.razor, auth endpoint'leri) sayfa normal render olur.</item>
+    ///   <item><b>JWT bearer auth (WebApi):</b> 401 + X-Auth-Failure-Code header. İstemci
+    ///   refresh token akışıyla yeni token alır.</item>
+    /// </list>
+    /// <returns>true → caller _next çağırmalı (cookie scheme); false → response yazıldı, halt.</returns>
     /// </summary>
-    private static async Task Reject(HttpContext context, string code, string message)
+    private static async Task<bool> HandleMissingSessionAsync(HttpContext context, string code, string message)
     {
+        var isCookieAuth = context.User.Identities.Any(i =>
+            string.Equals(i.AuthenticationType, CookieAuthenticationDefaults.AuthenticationScheme, StringComparison.Ordinal));
+
+        if (isCookieAuth)
+        {
+            await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            context.User = new ClaimsPrincipal(new ClaimsIdentity());
+            context.Response.Headers.Append("X-Auth-Failure-Code", code);
+            return true; // caller _next çağıracak
+        }
+
+        // JWT bearer: 401 + body, pipeline durur.
         context.Response.StatusCode = StatusCodes.Status401Unauthorized;
         context.Response.Headers.Append("X-Auth-Failure-Code", code);
         await context.Response.WriteAsync(message);
+        return false;
     }
 }
 
