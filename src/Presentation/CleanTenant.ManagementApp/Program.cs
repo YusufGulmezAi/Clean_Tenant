@@ -62,6 +62,9 @@ if (!string.IsNullOrWhiteSpace(mainConnection))
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 builder.Services.AddMudServices();
+// v0.2.3.e — MudBlazor default İngilizce metinlerini TR'ye override eder
+// (MudDataGrid filtre/gruplama/loading, dialog/input vs.).
+builder.Services.AddTransient<MudBlazor.MudLocalizer, CleanTenantMudLocalizer>();
 builder.Services.AddBlazoredLocalStorage();
 builder.Services.AddScoped<IThemeService, LocalStorageThemeService>();
 builder.Services.AddLocalization(opts => opts.ResourcesPath = "Localization/Resources");
