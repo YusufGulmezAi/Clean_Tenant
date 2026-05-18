@@ -90,44 +90,58 @@
         </form>
 
         <script>
+            // cleantenant.js body sonunda yüklenir — inline script ondan ÖNCE
+            // parse edilir; window.cleantenant henüz tanımlı değil. DOMContentLoaded
+            // event'i tüm sync script'ler (cleantenant.js dahil) yüklendikten sonra
+            // tetiklenir; init'i o zaman çalıştır.
             (function() {
-                // 6 haneli OTP setup (Authenticator default seçili)
-                window.cleantenant.otpForm.init('challenge-otp-inputs', 'code', 'challenge-submit');
-
-                // Method değişimi: 6 kutucuk vs serbest metin görünür/gizli
-                window.cleantenant.challengeMethodSwitch = function(method) {
-                    var otpDiv = document.getElementById('challenge-otp');
-                    var recoveryDiv = document.getElementById('challenge-recovery');
-                    var submitBtn = document.getElementById('challenge-submit');
-                    var hidden = document.getElementById('challenge-code');
-                    if (method === 'RecoveryCode') {
-                        otpDiv.style.display = 'none';
-                        recoveryDiv.style.display = 'block';
-                        // Recovery için en az 5 karakter kontrolü
-                        var rv = document.getElementById('recovery-code').value || '';
-                        hidden.value = rv;
-                        submitBtn.disabled = rv.replace(/[^A-Za-z0-9]/g,'').length < 5;
-                        submitBtn.style.opacity = submitBtn.disabled ? '0.5' : '1';
-                    } else {
-                        otpDiv.style.display = 'block';
-                        recoveryDiv.style.display = 'none';
-                        // OTP form state'i tekrar değerlendir
-                        var inputs = document.querySelectorAll('#challenge-otp-inputs input[data-otp-index]');
-                        var val = Array.from(inputs).map(function(i){return i.value || '';}).join('');
-                        hidden.value = val;
-                        submitBtn.disabled = val.length < 6;
-                        submitBtn.style.opacity = submitBtn.disabled ? '0.5' : '1';
+                function init() {
+                    if (!window.cleantenant || !window.cleantenant.otpForm) {
+                        // Bir miktar daha bekle — cleantenant.js henüz parse edilmemiş.
+                        setTimeout(init, 25);
+                        return;
                     }
-                };
 
-                window.cleantenant.challengeSyncRecovery = function(value) {
-                    var hidden = document.getElementById('challenge-code');
-                    var submitBtn = document.getElementById('challenge-submit');
-                    hidden.value = value || '';
-                    var clean = (value || '').replace(/[^A-Za-z0-9]/g,'');
-                    submitBtn.disabled = clean.length < 5;
-                    submitBtn.style.opacity = submitBtn.disabled ? '0.5' : '1';
-                };
+                    window.cleantenant.otpForm.init('challenge-otp-inputs', 'code', 'challenge-submit');
+
+                    window.cleantenant.challengeMethodSwitch = function(method) {
+                        var otpDiv = document.getElementById('challenge-otp');
+                        var recoveryDiv = document.getElementById('challenge-recovery');
+                        var submitBtn = document.getElementById('challenge-submit');
+                        var hidden = document.getElementById('challenge-code');
+                        if (method === 'RecoveryCode') {
+                            otpDiv.style.display = 'none';
+                            recoveryDiv.style.display = 'block';
+                            var rv = document.getElementById('recovery-code').value || '';
+                            hidden.value = rv;
+                            submitBtn.disabled = rv.replace(/[^A-Za-z0-9]/g, '').length < 5;
+                            submitBtn.style.opacity = submitBtn.disabled ? '0.5' : '1';
+                        } else {
+                            otpDiv.style.display = 'block';
+                            recoveryDiv.style.display = 'none';
+                            var inputs = document.querySelectorAll('#challenge-otp-inputs input[data-otp-index]');
+                            var val = Array.from(inputs).map(function(i) { return i.value || ''; }).join('');
+                            hidden.value = val;
+                            submitBtn.disabled = val.length < 6;
+                            submitBtn.style.opacity = submitBtn.disabled ? '0.5' : '1';
+                        }
+                    };
+
+                    window.cleantenant.challengeSyncRecovery = function(value) {
+                        var hidden = document.getElementById('challenge-code');
+                        var submitBtn = document.getElementById('challenge-submit');
+                        hidden.value = value || '';
+                        var clean = (value || '').replace(/[^A-Za-z0-9]/g, '');
+                        submitBtn.disabled = clean.length < 5;
+                        submitBtn.style.opacity = submitBtn.disabled ? '0.5' : '1';
+                    };
+                }
+
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', init);
+                } else {
+                    init();
+                }
             })();
         </script>
 
