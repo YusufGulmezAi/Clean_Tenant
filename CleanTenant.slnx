@@ -8,6 +8,7 @@
   <Folder Name="/src/Infrastructure/">
     <Project Path="src/Infrastructure/CleanTenant.Infrastructure.BackgroundJobs/CleanTenant.Infrastructure.BackgroundJobs.csproj" />
     <Project Path="src/Infrastructure/CleanTenant.Infrastructure.Caching/CleanTenant.Infrastructure.Caching.csproj" />
+    <Project Path="src/Infrastructure/CleanTenant.Infrastructure.Export/CleanTenant.Infrastructure.Export.csproj" />
     <Project Path="src/Infrastructure/CleanTenant.Infrastructure.Identity/CleanTenant.Infrastructure.Identity.csproj" />
     <Project Path="src/Infrastructure/CleanTenant.Infrastructure.Logging/CleanTenant.Infrastructure.Logging.csproj" />
     <Project Path="src/Infrastructure/CleanTenant.Infrastructure.Persistence/CleanTenant.Infrastructure.Persistence.csproj" />

@@ -1,6 +1,7 @@
 using Blazored.LocalStorage;
 using CleanTenant.Application;
 using CleanTenant.Infrastructure.Caching;
+using CleanTenant.Infrastructure.Export;
 using CleanTenant.Infrastructure.Identity;
 using CleanTenant.Infrastructure.Identity.Middleware;
 using CleanTenant.Infrastructure.Logging;
@@ -65,6 +66,8 @@ builder.Services.AddMudServices();
 // v0.2.3.e — MudBlazor default İngilizce metinlerini TR'ye override eder
 // (MudDataGrid filtre/gruplama/loading, dialog/input vs.).
 builder.Services.AddTransient<MudBlazor.MudLocalizer, CleanTenantMudLocalizer>();
+// v0.2.4.a — Excel (ClosedXML) + PDF (QuestPDF Community) export servisleri.
+builder.Services.AddCleanTenantExport();
 builder.Services.AddBlazoredLocalStorage();
 builder.Services.AddScoped<IThemeService, LocalStorageThemeService>();
 builder.Services.AddLocalization(opts => opts.ResourcesPath = "Localization/Resources");

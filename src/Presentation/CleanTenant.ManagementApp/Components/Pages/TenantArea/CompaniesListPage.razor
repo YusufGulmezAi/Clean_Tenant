@@ -6,25 +6,17 @@
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 @implements IDisposable
+@using CleanTenant.Application.Common.Export
 @using CleanTenant.Application.Features.Main.Readers
 @using CleanTenant.Domain.Tenant.Companies
+@using CleanTenant.ManagementApp.Components.Shared
 
 <PageTitle>Siteler — Yönetim</PageTitle>
 
 @*
-    v0.2.3.d — Hybrid cache reader + PersistentComponentState. Aktif Yönetim
-    bağlamındaki Site listesi. Reader IMainCatalogReader.GetByTenantAsync ile
-    Yönetim'e filtreli sorgu yapar; L1/L2 cache otomatik.
+    v0.2.4.a — DataTable<TItem> migration. Aktif Yönetim bağlamındaki Site
+    listesi (sadece o yönetime ait olanlar).
 *@
-
-<MudText Typo="Typo.h5" Class="mb-3">
-    <MudIcon Icon="@Icons.Material.Filled.Apartment" Class="mr-2" />
-    Siteler
-    @if (!string.IsNullOrWhiteSpace(_tenantName))
-    {
-        <MudText Typo="Typo.subtitle2" Color="Color.Default" Class="d-inline ml-2">— @_tenantName</MudText>
-    }
-</MudText>
 
 @if (_unauthorized)
 {
@@ -32,50 +24,22 @@
         Aktif Yönetim bağlamı yok. Önce bir Yönetim seçin.
     </MudAlert>
 }
-else if (_items is null)
-{
-    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
-}
-else if (_items.Count == 0)
-{
-    <MudPaper Class="pa-6 mt-3 d-flex flex-column align-center" Elevation="0">
-        <MudIcon Icon="@Icons.Material.Filled.HomeWork" Size="Size.Large" Color="Color.Default" />
-        <MudText Typo="Typo.body1" Class="mt-2">Bu Yönetim'de henüz Site kaydı yok.</MudText>
-        <MudText Typo="Typo.caption" Color="Color.Default">(Faz 1.4'te "Yeni Site" akışı eklenecek.)</MudText>
-    </MudPaper>
-}
 else
 {
-    <MudDataGrid T="CompanyListItem"
-                 Items="@_items"
-                 Filterable="true"
-                 SortMode="@SortMode.Multiple"
-                 QuickFilter="@QuickFilter"
-                 Hover="true"
-                 Dense="true"
-                 RowClick="@OnRowClick"
-                 RowClass="cursor-pointer">
-        <ToolBarContent>
-            <MudText Typo="Typo.subtitle1">Toplam: @_items.Count</MudText>
-            <MudSpacer />
-            <MudTextField @bind-Value="_searchText"
-                          Placeholder="Site ara…"
-                          Adornment="Adornment.Start"
-                          AdornmentIcon="@Icons.Material.Filled.Search"
-                          IconSize="Size.Medium"
-                          Immediate="true"
-                          DebounceInterval="200"
-                          Variant="Variant.Outlined"
-                          Margin="Margin.Dense"
-                          Clearable="true"
-                          Class="mt-0" Style="max-width: 300px;" />
-        </ToolBarContent>
+    <DataTable TItem="CompanyListItem"
+               Items="@_items"
+               Title="@($"Siteler — {_tenantName}")"
+               SearchPlaceholder="Site ara…"
+               SearchableFields="@(row => new[] { row.Name, row.UrlCode, row.LegalName, row.Vkn })"
+               ExportColumns="@_exportColumns"
+               ExportTitle="@($"{_tenantName}-Siteler")"
+               RowClick="@OnRowClick">
         <Columns>
-            <PropertyColumn Property="@(c => c.Name)" Title="Site Adı" />
-            <PropertyColumn Property="@(c => c.UrlCode)" Title="URL Kodu" />
-            <PropertyColumn Property="@(c => c.LegalName)" Title="Yasal Ad" />
-            <PropertyColumn Property="@(c => c.Vkn)" Title="VKN" />
-            <PropertyColumn Property="@(c => c.Status)" Title="Durum">
+            <PropertyColumn T="CompanyListItem" TProperty="string" Property="@(c => c.Name)" Title="Site Adı" />
+            <PropertyColumn T="CompanyListItem" TProperty="string" Property="@(c => c.UrlCode)" Title="URL Kodu" />
+            <PropertyColumn T="CompanyListItem" TProperty="string" Property="@(c => c.LegalName)" Title="Yasal Ad" />
+            <PropertyColumn T="CompanyListItem" TProperty="string" Property="@(c => c.Vkn)" Title="VKN" />
+            <PropertyColumn T="CompanyListItem" TProperty="CompanyStatus" Property="@(c => c.Status)" Title="Durum">
                 <CellTemplate>
                     <MudChip T="string" Size="Size.Small"
                              Color="@(context.Item.Status == CompanyStatus.Active ? Color.Success : Color.Default)">
@@ -83,7 +47,7 @@ else
                     </MudChip>
                 </CellTemplate>
             </PropertyColumn>
-            <TemplateColumn CellClass="d-flex justify-end" Filterable="false" Sortable="false">
+            <TemplateColumn T="CompanyListItem" CellClass="d-flex justify-end" Filterable="false" Sortable="false">
                 <CellTemplate>
                     <MudIconButton Icon="@Icons.Material.Filled.Login"
                                    Size="Size.Small"
@@ -93,17 +57,25 @@ else
                 </CellTemplate>
             </TemplateColumn>
         </Columns>
-    </MudDataGrid>
+    </DataTable>
 }
 
 @code {
     private const string PersistKey = "tenantarea.companies.list";
-    private string _searchText = string.Empty;
     private bool _unauthorized;
     private Guid? _activeTenantId;
     private string? _tenantName;
     private IReadOnlyList<CompanyListItem>? _items;
     private PersistingComponentStateSubscription _persistSubscription;
+
+    private static readonly IReadOnlyList<ExportColumn<CompanyListItem>> _exportColumns =
+    [
+        new() { Header = "Site Adı", Selector = r => r.Name },
+        new() { Header = "URL Kodu", Selector = r => r.UrlCode },
+        new() { Header = "Yasal Ad", Selector = r => r.LegalName },
+        new() { Header = "VKN", Selector = r => r.Vkn },
+        new() { Header = "Durum", Selector = r => r.Status.ToString() },
+    ];
 
     protected override async Task OnInitializedAsync()
     {
@@ -140,15 +112,6 @@ else
             return Task.CompletedTask;
         });
     }
-
-    private Func<CompanyListItem, bool> QuickFilter => row =>
-    {
-        if (string.IsNullOrWhiteSpace(_searchText)) return true;
-        return row.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase)
-            || row.UrlCode.Contains(_searchText, StringComparison.OrdinalIgnoreCase)
-            || (row.LegalName?.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ?? false)
-            || (row.Vkn?.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ?? false);
-    };
 
     private Task OnRowClick(DataGridRowClickEventArgs<CompanyListItem> args)
         => SwitchAsync(args.Item.Id);

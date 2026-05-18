@@ -172,6 +172,29 @@ window.cleantenant.downloadTextFile = function (filename, content) {
 };
 
 // ---------------------------------------------------------------------------
+// v0.2.4.a — Base64 olarak gelen byte array'i belirli MIME tipiyle blob olarak
+// indir. DataTable<TItem> Excel/PDF export butonları bu helper'ı çağırır.
+// Server tarafında byte[] → Convert.ToBase64String → JS'e geçirilir.
+// ---------------------------------------------------------------------------
+window.cleantenant.downloadBlobBase64 = function (filename, base64Content, mimeType) {
+    const byteCharacters = atob(base64Content);
+    const len = byteCharacters.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+        bytes[i] = byteCharacters.charCodeAt(i);
+    }
+    const blob = new Blob([bytes], { type: mimeType || 'application/octet-stream' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename || 'download';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+};
+
+// ---------------------------------------------------------------------------
 // Tenant switch: dinamik form üret + post /auth/switch-tenant (cookie yenile).
 // Blazor circuit içinden cookie set'lemek mümkün değil; form post HttpContext
 // yolunu kullanır. Component MudMenuItem OnClick'inde bunu çağırır.

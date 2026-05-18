@@ -1,0 +1,92 @@
+@typeparam TItem
+@using CleanTenant.Application.Common.Export
+@using MudBlazor
+
+@*
+    v0.2.4.a — Generic DataTable component. MudDataGrid'i sarar; toolbar'a
+    Excel + PDF export butonları + multi-keyword AND quick filter + custom action
+    slot ekler. Tüm MudDataGrid kolon türleri (PropertyColumn, TemplateColumn)
+    Columns RenderFragment ile geçirilir.
+*@
+
+<MudPaper Elevation="0" Class="pa-0">
+    @if (Items is null)
+    {
+        <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+    }
+    else
+    {
+        <MudDataGrid T="TItem"
+                     Items="@Items"
+                     Filterable="@Filterable"
+                     FilterMode="@FilterMode"
+                     SortMode="@SortMode.Multiple"
+                     Hover="@Hover"
+                     Dense="@Dense"
+                     Groupable="@Groupable"
+                     ShowColumnOptions="@ShowColumnOptions"
+                     QuickFilter="@CombinedQuickFilter"
+                     RowClick="@RowClick"
+                     RowClassFunc="@RowClassFunc">
+            <ToolBarContent>
+                @if (!string.IsNullOrWhiteSpace(Title))
+                {
+                    <MudText Typo="Typo.h6">@Title</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Default" Class="ml-3 mt-1">
+                        @($"Toplam: {Items?.Count() ?? 0}")
+                    </MudText>
+                }
+                <MudSpacer />
+                @ToolbarRight
+
+                @if (ShowQuickFilter)
+                {
+                    <MudTextField @bind-Value="_searchText"
+                                  Placeholder="@SearchPlaceholder"
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Filled.Search"
+                                  IconSize="Size.Medium"
+                                  Immediate="true"
+                                  DebounceInterval="200"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Clearable="true"
+                                  Class="mt-0 ml-3"
+                                  Style="max-width: 280px;" />
+                }
+
+                @if (ShowExcelExport)
+                {
+                    <MudIconButton Icon="@Icons.Material.Filled.TableChart"
+                                   Color="Color.Success"
+                                   title="Excel olarak indir"
+                                   OnClick="@ExportExcelAsync"
+                                   Class="ml-2" />
+                }
+                @if (ShowPdfExport)
+                {
+                    <MudIconButton Icon="@Icons.Material.Filled.PictureAsPdf"
+                                   Color="Color.Error"
+                                   title="PDF olarak indir"
+                                   OnClick="@ExportPdfAsync"
+                                   Class="ml-1" />
+                }
+            </ToolBarContent>
+            <Columns>
+                @Columns
+            </Columns>
+            <NoRecordsContent>
+                @if (NoRecordsContent is not null)
+                {
+                    @NoRecordsContent
+                }
+                else
+                {
+                    <MudText Typo="Typo.body2" Color="Color.Default" Class="pa-4">
+                        Kayıt bulunamadı
+                    </MudText>
+                }
+            </NoRecordsContent>
+        </MudDataGrid>
+    }
+</MudPaper>

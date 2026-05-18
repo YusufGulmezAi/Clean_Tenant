@@ -19,6 +19,8 @@
     <PackageReference Include="StackExchange.Redis" />
     <PackageReference Include="Microsoft.Extensions.Caching.Memory" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <PackageReference Include="ClosedXML" />
+    <PackageReference Include="QuestPDF" />
   </ItemGroup>
 
   <ItemGroup>
@@ -32,6 +34,7 @@
     <ProjectReference Include="..\..\src\Infrastructure\CleanTenant.Infrastructure.Identity\CleanTenant.Infrastructure.Identity.csproj" />
     <ProjectReference Include="..\..\src\Infrastructure\CleanTenant.Infrastructure.Logging\CleanTenant.Infrastructure.Logging.csproj" />
     <ProjectReference Include="..\..\src\Infrastructure\CleanTenant.Infrastructure.Caching\CleanTenant.Infrastructure.Caching.csproj" />
+    <ProjectReference Include="..\..\src\Infrastructure\CleanTenant.Infrastructure.Export\CleanTenant.Infrastructure.Export.csproj" />
     <ProjectReference Include="..\..\src\Infrastructure\CleanTenant.Infrastructure.BackgroundJobs\CleanTenant.Infrastructure.BackgroundJobs.csproj" />
   </ItemGroup>
 

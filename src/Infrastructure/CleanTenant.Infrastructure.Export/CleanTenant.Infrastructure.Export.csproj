@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Core\CleanTenant.Application\CleanTenant.Application.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- v0.2.4.a — Excel (ClosedXML MIT) + PDF (QuestPDF 2023.x community). -->
+    <PackageReference Include="ClosedXML" />
+    <PackageReference Include="QuestPDF" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

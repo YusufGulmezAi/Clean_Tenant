@@ -6,23 +6,17 @@
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 @implements IDisposable
+@using CleanTenant.Application.Common.Export
 @using CleanTenant.Application.Features.Catalog.Readers
 @using CleanTenant.Domain.Identity.Tenants
+@using CleanTenant.ManagementApp.Components.Shared
 
 <PageTitle>Yönetimler — Sistem</PageTitle>
 
 @*
-    v0.2.3.d — Hybrid cache reader pattern + PersistentComponentState.
-    OnInitializedAsync prerender'da DB'ye gider → PersistentState'a yazar → interactive
-    geçişte yeniden DB sorgulamaz, state'ten okur. Sonraki açılışlarda reader L1 hit.
-
-    Yetki: yalnız Sistem scope erişebilir.
+    v0.2.4.a — DataTable<TItem> generic component'a migrate edildi. Cache
+    reader pattern + PersistentComponentState + Excel/PDF export tek satırla.
 *@
-
-<MudText Typo="Typo.h5" Class="mb-3">
-    <MudIcon Icon="@Icons.Material.Filled.Domain" Class="mr-2" />
-    Yönetimler
-</MudText>
 
 @if (_unauthorized)
 {
@@ -30,41 +24,20 @@
         Bu sayfa yalnız Sistem kullanıcıları için. Aktif bağlamınız Sistem değil.
     </MudAlert>
 }
-else if (_items is null)
-{
-    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
-}
 else
 {
-    <MudDataGrid T="TenantListItem"
-                 Items="@_items"
-                 Filterable="true"
-                 SortMode="@SortMode.Multiple"
-                 QuickFilter="@QuickFilter"
-                 Hover="true"
-                 Dense="true"
-                 RowClick="@OnRowClick"
-                 RowClass="cursor-pointer">
-        <ToolBarContent>
-            <MudText Typo="Typo.subtitle1">Toplam: @_items.Count</MudText>
-            <MudSpacer />
-            <MudTextField @bind-Value="_searchText"
-                          Placeholder="Yönetim ara…"
-                          Adornment="Adornment.Start"
-                          AdornmentIcon="@Icons.Material.Filled.Search"
-                          IconSize="Size.Medium"
-                          Immediate="true"
-                          DebounceInterval="200"
-                          Variant="Variant.Outlined"
-                          Margin="Margin.Dense"
-                          Clearable="true"
-                          Class="mt-0" Style="max-width: 300px;" />
-        </ToolBarContent>
+    <DataTable TItem="TenantListItem"
+               Items="@_items"
+               Title="Yönetimler"
+               SearchPlaceholder="Yönetim ara…"
+               SearchableFields="@(row => new[] { row.Name, row.UrlCode, row.LegalName })"
+               ExportColumns="@_exportColumns"
+               RowClick="@OnRowClick">
         <Columns>
-            <PropertyColumn Property="@(t => t.Name)" Title="Yönetim Adı" />
-            <PropertyColumn Property="@(t => t.UrlCode)" Title="URL Kodu" />
-            <PropertyColumn Property="@(t => t.LegalName)" Title="Yasal Ad" />
-            <PropertyColumn Property="@(t => t.Status)" Title="Durum">
+            <PropertyColumn T="TenantListItem" TProperty="string" Property="@(t => t.Name)" Title="Yönetim Adı" />
+            <PropertyColumn T="TenantListItem" TProperty="string" Property="@(t => t.UrlCode)" Title="URL Kodu" />
+            <PropertyColumn T="TenantListItem" TProperty="string" Property="@(t => t.LegalName)" Title="Yasal Ad" />
+            <PropertyColumn T="TenantListItem" TProperty="TenantStatus" Property="@(t => t.Status)" Title="Durum">
                 <CellTemplate>
                     <MudChip T="string" Size="Size.Small"
                              Color="@(context.Item.Status == TenantStatus.Active ? Color.Success : Color.Default)">
@@ -72,15 +45,15 @@ else
                     </MudChip>
                 </CellTemplate>
             </PropertyColumn>
-            <PropertyColumn Property="@(t => t.BillingTier)" Title="Katman" />
-            <PropertyColumn Property="@(t => t.AllowSystemWriteAccess)" Title="Sistem Yazma">
+            <PropertyColumn T="TenantListItem" TProperty="BillingTier" Property="@(t => t.BillingTier)" Title="Katman" />
+            <PropertyColumn T="TenantListItem" TProperty="bool" Property="@(t => t.AllowSystemWriteAccess)" Title="Sistem Yazma">
                 <CellTemplate>
                     <MudIcon Icon="@(context.Item.AllowSystemWriteAccess ? Icons.Material.Filled.LockOpen : Icons.Material.Filled.Lock)"
                              Color="@(context.Item.AllowSystemWriteAccess ? Color.Success : Color.Warning)"
                              Size="Size.Small" />
                 </CellTemplate>
             </PropertyColumn>
-            <TemplateColumn CellClass="d-flex justify-end" Filterable="false" Sortable="false">
+            <TemplateColumn T="TenantListItem" CellClass="d-flex justify-end" Filterable="false" Sortable="false">
                 <CellTemplate>
                     <MudIconButton Icon="@Icons.Material.Filled.Login"
                                    Size="Size.Small"
@@ -90,15 +63,24 @@ else
                 </CellTemplate>
             </TemplateColumn>
         </Columns>
-    </MudDataGrid>
+    </DataTable>
 }
 
 @code {
     private const string PersistKey = "systemarea.tenants.list";
-    private string _searchText = string.Empty;
     private bool _unauthorized;
     private IReadOnlyList<TenantListItem>? _items;
     private PersistingComponentStateSubscription _persistSubscription;
+
+    private static readonly IReadOnlyList<ExportColumn<TenantListItem>> _exportColumns =
+    [
+        new() { Header = "Yönetim Adı", Selector = r => r.Name },
+        new() { Header = "URL Kodu", Selector = r => r.UrlCode },
+        new() { Header = "Yasal Ad", Selector = r => r.LegalName },
+        new() { Header = "Durum", Selector = r => r.Status.ToString() },
+        new() { Header = "Katman", Selector = r => r.BillingTier.ToString() },
+        new() { Header = "Sistem Yazma", Selector = r => r.AllowSystemWriteAccess ? "Açık" : "Kapalı" },
+    ];
 
     protected override async Task OnInitializedAsync()
     {
@@ -111,7 +93,6 @@ else
             return;
         }
 
-        // Prerender → interactive transfer: state varsa direkt al, yoksa reader'dan
         if (PersistentState.TryTakeFromJson<List<TenantListItem>>(PersistKey, out var cached) && cached is not null)
         {
             _items = cached;
@@ -120,21 +101,12 @@ else
 
         _items = await TenantReader.GetAllActiveAsync();
 
-        // Prerender'da çalışıyorsa state'e yaz (interactive geçişte alınacak)
         _persistSubscription = PersistentState.RegisterOnPersisting(() =>
         {
             PersistentState.PersistAsJson(PersistKey, _items);
             return Task.CompletedTask;
         });
     }
-
-    private Func<TenantListItem, bool> QuickFilter => row =>
-    {
-        if (string.IsNullOrWhiteSpace(_searchText)) return true;
-        return row.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase)
-            || row.UrlCode.Contains(_searchText, StringComparison.OrdinalIgnoreCase)
-            || (row.LegalName?.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ?? false);
-    };
 
     private Task OnRowClick(DataGridRowClickEventArgs<TenantListItem> args)
         => SwitchToTenantAsync(args.Item.Id);

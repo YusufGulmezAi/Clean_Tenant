@@ -101,6 +101,18 @@
     <PackageVersion Include="QRCoder" Version="1.6.0" />
   </ItemGroup>
 
+  <ItemGroup Label="Export — Excel + PDF (v0.2.4.a — DataTable export)">
+    <!--
+      ClosedXML: MIT, Excel .xlsx üretimi. v0.105+ .NET 10 uyumlu.
+      QuestPDF: 2023.12.6 son geniş community lisansı taşıyan sürüm.
+      2024.x.x'ten itibaren Community License sınırlandırıldı ($15M altı gelir).
+      CleanTenant başlangıç → 2023.12.6 ücretsiz + sürüm risksiz.
+      Boot'ta LicenseType.Community set edilir (QuestPdfLicenseInitializer).
+    -->
+    <PackageVersion Include="ClosedXML" Version="0.105.0" />
+    <PackageVersion Include="QuestPDF" Version="2023.12.6" />
+  </ItemGroup>
+
   <ItemGroup Label="Serilog + Dapper + UAParser (v0.1.7 — audit + structured logging)">
     <PackageVersion Include="Serilog" Version="4.2.0" />
     <PackageVersion Include="Serilog.AspNetCore" Version="9.0.0" />
