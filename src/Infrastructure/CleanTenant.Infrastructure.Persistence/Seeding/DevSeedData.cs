@@ -144,6 +144,9 @@ public sealed class DevSeedData
         {
             Name = DemoTenantName,
             LegalName = "Acme Site Yönetim Limited Şirketi",
+            LegalIdentityType = LegalIdentityType.Vkn,
+            LegalIdentityNumber = "1000000001",
+            Address = "Demo adres — Acme Sitesi, İstanbul",
             Status = TenantStatus.Active,
             BillingTier = BillingTier.Standard,
             HasDedicatedDatabase = false,

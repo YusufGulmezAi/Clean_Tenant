@@ -50,6 +50,28 @@ public sealed class TenantConfiguration : IEntityTypeConfiguration<Tenant>
             .IsRequired()
             .HasDefaultValue(true);
 
+        // v0.2.4.b — Yasal kimlik (VKN / TCKN / YKN — mutually exclusive)
+        builder.Property(t => t.LegalIdentityType)
+            .IsRequired()
+            .HasConversion<short>();
+
+        builder.Property(t => t.LegalIdentityNumber)
+            .IsRequired()
+            .HasMaxLength(11);
+
+        // Global tekil — herhangi bir Yönetim aynı kimlikle kayıt edilemez.
+        builder.HasIndex(t => t.LegalIdentityNumber).IsUnique();
+
+        // Format CHECK constraint: tipe göre regex
+        builder.ToTable(tb => tb.HasCheckConstraint(
+            "ck_tenant_legal_identity_format",
+            "(legal_identity_type = 1 AND legal_identity_number ~ '^[1-9][0-9]{9}$') OR " +
+            "(legal_identity_type = 2 AND legal_identity_number ~ '^[1-9][0-9]{10}$') OR " +
+            "(legal_identity_type = 3 AND legal_identity_number ~ '^99[0-9]{9}$')"));
+
+        builder.Property(t => t.Address)
+            .HasMaxLength(512);
+
         // xmin → RowVersion (PostgreSQL optimistic concurrency)
         builder.UseXminAsConcurrencyToken();
 

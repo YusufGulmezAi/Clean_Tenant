@@ -65,4 +65,35 @@ public sealed class Tenant : BaseEntity, IAggregateRoot, IHasUrlCode
     /// </para>
     /// </summary>
     public bool AllowSystemWriteAccess { get; set; } = true;
+
+    /// <summary>
+    /// <para>
+    /// Yönetim'in yasal kimlik tipi. <see cref="LegalIdentityType.Vkn"/>,
+    /// <see cref="LegalIdentityType.Tckn"/> veya <see cref="LegalIdentityType.Ykn"/>
+    /// — mutually exclusive. v0.2.4.b.
+    /// </para>
+    /// </summary>
+    public LegalIdentityType LegalIdentityType { get; set; }
+
+    /// <summary>
+    /// <para>
+    /// Yönetim'in yasal kimlik numarası. Tipe göre format:
+    /// </para>
+    /// <list type="bullet">
+    ///   <item><b>VKN</b>: 10 hane, ilk hane 1-9 (^[1-9]\d{9}$).</item>
+    ///   <item><b>TCKN</b>: 11 hane, ilk hane 1-9 (^[1-9]\d{10}$).</item>
+    ///   <item><b>YKN</b>: 11 hane, "99" ile başlar (^99\d{9}$).</item>
+    /// </list>
+    /// <para>
+    /// DB seviyesinde CHECK constraint ile format zorlanır. Global tekildir
+    /// (Catalog DB'de unique index).
+    /// </para>
+    /// </summary>
+    public string LegalIdentityNumber { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Yönetim'in posta adresi (opsiyonel). Faturalama ve resmi yazışma için.
+    /// Max 512 karakter.
+    /// </summary>
+    public string? Address { get; set; }
 }
