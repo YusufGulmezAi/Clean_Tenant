@@ -4,6 +4,7 @@ using CleanTenant.Application.Features.Auth.Logout;
 using CleanTenant.Application.Features.Auth.LogoutAllSessions;
 using CleanTenant.Application.Features.Auth.Refresh;
 using CleanTenant.Application.Features.Auth.SwitchContext;
+using CleanTenant.Application.Features.Auth.Tenants;
 using CleanTenant.SharedKernel.Context;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
@@ -26,6 +27,10 @@ public static class AuthEndpoints
         group.MapPost("/refresh", RefreshAsync).AllowAnonymous();
         group.MapPost("/logout", LogoutAsync).RequireAuthorization();
         group.MapPost("/switch-context", SwitchContextAsync).RequireAuthorization();
+
+        // v0.2.3.b — AppBar "Aktif Tenant" dropdown akışı.
+        group.MapGet("/accessible-tenants", GetAccessibleTenantsAsync).RequireAuthorization();
+        group.MapPost("/switch-tenant", SwitchTenantAsync).RequireAuthorization();
 
         // Self: tüm cihazlardan çıkış
         routes.MapPost("/api/v1/users/me/sessions/logout-all", LogoutAllSessionsAsync)
@@ -51,6 +56,31 @@ public static class AuthEndpoints
             ip, ua);
         var result = await mediator.Send(command, cancellationToken);
 
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : Results.Json(new { errors = result.Errors }, statusCode: MapErrorTypeToStatus(result.FirstError.Type));
+    }
+
+    private static async Task<IResult> GetAccessibleTenantsAsync(
+        [FromServices] IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new GetAccessibleTenantsQuery(), cancellationToken);
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : Results.Json(new { errors = result.Errors }, statusCode: MapErrorTypeToStatus(result.FirstError.Type));
+    }
+
+    private static async Task<IResult> SwitchTenantAsync(
+        [FromBody] SwitchTenantRequest request,
+        [FromServices] IMediator mediator,
+        HttpContext httpContext,
+        CancellationToken cancellationToken)
+    {
+        var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        var ua = httpContext.Request.Headers.UserAgent.ToString();
+        var command = new SwitchTenantCommand(request.TenantId, ip, ua);
+        var result = await mediator.Send(command, cancellationToken);
         return result.IsSuccess
             ? Results.Ok(result.Value)
             : Results.Json(new { errors = result.Errors }, statusCode: MapErrorTypeToStatus(result.FirstError.Type));
@@ -149,3 +179,7 @@ public sealed record SwitchContextRequest(
     Guid? TenantId,
     Guid? CompanyId,
     Guid? UnitId);
+
+/// <summary>v0.2.3.b — Switch-tenant isteği gövdesi (AppBar dropdown).</summary>
+/// <param name="TenantId">Geçilecek tenant kimliği.</param>
+public sealed record SwitchTenantRequest(Guid TenantId);

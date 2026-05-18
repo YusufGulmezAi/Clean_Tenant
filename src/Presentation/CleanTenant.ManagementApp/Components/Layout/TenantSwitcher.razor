@@ -1,0 +1,98 @@
+@inject MediatR.IMediator Mediator
+@inject AuthenticationStateProvider AuthProvider
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+@*
+    v0.2.3.b — AppBar'da "Aktif Tenant" dropdown'u.
+    - System scope kullanıcı tüm Active tenant'ları listeler (cross-tenant erişim).
+    - Tenant scope kullanıcı yalnız kendi atamasındaki tenant'ları listeler.
+    - 0 tenant erişimi varsa hiçbir şey render etmez (UI'da yer kaplamaz).
+    - Tıklama → JS dinamik form post /auth/switch-tenant → SwitchTenantCommand →
+      cookie yenile → sayfa geçerli return URL'e döner (full reload).
+
+    Cookie set işlemi HttpContext.SignInAsync gerektirdiği için form post pattern
+    şart; Blazor circuit içinden JS interop ile dinamik form üretiyor.
+*@
+
+@if (_tenants is not null && _tenants.Count >= 1)
+{
+    <MudMenu Color="Color.Inherit"
+             ActivationEvent="@MouseEvent.LeftClick"
+             AnchorOrigin="Origin.BottomLeft"
+             TransformOrigin="Origin.TopLeft"
+             Class="mr-2">
+        <ActivatorContent>
+            <MudButton Variant="Variant.Text"
+                       Color="Color.Inherit"
+                       StartIcon="@Icons.Material.Filled.Business"
+                       EndIcon="@Icons.Material.Filled.ArrowDropDown"
+                       Class="text-transform-none">
+                @(_activeTenantName ?? "Tenant seç")
+            </MudButton>
+        </ActivatorContent>
+        <ChildContent>
+            <MudText Typo="Typo.caption" Color="Color.Default" Class="px-4 pt-2 pb-1 d-block">
+                Aktif tenant
+            </MudText>
+            @foreach (var tenant in _tenants)
+            {
+                var isActive = _activeTenantId == tenant.TenantId;
+                <MudMenuItem Icon="@(isActive ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Domain)"
+                             IconColor="@(isActive ? Color.Success : Color.Default)"
+                             OnClick="@(() => SubmitSwitchAsync(tenant.TenantId))">
+                    <div class="d-flex flex-column">
+                        <span>@tenant.Name</span>
+                        <MudText Typo="Typo.caption" Color="Color.Default" Style="font-family: monospace;">
+                            @tenant.UrlCode
+                        </MudText>
+                    </div>
+                </MudMenuItem>
+            }
+        </ChildContent>
+    </MudMenu>
+}
+
+@code {
+    private IReadOnlyList<CleanTenant.Application.Features.Auth.Tenants.AccessibleTenant>? _tenants;
+    private Guid? _activeTenantId;
+    private string? _activeTenantName;
+
+    [Parameter] public Guid? ActiveTenantId { get; set; }
+    [Parameter] public string? ActiveTenantName { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        if (authState.User?.Identity?.IsAuthenticated != true)
+        {
+            return;
+        }
+
+        try
+        {
+            var result = await Mediator.Send(
+                new CleanTenant.Application.Features.Auth.Tenants.GetAccessibleTenantsQuery());
+            if (result.IsSuccess)
+            {
+                _tenants = result.Value;
+            }
+        }
+        catch
+        {
+            _tenants = null;
+        }
+    }
+
+    protected override void OnParametersSet()
+    {
+        _activeTenantId = ActiveTenantId;
+        _activeTenantName = ActiveTenantName;
+    }
+
+    private async Task SubmitSwitchAsync(Guid tenantId)
+    {
+        var returnUrl = Nav.ToBaseRelativePath(Nav.Uri);
+        await JS.InvokeVoidAsync("cleantenant.submitTenantSwitch", tenantId.ToString(), returnUrl);
+    }
+}

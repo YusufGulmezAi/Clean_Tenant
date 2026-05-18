@@ -2,6 +2,7 @@ using System.Security.Claims;
 using CleanTenant.Application.Common.Auth;
 using CleanTenant.Application.Features.Auth.Login;
 using CleanTenant.Application.Features.Auth.Logout;
+using CleanTenant.Application.Features.Auth.Tenants;
 using CleanTenant.Application.Features.Auth.TwoFactor.PreAuthEnrollment;
 using CleanTenant.Application.Features.Auth.TwoFactor.SendCode;
 using CleanTenant.Application.Features.Auth.TwoFactor.VerifyTwoFactor;
@@ -58,6 +59,13 @@ public static class AuthEndpoints
         routes.MapPost("/auth/2fa/enroll-pre-auth/finalize", FinalizePreAuthEnrollmentAsync)
               .DisableAntiforgery()
               .AllowAnonymous();
+
+        // v0.2.3.b — AppBar "Aktif Tenant" dropdown form post.
+        // SwitchTenantCommand çalıştırır, dönen TokenPair ile cookie'yi yeniler ve
+        // kullanıcıyı belirtilen returnUrl'e (default "/") yönlendirir.
+        routes.MapPost("/auth/switch-tenant", SwitchTenantFormAsync)
+              .DisableAntiforgery()
+              .RequireAuthorization();
 
         return routes;
     }
@@ -155,6 +163,35 @@ public static class AuthEndpoints
         var tokens = login.Tokens!;
         await SignInWithSessionAsync(httpContext, tokens, remember);
         return Results.Redirect("/");
+    }
+
+    private static async Task<IResult> SwitchTenantFormAsync(
+        HttpContext httpContext,
+        [FromForm] Guid tenantId,
+        [FromForm] string? returnUrl,
+        [FromServices] IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        var ua = httpContext.Request.Headers.UserAgent.ToString();
+        var command = new SwitchTenantCommand(tenantId, ip, ua);
+
+        var result = await mediator.Send(command, cancellationToken);
+        if (result.IsFailure)
+        {
+            // Hata durumunda kullanıcıyı geldiği yere geri yolla (error query ile)
+            var fallback = string.IsNullOrEmpty(returnUrl) ? "/" : returnUrl;
+            var sep = fallback.Contains('?') ? '&' : '?';
+            return Results.Redirect($"{fallback}{sep}switch-error={Uri.EscapeDataString(result.FirstError.Code)}");
+        }
+
+        // Önce eski cookie'yi sil (yeni session id ile değişti) sonra yeni cookie set
+        await httpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+        await SignInWithSessionAsync(httpContext, result.Value!, rememberMe: false);
+
+        // Tenant değiştirildiğinde dashboard'a dön — hangi sayfada olduğu önemli değil
+        // çünkü tenant-scoped sayfalarda data yenilenir (full reload).
+        return Results.Redirect(string.IsNullOrEmpty(returnUrl) ? "/" : returnUrl);
     }
 
     private static async Task<IResult> FinalizePreAuthEnrollmentAsync(

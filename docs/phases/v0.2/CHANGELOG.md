@@ -7,6 +7,57 @@ Bu dosya, Faz 1 (UI başlangıç + ManagementApp) kapsamında yapılan tüm alt-
 
 ---
 
+## v0.2.3.b — 2026-05-18 — Switch-Tenant UI (AppBar dropdown + cross-tenant context)
+
+### Sorun
+v0.2.3.a Main DB + Company entity altyapısı tamam ama System scope kullanıcısı (dev admin Developer rolünde) Companies UI'sını henüz göremezdi: global query filter `TenantId == _tenantContext.TenantId` System scope'ta null=null=false döner. Companies CRUD'a geçmeden önce AppBar'da "Aktif Tenant" seçici (Soru 1 B çözümü) altyapısı şart.
+
+### Mimari Karar: SwitchTenantCommand (SwitchContext'ten ayrı)
+- Mevcut `SwitchContextCommand` kullanıcının **rol ataması olan** scope'a izin verir; bu System operatörlerin cross-tenant erişimi için engel.
+- Yeni `SwitchTenantCommand` Tenant-spesifik:
+  - **System scope kullanıcı** (Developer / SystemAdmin) → herhangi bir Active tenant'a geçebilir; permissions + roles System'den miras (cross-tenant operasyonel görünürlük).
+  - **Alt scope kullanıcı** → yalnız UserRoleAssignments'ta bulunan tenant'a; permissions o tenant'taki rol atamasından (Tenant > Company öncelik).
+- Side-effect: yeni AuthSession Redis'e yazılır, eski sessions silinir, refresh chain `TenantSwitch` reason'ıyla revoke + yeni token, JWT yenilenir.
+
+### Mimari Karar: AccessibleTenants Querysi
+- `GetAccessibleTenantsQuery` — dropdown'u dolduran liste.
+- System scope kullanıcı: tüm `TenantStatus.Active` tenant'lar.
+- Alt scope kullanıcı: `UserRoleAssignments`'ta distinct `TenantId`'lere sahip olduğu tenant'lar.
+
+### Eklenen Dosyalar (5 yeni)
+
+**Application:**
+- [GetAccessibleTenantsQuery.cs](../../../src/Core/CleanTenant.Application/Features/Auth/Tenants/GetAccessibleTenantsQuery.cs) + Handler
+- [SwitchTenantCommand.cs](../../../src/Core/CleanTenant.Application/Features/Auth/Tenants/SwitchTenantCommand.cs) + Handler
+
+**ManagementApp:**
+- [Components/Layout/TenantSwitcher.razor](../../../src/Presentation/CleanTenant.ManagementApp/Components/Layout/TenantSwitcher.razor) — AppBar dropdown'u (System scope + multi-tenant kullanıcılar için). 0 tenant erişimi olanlarda render edilmez.
+
+### Güncellenen Dosyalar
+- [WebApi AuthEndpoints.cs](../../../src/Presentation/CleanTenant.WebApi/Endpoints/AuthEndpoints.cs) — 2 yeni endpoint: `GET /api/v1/auth/accessible-tenants` + `POST /api/v1/auth/switch-tenant` + `SwitchTenantRequest` record.
+- [ManagementApp Auth/AuthEndpoints.cs](../../../src/Presentation/CleanTenant.ManagementApp/Auth/AuthEndpoints.cs) — `POST /auth/switch-tenant` form post handler (HttpContext.SignInAsync ile cookie yenile, dropdown'dan tetiklenir).
+- [wwwroot/js/cleantenant.js](../../../src/Presentation/CleanTenant.ManagementApp/wwwroot/js/cleantenant.js) — `submitTenantSwitch(tenantId, returnUrl)` JS helper (dinamik form üretir + post).
+- [Components/Layout/MainLayout.razor](../../../src/Presentation/CleanTenant.ManagementApp/Components/Layout/MainLayout.razor) — AppBar'a `<TenantSwitcher>` yerleştirildi; aktif tenant id/name `ICurrentSessionAccessor.Current` üzerinden okunur.
+
+### Test Eklemeleri (6 yeni integration test)
+
+[TenantSwitchTests.cs](../../../tests/CleanTenant.WebApi.IntegrationTests/Auth/TenantSwitchTests.cs):
+1. AccessibleTenants_anonim_401
+2. AccessibleTenants_System_scope_tum_Active_tenantlari_doner (Active + Suspended ayrımı)
+3. SwitchTenant_anonim_401
+4. SwitchTenant_olmayan_tenant_404
+5. SwitchTenant_System_user_herhangi_bir_Active_tenanta_gecebilmeli
+6. SwitchTenant_pasif_tenanta_gecis_404
+
+### Doğrulama
+- ✓ `dotnet build CleanTenant.slnx` — 0 uyarı / 0 hata.
+- ✓ `dotnet test CleanTenant.slnx --no-build` — **202 yeşil test** (196 → 202).
+
+### Sonraki Adım
+**v0.2.3.c — DataTable<T> generic component + ExportService** (ClosedXML + QuestPDF). Companies'e geçmeden önce reusable tablo + export altyapısı.
+
+---
+
 ## v0.2.2.b — 2026-05-18 — UX İyileştirme + Markalama (Login + 2FA + Layout)
 
 ### Kapsam

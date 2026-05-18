@@ -170,3 +170,33 @@ window.cleantenant.downloadTextFile = function (filename, content) {
     document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(url), 0);
 };
+
+// ---------------------------------------------------------------------------
+// Tenant switch: dinamik form üret + post /auth/switch-tenant (cookie yenile).
+// Blazor circuit içinden cookie set'lemek mümkün değil; form post HttpContext
+// yolunu kullanır. Component MudMenuItem OnClick'inde bunu çağırır.
+// ---------------------------------------------------------------------------
+window.cleantenant.submitTenantSwitch = function (tenantId, returnUrl) {
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/auth/switch-tenant';
+    form.style.display = 'none';
+
+    const tenantInput = document.createElement('input');
+    tenantInput.type = 'hidden';
+    tenantInput.name = 'tenantId';
+    tenantInput.value = tenantId;
+    form.appendChild(tenantInput);
+
+    if (returnUrl) {
+        const returnInput = document.createElement('input');
+        returnInput.type = 'hidden';
+        returnInput.name = 'returnUrl';
+        // returnUrl bir relative path; '/' eki için baş slash garantile
+        returnInput.value = returnUrl.startsWith('/') ? returnUrl : '/' + returnUrl;
+        form.appendChild(returnInput);
+    }
+
+    document.body.appendChild(form);
+    form.submit();
+};

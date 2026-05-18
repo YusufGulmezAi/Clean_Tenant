@@ -1,6 +1,7 @@
 @inherits LayoutComponentBase
 @implements IDisposable
 @inject IThemeService ThemeService
+@inject CleanTenant.Application.Common.Auth.ICurrentSessionAccessor SessionAccessor
 
 @*
     AdminLTE+ pateni MudBlazor ile (v0.2.2.c — Routes seviyesinde InteractiveServer
@@ -28,6 +29,8 @@
         <MudText Typo="Typo.h6">Toplu Yapı Yönetimi</MudText>
 
         <MudSpacer />
+
+        <TenantSwitcher ActiveTenantId="@_activeTenantId" ActiveTenantName="@_activeTenantName" />
 
         <MudIconButton Icon="@(_isDark ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)"
                        Color="Color.Inherit"
@@ -82,11 +85,21 @@
     private bool _drawerOpen = true;
     private bool _isDark;
     private MudTheme _currentTheme = CleanTenantThemes.KurumsalMavi;
+    private Guid? _activeTenantId;
+    private string? _activeTenantName;
 
     protected override void OnInitialized()
     {
         ThemeService.ThemeChanged += OnThemeChanged;
         ApplyTheme();
+
+        // Aktif tenant bilgisini AuthSession'dan oku (SessionLookupMiddleware
+        // her HTTP isteğinde set eder). Tenant scope kullanıcı için TenantId
+        // login akışında set'lendi; System scope kullanıcı için null (kullanıcı
+        // henüz tenant seçmediyse) veya seçtikten sonra dolu.
+        var session = SessionAccessor.Current;
+        _activeTenantId = session?.TenantId;
+        _activeTenantName = session?.TenantName;
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
