@@ -1,51 +1,126 @@
 @*
     Sol drawer'ın içeriği — AdminLTE+ nested menu pattern.
-    Faz 1.1: yalnız Dashboard aktif; diğerleri "Yakında" badge'li.
-    Faz 1.5+: scope-aware visibility (TenantScope yalnız kendi audit'i; SystemScope cross-tenant).
+    v0.2.2.c: Üstte canlı arama kutusu (NavMenu link'lerini filtreler);
+    eşleşmeyen MudNavLink'ler ve eşleşmeyen MudNavGroup'lar gizlenir.
+    Faz 1.4-1.6: scope-aware visibility eklenecek.
 *@
 
+<div class="pa-2">
+    <MudTextField T="string"
+                  Value="@_search"
+                  ValueChanged="@OnSearchChanged"
+                  DebounceInterval="120"
+                  Adornment="Adornment.Start"
+                  AdornmentIcon="@Icons.Material.Filled.Search"
+                  Placeholder="Menüde ara…"
+                  Variant="Variant.Outlined"
+                  Margin="Margin.Dense"
+                  Clearable="true"
+                  Immediate="true" />
+</div>
+
 <MudNavMenu Color="Color.Primary" Bordered="true">
-    <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">
-        Dashboard
-    </MudNavLink>
+    @if (Matches("Dashboard"))
+    {
+        <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">
+            Dashboard
+        </MudNavLink>
+    }
 
-    <MudNavGroup Title="Yönetim" Icon="@Icons.Material.Filled.AdminPanelSettings" Expanded="true">
-        <MudNavLink Href="/tenants" Icon="@Icons.Material.Filled.Domain" Disabled="true">
-            Tenant Yönetimi
-            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="ml-2">Faz 1.4</MudChip>
-        </MudNavLink>
-        <MudNavLink Href="/roles" Icon="@Icons.Material.Filled.Security" Disabled="true">
-            Roller &amp; İzinler
-            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="ml-2">Faz 1.5</MudChip>
-        </MudNavLink>
-        <MudNavLink Href="/users" Icon="@Icons.Material.Filled.People" Disabled="true">
-            Kullanıcılar
-            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="ml-2">Faz 1.4</MudChip>
-        </MudNavLink>
-    </MudNavGroup>
+    @{
+        var managementChildren = new[]
+        {
+            ("Tenant Yönetimi", "/tenants", Icons.Material.Filled.Domain, "Faz 1.4", true),
+            ("Roller & İzinler", "/roles", Icons.Material.Filled.Security, "Faz 1.5", true),
+            ("Kullanıcılar", "/users", Icons.Material.Filled.People, "Faz 1.4", true),
+        };
+        var managementVisible = AnyMatch(managementChildren.Select(c => c.Item1));
+    }
+    @if (managementVisible)
+    {
+        <MudNavGroup Title="Yönetim" Icon="@Icons.Material.Filled.AdminPanelSettings" Expanded="@(IsSearching || true)">
+            @foreach (var (title, href, icon, phase, disabled) in managementChildren)
+            {
+                if (Matches(title))
+                {
+                    <MudNavLink Href="@href" Icon="@icon" Disabled="@disabled">
+                        @title
+                        <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="ml-2">@phase</MudChip>
+                    </MudNavLink>
+                }
+            }
+        </MudNavGroup>
+    }
 
-    <MudNavGroup Title="Gözetim" Icon="@Icons.Material.Filled.QueryStats" Expanded="true">
-        <MudNavLink Href="/audit" Icon="@Icons.Material.Filled.History" Disabled="true">
-            Audit &amp; Loglar
-            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="ml-2">Faz 1.6</MudChip>
-        </MudNavLink>
-        <MudNavLink Href="/support-sessions" Icon="@Icons.Material.Filled.Support" Disabled="true">
-            Destek Oturumları
-            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="ml-2">Faz 1.6</MudChip>
-        </MudNavLink>
-    </MudNavGroup>
+    @{
+        var supervisionChildren = new[]
+        {
+            ("Audit & Loglar", "/audit", Icons.Material.Filled.History, "Faz 1.6", true),
+            ("Destek Oturumları", "/support-sessions", Icons.Material.Filled.Support, "Faz 1.6", true),
+        };
+        var supervisionVisible = AnyMatch(supervisionChildren.Select(c => c.Item1));
+    }
+    @if (supervisionVisible)
+    {
+        <MudNavGroup Title="Gözetim" Icon="@Icons.Material.Filled.QueryStats" Expanded="@(IsSearching || true)">
+            @foreach (var (title, href, icon, phase, disabled) in supervisionChildren)
+            {
+                if (Matches(title))
+                {
+                    <MudNavLink Href="@href" Icon="@icon" Disabled="@disabled">
+                        @title
+                        <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="ml-2">@phase</MudChip>
+                    </MudNavLink>
+                }
+            }
+        </MudNavGroup>
+    }
 
     <MudDivider Class="my-2" />
 
-    <MudNavGroup Title="Ayarlar" Icon="@Icons.Material.Filled.Settings">
-        <MudNavLink Href="/settings/theme" Icon="@Icons.Material.Filled.Palette">
-            Tema
-        </MudNavLink>
-        <MudNavLink Href="/settings/language" Icon="@Icons.Material.Filled.Language">
-            Dil
-        </MudNavLink>
-        <MudNavLink Href="/about" Icon="@Icons.Material.Filled.Info">
-            Hakkında
-        </MudNavLink>
-    </MudNavGroup>
+    @{
+        var settingsChildren = new[]
+        {
+            ("Tema", "/settings/theme", Icons.Material.Filled.Palette),
+            ("Dil", "/settings/language", Icons.Material.Filled.Language),
+            ("Hakkında", "/about", Icons.Material.Filled.Info),
+        };
+        var settingsVisible = AnyMatch(settingsChildren.Select(c => c.Item1));
+    }
+    @if (settingsVisible)
+    {
+        <MudNavGroup Title="Ayarlar" Icon="@Icons.Material.Filled.Settings" Expanded="@IsSearching">
+            @foreach (var (title, href, icon) in settingsChildren)
+            {
+                if (Matches(title))
+                {
+                    <MudNavLink Href="@href" Icon="@icon">@title</MudNavLink>
+                }
+            }
+        </MudNavGroup>
+    }
 </MudNavMenu>
+
+@code {
+    private string _search = string.Empty;
+
+    private bool IsSearching => !string.IsNullOrWhiteSpace(_search);
+
+    private void OnSearchChanged(string value)
+    {
+        _search = value ?? string.Empty;
+        StateHasChanged();
+    }
+
+    private bool Matches(string title)
+    {
+        if (!IsSearching) return true;
+        return title.Contains(_search, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool AnyMatch(IEnumerable<string> titles)
+    {
+        if (!IsSearching) return true;
+        return titles.Any(t => t.Contains(_search, StringComparison.OrdinalIgnoreCase));
+    }
+}

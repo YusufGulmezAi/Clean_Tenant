@@ -3,11 +3,12 @@
 @inject IThemeService ThemeService
 
 @*
-    AdminLTE+ pateni MudBlazor ile:
-    - MudAppBar üstte (logo + sayfa başlığı + dark toggle + tema + bildirim + kullanıcı)
-    - MudDrawer solda (NavMenu) — Mini variant, hover'da açılır
+    AdminLTE+ pateni MudBlazor ile (v0.2.2.c — Routes seviyesinde InteractiveServer
+    olduğu için layout state'i tam reaktif):
+    - MudAppBar üstte (hamburger + logo + dark toggle + tema + 2FA + kullanıcı menüsü)
+    - MudDrawer solda — Mini + hover; toggle butonu hep açık <-> mini arası geçirir
+    - NavMenu içinde arama kutusu (üstte) — linkleri canlı filtreler
     - MudMainContent ortada
-    - Footer altta
 *@
 
 <MudThemeProvider Theme="@_currentTheme" IsDarkMode="@_isDark" />
@@ -17,32 +18,44 @@
 
 <MudLayout>
     <MudAppBar Elevation="1">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu"
+                       Color="Color.Inherit"
+                       Edge="Edge.Start"
+                       OnClick="@DrawerToggle"
+                       title="Menüyü aç/kapa" />
+
         <MudIcon Icon="@Icons.Material.Filled.Domain" Class="mr-2" />
         <MudText Typo="Typo.h6">Toplu Yapı Yönetimi</MudText>
 
         <MudSpacer />
 
-        @* Dark toggle ve drawer toggle interactive state ister; layout statik SSR'da
-           kalıyor (Body parameter serialize edilemez sorunu). Dark mode için
-           /settings/theme aktif; drawer hover-on-mini ile açılır. *@
+        <MudIconButton Icon="@(_isDark ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)"
+                       Color="Color.Inherit"
+                       OnClick="@OnDarkToggle"
+                       title="@(_isDark ? "Açık mod" : "Koyu mod")" />
 
         <MudIconButton Icon="@Icons.Material.Filled.Palette"
                        Color="Color.Inherit"
                        Href="/settings/theme"
                        title="Tema ayarları" />
 
-        <MudIconButton Icon="@Icons.Material.Filled.Security"
+        <MudIconButton Icon="@Icons.Material.Filled.Notifications"
                        Color="Color.Inherit"
-                       Href="/settings/2fa/enroll"
-                       title="2FA Yönetimi" />
+                       title="Bildirimler (Faz 1+)" />
 
-        <MudIconButton Icon="@Icons.Material.Filled.Logout"
-                       Color="Color.Inherit"
-                       Href="/auth/sign-out"
-                       title="Çıkış" />
+        <MudMenu Icon="@Icons.Material.Filled.AccountCircle"
+                 Color="Color.Inherit"
+                 AnchorOrigin="Origin.BottomRight"
+                 TransformOrigin="Origin.TopRight">
+            <MudMenuItem Icon="@Icons.Material.Filled.Person" Href="/profile">Profilim (Faz 1.2)</MudMenuItem>
+            <MudMenuItem Icon="@Icons.Material.Filled.Security" Href="/settings/2fa/enroll">2FA Yönetimi</MudMenuItem>
+            <MudMenuItem Icon="@Icons.Material.Filled.Settings" Href="/settings/theme">Ayarlar</MudMenuItem>
+            <MudDivider />
+            <MudMenuItem Icon="@Icons.Material.Filled.Logout" Href="/auth/sign-out" ForceLoad="true">Çıkış</MudMenuItem>
+        </MudMenu>
     </MudAppBar>
 
-    <MudDrawer Open="true" ClipMode="DrawerClipMode.Always" Elevation="1" Variant="@DrawerVariant.Persistent">
+    <MudDrawer @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="1" Variant="@DrawerVariant.Persistent">
         <NavMenu />
     </MudDrawer>
 
@@ -53,7 +66,7 @@
 
         <MudPaper Elevation="0" Class="mt-8 pa-3 d-flex justify-center" Square="true">
             <MudText Typo="Typo.caption" Color="Color.Default">
-                © 2026 CleanTenant · v0.2.1 (Faz 1 başlangıç) · Yönetim
+                © 2026 CleanTenant · v0.2.2.c · Yönetim
             </MudText>
         </MudPaper>
     </MudMainContent>
@@ -66,18 +79,25 @@
 </div>
 
 @code {
+    private bool _drawerOpen = true;
     private bool _isDark;
     private MudTheme _currentTheme = CleanTenantThemes.KurumsalMavi;
 
     protected override void OnInitialized()
     {
-        // Layout statik SSR render edilir (Body parameter RenderFragment'ı
-        // interactive mode'da serialize edilemez). Default tema gösterilir;
-        // kullanıcı /settings/theme'den tercihi günceller ve sonraki sayfa
-        // yüklemesinde ThemeService.InitializeAsync (sayfa interactive ise)
-        // localStorage'dan değeri okur.
         ThemeService.ThemeChanged += OnThemeChanged;
         ApplyTheme();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Routes interactive — ilk render'da JSRuntime hazır; localStorage'dan
+        // tercihi oku ve tema'yı uygula (ThemeChanged event'i StateHasChanged
+        // tetikler, paletler anında değişir).
+        if (firstRender)
+        {
+            await ThemeService.InitializeAsync();
+        }
     }
 
     private void OnThemeChanged()
@@ -91,6 +111,10 @@
         _currentTheme = CleanTenantThemes.Resolve(ThemeService.CurrentPreset);
         _isDark = ThemeService.IsDarkMode;
     }
+
+    private void DrawerToggle() => _drawerOpen = !_drawerOpen;
+
+    private Task OnDarkToggle() => ThemeService.ToggleDarkModeAsync();
 
     public void Dispose()
     {

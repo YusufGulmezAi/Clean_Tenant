@@ -15,7 +15,11 @@
 </head>
 
 <body>
-    <Routes />
+    @* v0.2.2.c — Tüm route ağacını InteractiveServer'a çek. Layout dahil drawer/
+       tema/MudNavGroup expand-collapse anlık çalışır. Login + 2FA Challenge
+       sayfaları kendi form post pattern'lerini koruyor (form action attribute
+       interactive mod'da da DOM'da değişmez). *@
+    <Routes @rendermode="InteractiveServer" />
     <ReconnectModal />
     <script src="@Assets["_framework/blazor.web.js"]"></script>
     <script src="_content/MudBlazor/MudBlazor.min.js"></script>
