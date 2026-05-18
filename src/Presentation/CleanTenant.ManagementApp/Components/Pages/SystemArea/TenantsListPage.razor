@@ -1,0 +1,156 @@
+@page "/system/tenants"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject CleanTenant.Application.Common.Persistence.ICatalogDbContext Catalog
+@inject AuthenticationStateProvider AuthProvider
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@using Microsoft.EntityFrameworkCore
+@using CleanTenant.Domain.Identity.Tenants
+
+<PageTitle>Yönetimler — Sistem</PageTitle>
+
+@*
+    v0.2.3.c.2 — Sistem operatörü için tüm aktif Yönetim'leri (Tenant) listeler.
+    Satıra tıklayınca o Yönetim bağlamına geçer (cleantenant.submitTenantSwitch).
+    Yetki: yalnız Sistem scope erişebilir; başka scope'tan gelen kullanıcı 403'e
+    benzer şekilde "yetkisiz" bilgisi görür (basit guard).
+*@
+
+<MudText Typo="Typo.h5" Class="mb-3">
+    <MudIcon Icon="@Icons.Material.Filled.Domain" Class="mr-2" />
+    Yönetimler
+</MudText>
+
+@if (_unauthorized)
+{
+    <MudAlert Severity="Severity.Warning" Class="my-3">
+        Bu sayfa yalnız Sistem kullanıcıları için. Aktif bağlamınız Sistem değil.
+    </MudAlert>
+}
+else if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudDataGrid T="TenantRow"
+                 Items="@_items"
+                 Filterable="true"
+                 SortMode="@SortMode.Multiple"
+                 QuickFilter="@QuickFilter"
+                 Hover="true"
+                 Dense="true"
+                 RowClick="@OnRowClick"
+                 RowClass="cursor-pointer">
+        <ToolBarContent>
+            <MudText Typo="Typo.subtitle1">Toplam: @_items.Count</MudText>
+            <MudSpacer />
+            <MudTextField @bind-Value="_searchText"
+                          Placeholder="Yönetim ara…"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          IconSize="Size.Medium"
+                          Immediate="true"
+                          DebounceInterval="200"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Clearable="true"
+                          Class="mt-0" Style="max-width: 300px;" />
+        </ToolBarContent>
+        <Columns>
+            <PropertyColumn Property="@(t => t.Name)" Title="Yönetim Adı" />
+            <PropertyColumn Property="@(t => t.UrlCode)" Title="URL Kodu" />
+            <PropertyColumn Property="@(t => t.LegalName)" Title="Yasal Ad" />
+            <PropertyColumn Property="@(t => t.Status)" Title="Durum">
+                <CellTemplate>
+                    <MudChip T="string" Size="Size.Small"
+                             Color="@(context.Item.Status == TenantStatus.Active ? Color.Success : Color.Default)">
+                        @context.Item.Status
+                    </MudChip>
+                </CellTemplate>
+            </PropertyColumn>
+            <PropertyColumn Property="@(t => t.BillingTier)" Title="Katman" />
+            <PropertyColumn Property="@(t => t.AllowSystemWriteAccess)" Title="Sistem Yazma">
+                <CellTemplate>
+                    <MudIcon Icon="@(context.Item.AllowSystemWriteAccess ? Icons.Material.Filled.LockOpen : Icons.Material.Filled.Lock)"
+                             Color="@(context.Item.AllowSystemWriteAccess ? Color.Success : Color.Warning)"
+                             Size="Size.Small" />
+                </CellTemplate>
+            </PropertyColumn>
+            <TemplateColumn CellClass="d-flex justify-end" Filterable="false" Sortable="false">
+                <CellTemplate>
+                    <MudIconButton Icon="@Icons.Material.Filled.Login"
+                                   Size="Size.Small"
+                                   Color="Color.Primary"
+                                   title="Bu Yönetim bağlamına geç"
+                                   OnClick="@(() => SwitchToTenantAsync(context.Item.Id))" />
+                </CellTemplate>
+            </TemplateColumn>
+        </Columns>
+    </MudDataGrid>
+}
+
+@code {
+    private string _searchText = string.Empty;
+    private bool _loading = true;
+    private bool _unauthorized;
+    private List<TenantRow> _items = [];
+
+    public sealed record TenantRow(
+        Guid Id,
+        string UrlCode,
+        string Name,
+        string? LegalName,
+        TenantStatus Status,
+        BillingTier BillingTier,
+        bool AllowSystemWriteAccess);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user?.Identity?.IsAuthenticated != true
+            || !string.Equals(user.FindFirst("scope")?.Value, "System", StringComparison.OrdinalIgnoreCase))
+        {
+            _unauthorized = true;
+            _loading = false;
+            return;
+        }
+
+        _items = await Catalog.Tenants
+            .AsNoTracking()
+            .OrderBy(t => t.Name)
+            .Select(t => new TenantRow(
+                t.Id,
+                t.UrlCode,
+                t.Name,
+                t.LegalName,
+                t.Status,
+                t.BillingTier,
+                t.AllowSystemWriteAccess))
+            .ToListAsync();
+
+        _loading = false;
+    }
+
+    private Func<TenantRow, bool> QuickFilter => row =>
+    {
+        if (string.IsNullOrWhiteSpace(_searchText)) return true;
+        return row.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase)
+            || row.UrlCode.Contains(_searchText, StringComparison.OrdinalIgnoreCase)
+            || (row.LegalName?.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ?? false);
+    };
+
+    private Task OnRowClick(DataGridRowClickEventArgs<TenantRow> args)
+        => SwitchToTenantAsync(args.Item.Id);
+
+    private async Task SwitchToTenantAsync(Guid tenantId)
+    {
+        var returnUrl = "/" + Nav.ToBaseRelativePath(Nav.Uri);
+        await JS.InvokeVoidAsync(
+            "cleantenant.submitTenantSwitch",
+            tenantId.ToString(),
+            returnUrl,
+            string.Empty);
+    }
+}

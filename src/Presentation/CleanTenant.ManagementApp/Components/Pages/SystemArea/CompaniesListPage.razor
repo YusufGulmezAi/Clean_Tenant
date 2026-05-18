@@ -1,0 +1,160 @@
+@page "/system/companies"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject CleanTenant.Application.Common.Persistence.ICatalogDbContext Catalog
+@inject CleanTenant.Application.Common.Persistence.IMainDbContext Main
+@inject AuthenticationStateProvider AuthProvider
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@using Microsoft.EntityFrameworkCore
+@using CleanTenant.Domain.Tenant.Companies
+
+<PageTitle>Siteler — Sistem</PageTitle>
+
+@*
+    v0.2.3.c.2 — Sistem operatörü için tüm Site'leri (Company) parent Yönetim'iyle
+    birlikte listeler. Main DB query filter ITenantContext.TenantId=null nedeniyle
+    boş döner; IgnoreQueryFilters ile bypass. Satıra tıklayınca o Site bağlamına
+    geçer (cleantenant.submitTenantSwitch + companyId).
+*@
+
+<MudText Typo="Typo.h5" Class="mb-3">
+    <MudIcon Icon="@Icons.Material.Filled.Apartment" Class="mr-2" />
+    Siteler
+</MudText>
+
+@if (_unauthorized)
+{
+    <MudAlert Severity="Severity.Warning" Class="my-3">
+        Bu sayfa yalnız Sistem kullanıcıları için.
+    </MudAlert>
+}
+else if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudDataGrid T="CompanyRow"
+                 Items="@_items"
+                 Filterable="true"
+                 SortMode="@SortMode.Multiple"
+                 QuickFilter="@QuickFilter"
+                 Hover="true"
+                 Dense="true"
+                 RowClick="@OnRowClick"
+                 RowClass="cursor-pointer">
+        <ToolBarContent>
+            <MudText Typo="Typo.subtitle1">Toplam: @_items.Count</MudText>
+            <MudSpacer />
+            <MudTextField @bind-Value="_searchText"
+                          Placeholder="Site / Yönetim ara…"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          IconSize="Size.Medium"
+                          Immediate="true"
+                          DebounceInterval="200"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Clearable="true"
+                          Class="mt-0" Style="max-width: 300px;" />
+        </ToolBarContent>
+        <Columns>
+            <PropertyColumn Property="@(c => c.Name)" Title="Site Adı" />
+            <PropertyColumn Property="@(c => c.UrlCode)" Title="URL Kodu" />
+            <PropertyColumn Property="@(c => c.TenantName)" Title="Yönetim" Grouping="true" />
+            <PropertyColumn Property="@(c => c.LegalName)" Title="Yasal Ad" />
+            <PropertyColumn Property="@(c => c.Status)" Title="Durum">
+                <CellTemplate>
+                    <MudChip T="string" Size="Size.Small"
+                             Color="@(context.Item.Status == CompanyStatus.Active ? Color.Success : Color.Default)">
+                        @context.Item.Status
+                    </MudChip>
+                </CellTemplate>
+            </PropertyColumn>
+            <TemplateColumn CellClass="d-flex justify-end" Filterable="false" Sortable="false">
+                <CellTemplate>
+                    <MudIconButton Icon="@Icons.Material.Filled.Login"
+                                   Size="Size.Small"
+                                   Color="Color.Primary"
+                                   title="Bu Site bağlamına geç"
+                                   OnClick="@(() => SwitchAsync(context.Item.TenantId, context.Item.Id))" />
+                </CellTemplate>
+            </TemplateColumn>
+        </Columns>
+    </MudDataGrid>
+}
+
+@code {
+    private string _searchText = string.Empty;
+    private bool _loading = true;
+    private bool _unauthorized;
+    private List<CompanyRow> _items = [];
+
+    public sealed record CompanyRow(
+        Guid Id,
+        Guid TenantId,
+        string TenantName,
+        string UrlCode,
+        string Name,
+        string? LegalName,
+        CompanyStatus Status);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user?.Identity?.IsAuthenticated != true
+            || !string.Equals(user.FindFirst("scope")?.Value, "System", StringComparison.OrdinalIgnoreCase))
+        {
+            _unauthorized = true;
+            _loading = false;
+            return;
+        }
+
+        // Parent Tenant adları için lookup
+        var tenantLookup = await Catalog.Tenants
+            .AsNoTracking()
+            .Select(t => new { t.Id, t.Name })
+            .ToDictionaryAsync(t => t.Id, t => t.Name);
+
+        var companies = await Main.Companies
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .OrderBy(c => c.Name)
+            .Select(c => new { c.Id, c.TenantId, c.UrlCode, c.Name, c.LegalName, c.Status })
+            .ToListAsync();
+
+        _items = [.. companies.Select(c => new CompanyRow(
+            c.Id,
+            c.TenantId,
+            tenantLookup.TryGetValue(c.TenantId, out var tn) ? tn : "?",
+            c.UrlCode,
+            c.Name,
+            c.LegalName,
+            c.Status))];
+
+        _loading = false;
+    }
+
+    private Func<CompanyRow, bool> QuickFilter => row =>
+    {
+        if (string.IsNullOrWhiteSpace(_searchText)) return true;
+        return row.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase)
+            || row.UrlCode.Contains(_searchText, StringComparison.OrdinalIgnoreCase)
+            || row.TenantName.Contains(_searchText, StringComparison.OrdinalIgnoreCase)
+            || (row.LegalName?.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ?? false);
+    };
+
+    private Task OnRowClick(DataGridRowClickEventArgs<CompanyRow> args)
+        => SwitchAsync(args.Item.TenantId, args.Item.Id);
+
+    private async Task SwitchAsync(Guid tenantId, Guid companyId)
+    {
+        var returnUrl = "/" + Nav.ToBaseRelativePath(Nav.Uri);
+        await JS.InvokeVoidAsync(
+            "cleantenant.submitTenantSwitch",
+            tenantId.ToString(),
+            returnUrl,
+            companyId.ToString());
+    }
+}

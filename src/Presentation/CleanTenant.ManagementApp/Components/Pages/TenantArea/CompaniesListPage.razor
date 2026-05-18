@@ -1,0 +1,173 @@
+@page "/tenant/companies"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject CleanTenant.Application.Common.Persistence.IMainDbContext Main
+@inject AuthenticationStateProvider AuthProvider
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@using Microsoft.EntityFrameworkCore
+@using CleanTenant.Domain.Tenant.Companies
+
+<PageTitle>Siteler — Yönetim</PageTitle>
+
+@*
+    v0.2.3.c.2 — Aktif Yönetim bağlamındaki Site listesi. Main DB query filter
+    ITenantContext.TenantId = aktif tenant'a göre otomatik filtreliyor; IgnoreQueryFilters
+    GEREK YOK. Sistem kullanıcı destek bağlamında ise yine bu sayfada o yönetimin
+    Site'leri görünür (SupportSession + claim'den TenantId).
+*@
+
+<MudText Typo="Typo.h5" Class="mb-3">
+    <MudIcon Icon="@Icons.Material.Filled.Apartment" Class="mr-2" />
+    Siteler
+    @if (!string.IsNullOrWhiteSpace(_tenantName))
+    {
+        <MudText Typo="Typo.subtitle2" Color="Color.Default" Class="d-inline ml-2">— @_tenantName</MudText>
+    }
+</MudText>
+
+@if (_unauthorized)
+{
+    <MudAlert Severity="Severity.Warning" Class="my-3">
+        Aktif Yönetim bağlamı yok. Önce bir Yönetim seçin.
+    </MudAlert>
+}
+else if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else if (_items.Count == 0)
+{
+    <MudPaper Class="pa-6 mt-3 d-flex flex-column align-center" Elevation="0">
+        <MudIcon Icon="@Icons.Material.Filled.HomeWork" Size="Size.Large" Color="Color.Default" />
+        <MudText Typo="Typo.body1" Class="mt-2">Bu Yönetim'de henüz Site kaydı yok.</MudText>
+        <MudText Typo="Typo.caption" Color="Color.Default">(Faz 1.4'te "Yeni Site" akışı eklenecek.)</MudText>
+    </MudPaper>
+}
+else
+{
+    <MudDataGrid T="CompanyRow"
+                 Items="@_items"
+                 Filterable="true"
+                 SortMode="@SortMode.Multiple"
+                 QuickFilter="@QuickFilter"
+                 Hover="true"
+                 Dense="true"
+                 RowClick="@OnRowClick"
+                 RowClass="cursor-pointer">
+        <ToolBarContent>
+            <MudText Typo="Typo.subtitle1">Toplam: @_items.Count</MudText>
+            <MudSpacer />
+            <MudTextField @bind-Value="_searchText"
+                          Placeholder="Site ara…"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          IconSize="Size.Medium"
+                          Immediate="true"
+                          DebounceInterval="200"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Clearable="true"
+                          Class="mt-0" Style="max-width: 300px;" />
+        </ToolBarContent>
+        <Columns>
+            <PropertyColumn Property="@(c => c.Name)" Title="Site Adı" />
+            <PropertyColumn Property="@(c => c.UrlCode)" Title="URL Kodu" />
+            <PropertyColumn Property="@(c => c.LegalName)" Title="Yasal Ad" />
+            <PropertyColumn Property="@(c => c.Vkn)" Title="VKN" />
+            <PropertyColumn Property="@(c => c.Status)" Title="Durum">
+                <CellTemplate>
+                    <MudChip T="string" Size="Size.Small"
+                             Color="@(context.Item.Status == CompanyStatus.Active ? Color.Success : Color.Default)">
+                        @context.Item.Status
+                    </MudChip>
+                </CellTemplate>
+            </PropertyColumn>
+            <TemplateColumn CellClass="d-flex justify-end" Filterable="false" Sortable="false">
+                <CellTemplate>
+                    <MudIconButton Icon="@Icons.Material.Filled.Login"
+                                   Size="Size.Small"
+                                   Color="Color.Primary"
+                                   title="Bu Site bağlamına geç"
+                                   OnClick="@(() => SwitchAsync(context.Item.Id))" />
+                </CellTemplate>
+            </TemplateColumn>
+        </Columns>
+    </MudDataGrid>
+}
+
+@code {
+    private string _searchText = string.Empty;
+    private bool _loading = true;
+    private bool _unauthorized;
+    private Guid? _activeTenantId;
+    private string? _tenantName;
+    private List<CompanyRow> _items = [];
+
+    public sealed record CompanyRow(
+        Guid Id,
+        string UrlCode,
+        string Name,
+        string? LegalName,
+        string? Vkn,
+        CompanyStatus Status);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user?.Identity?.IsAuthenticated != true)
+        {
+            _unauthorized = true;
+            _loading = false;
+            return;
+        }
+
+        if (user.FindFirst("tenant_id") is { Value: var tid } && Guid.TryParseExact(tid, "N", out var tenantGuid))
+        {
+            _activeTenantId = tenantGuid;
+            _tenantName = user.FindFirst("tenant_name")?.Value;
+        }
+        else
+        {
+            _unauthorized = true;
+            _loading = false;
+            return;
+        }
+
+        // Sistem operatör destek bağlamında ise query filter ITenantContext.TenantId
+        // null olabilir → IgnoreQueryFilters + explicit TenantId filter ile güvenli yol.
+        var companies = await Main.Companies
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .Where(c => c.TenantId == _activeTenantId.Value)
+            .OrderBy(c => c.Name)
+            .Select(c => new CompanyRow(c.Id, c.UrlCode, c.Name, c.LegalName, c.Vkn, c.Status))
+            .ToListAsync();
+
+        _items = companies;
+        _loading = false;
+    }
+
+    private Func<CompanyRow, bool> QuickFilter => row =>
+    {
+        if (string.IsNullOrWhiteSpace(_searchText)) return true;
+        return row.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase)
+            || row.UrlCode.Contains(_searchText, StringComparison.OrdinalIgnoreCase)
+            || (row.LegalName?.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ?? false)
+            || (row.Vkn?.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ?? false);
+    };
+
+    private Task OnRowClick(DataGridRowClickEventArgs<CompanyRow> args)
+        => SwitchAsync(args.Item.Id);
+
+    private async Task SwitchAsync(Guid companyId)
+    {
+        if (_activeTenantId is null) return;
+        var returnUrl = "/" + Nav.ToBaseRelativePath(Nav.Uri);
+        await JS.InvokeVoidAsync(
+            "cleantenant.submitTenantSwitch",
+            _activeTenantId.Value.ToString(),
+            returnUrl,
+            companyId.ToString());
+    }
+}

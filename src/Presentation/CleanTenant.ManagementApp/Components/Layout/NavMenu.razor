@@ -1,21 +1,18 @@
 @inject AuthenticationStateProvider AuthProvider
-@inject CleanTenant.Application.Common.Persistence.ICatalogDbContext Catalog
-@inject IServiceProvider Services
-@inject NavigationManager Nav
-@inject IJSRuntime JS
-@using Microsoft.EntityFrameworkCore
-@using CleanTenant.Application.Common.Persistence
 
 @*
     v0.2.3.c — Scope-aware sol drawer.
 
     Bağlama göre menü tamamen değişir:
-      - Sistem        → "Sistem Yönetimi" + Yönetimler (liste) + Siteler (liste)
-      - Yönetim       → o Yönetim'in Siteleri + Kullanıcılar + Roller + Audit + Destek Erişim Geçmişi + Yönetim Ayarları
-      - Site          → Birimler + Kullanıcılar + Site Ayarları
+      - Sistem        → Yönetimler (link) + Siteler (link) + Sistem Yönetimi
+      - Yönetim       → Siteler (link) + Yönetim admin (Kullanıcılar/Roller/Audit/...)
+      - Site          → Birimler + Site Ayarları
 
-    Üstte canlı arama kutusu (link'leri filtreler); eşleşmeyen MudNavLink ve
-    MudNavGroup'lar gizlenir. Tüm scope'larda altta "Ayarlar" grubu (Tema, Dil, Hakkında).
+    "Yönetimler" / "Siteler" liste sayfalarına navigate eder; bağlam değişimi
+    o sayfada satıra tıklayarak yapılır (NavMenu liste yapısı v0.2.3.c.2'de kaldırıldı).
+
+    Üstte canlı arama kutusu (link'leri filtreler); eşleşmeyen NavLink'ler gizlenir.
+    Tüm scope'larda altta "Ayarlar" grubu (Tema, Dil, Hakkında).
 *@
 
 <div class="pa-2">
@@ -43,39 +40,18 @@
     @* ─── SİSTEM BAĞLAMI ─────────────────────────────────────────────── *@
     @if (_scope == "System")
     {
-        @if (_tenants is { Count: > 0 } && AnyMatch(_tenants.Select(t => "Yönetim " + t.Name)))
+        @if (Matches("Yönetimler"))
         {
-            <MudNavGroup Title="Yönetimler" Icon="@Icons.Material.Filled.Domain" Expanded="@(IsSearching || _scope == "System")">
-                @foreach (var tenant in _tenants)
-                {
-                    if (Matches("Yönetim " + tenant.Name) || Matches(tenant.UrlCode))
-                    {
-                        <MudNavLink Href="javascript:void(0)"
-                                    Icon="@Icons.Material.Filled.Domain"
-                                    OnClick="@(() => OnTenantClick(tenant.Id))">
-                            @tenant.Name
-                        </MudNavLink>
-                    }
-                }
-            </MudNavGroup>
+            <MudNavLink Href="/system/tenants" Icon="@Icons.Material.Filled.Domain">
+                Yönetimler
+            </MudNavLink>
         }
 
-        @if (_companies is { Count: > 0 } && AnyMatch(_companies.Select(c => "Site " + c.Name)))
+        @if (Matches("Siteler"))
         {
-            <MudNavGroup Title="Siteler" Icon="@Icons.Material.Filled.Apartment" Expanded="@(IsSearching)">
-                @foreach (var company in _companies)
-                {
-                    if (Matches("Site " + company.Name) || Matches(company.UrlCode))
-                    {
-                        <MudNavLink Href="javascript:void(0)"
-                                    Icon="@Icons.Material.Filled.Apartment"
-                                    OnClick="@(() => OnCompanyClick(company.TenantId, company.Id))">
-                            @company.Name
-                            <MudText Typo="Typo.caption" Color="Color.Default" Style="margin-left: 6px;">@company.TenantName</MudText>
-                        </MudNavLink>
-                    }
-                }
-            </MudNavGroup>
+            <MudNavLink Href="/system/companies" Icon="@Icons.Material.Filled.Apartment">
+                Siteler
+            </MudNavLink>
         }
 
         var systemAdminChildren = new[]
@@ -106,21 +82,11 @@
     @* ─── YÖNETİM (TENANT) BAĞLAMI ─────────────────────────────────── *@
     @if (_scope == "Tenant" && _activeTenantId.HasValue)
     {
-        @if (_companies is { Count: > 0 } && AnyMatch(_companies.Select(c => "Site " + c.Name)))
+        @if (Matches("Siteler"))
         {
-            <MudNavGroup Title="Siteler" Icon="@Icons.Material.Filled.Apartment" Expanded="@(IsSearching || true)">
-                @foreach (var company in _companies)
-                {
-                    if (Matches("Site " + company.Name) || Matches(company.UrlCode))
-                    {
-                        <MudNavLink Href="javascript:void(0)"
-                                    Icon="@Icons.Material.Filled.Apartment"
-                                    OnClick="@(() => OnCompanyClick(company.TenantId, company.Id))">
-                            @company.Name
-                        </MudNavLink>
-                    }
-                }
-            </MudNavGroup>
+            <MudNavLink Href="/tenant/companies" Icon="@Icons.Material.Filled.Apartment">
+                Siteler
+            </MudNavLink>
         }
 
         var tenantAdminChildren = new[]
@@ -208,11 +174,6 @@
     private string? _scope;
     private Guid? _activeTenantId;
     private Guid? _activeCompanyId;
-    private List<TenantRow> _tenants = [];
-    private List<CompanyRow> _companies = [];
-
-    private sealed record TenantRow(Guid Id, string UrlCode, string Name);
-    private sealed record CompanyRow(Guid Id, Guid TenantId, string TenantName, string UrlCode, string Name);
 
     private bool IsSearching => !string.IsNullOrWhiteSpace(_search);
 
@@ -235,79 +196,6 @@
         {
             _activeCompanyId = companyGuid;
         }
-
-        await LoadContextDataAsync();
-    }
-
-    private async Task LoadContextDataAsync()
-    {
-        var main = Services.GetService<IMainDbContext>();
-
-        if (string.Equals(_scope, "System", StringComparison.OrdinalIgnoreCase))
-        {
-            // Sistem bağlamında: tüm aktif Yönetimler + tüm Siteler
-            _tenants = await Catalog.Tenants
-                .AsNoTracking()
-                .Where(t => t.Status == CleanTenant.Domain.Identity.Tenants.TenantStatus.Active)
-                .OrderBy(t => t.Name)
-                .Select(t => new TenantRow(t.Id, t.UrlCode, t.Name))
-                .ToListAsync();
-
-            if (main is not null)
-            {
-                var tenantNames = _tenants.ToDictionary(t => t.Id, t => t.Name);
-                var companies = await main.Companies
-                    .IgnoreQueryFilters()
-                    .AsNoTracking()
-                    .OrderBy(c => c.Name)
-                    .Select(c => new { c.Id, c.TenantId, c.UrlCode, c.Name })
-                    .ToListAsync();
-
-                _companies = [.. companies.Select(c => new CompanyRow(
-                    c.Id,
-                    c.TenantId,
-                    tenantNames.TryGetValue(c.TenantId, out var tn) ? tn : "?",
-                    c.UrlCode,
-                    c.Name))];
-            }
-        }
-        else if (string.Equals(_scope, "Tenant", StringComparison.OrdinalIgnoreCase) && _activeTenantId.HasValue)
-        {
-            // Yönetim bağlamında: sadece bu yönetime ait Siteler
-            if (main is not null)
-            {
-                var tenantId = _activeTenantId.Value;
-                var companies = await main.Companies
-                    .IgnoreQueryFilters()
-                    .AsNoTracking()
-                    .Where(c => c.TenantId == tenantId)
-                    .OrderBy(c => c.Name)
-                    .Select(c => new { c.Id, c.TenantId, c.UrlCode, c.Name })
-                    .ToListAsync();
-
-                _companies = [.. companies.Select(c => new CompanyRow(c.Id, c.TenantId, "", c.UrlCode, c.Name))];
-            }
-        }
-    }
-
-    private async Task OnTenantClick(Guid tenantId)
-    {
-        var returnUrl = "/" + Nav.ToBaseRelativePath(Nav.Uri);
-        await JS.InvokeVoidAsync(
-            "cleantenant.submitTenantSwitch",
-            tenantId.ToString(),
-            returnUrl,
-            string.Empty);
-    }
-
-    private async Task OnCompanyClick(Guid tenantId, Guid companyId)
-    {
-        var returnUrl = "/" + Nav.ToBaseRelativePath(Nav.Uri);
-        await JS.InvokeVoidAsync(
-            "cleantenant.submitTenantSwitch",
-            tenantId.ToString(),
-            returnUrl,
-            companyId.ToString());
     }
 
     private void OnSearchChanged(string value)
