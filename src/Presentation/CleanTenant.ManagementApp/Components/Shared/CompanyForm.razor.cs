@@ -1,0 +1,66 @@
+using FluentValidation;
+using Microsoft.AspNetCore.Components;
+using MudBlazor;
+
+namespace CleanTenant.ManagementApp.Components.Shared;
+
+/// <summary>
+/// Site oluşturma / düzenleme paylaşımlı form bileşeni.
+/// <see cref="CompanyFormMode"/> parametresine göre alanlar render edilir.
+/// </summary>
+public sealed partial class CompanyForm : ComponentBase
+{
+    /// <summary>Form'un binding hedefi.</summary>
+    [Parameter, EditorRequired] public CompanyFormModel Model { get; set; } = default!;
+
+    /// <summary>Form modu — render ve validasyon kararlarını belirler.</summary>
+    [Parameter, EditorRequired] public CompanyFormMode Mode { get; set; }
+
+    /// <summary>Form valid olduğunda tetiklenir.</summary>
+    [Parameter] public EventCallback OnValidSubmit { get; set; }
+
+    /// <summary>Submit butonu yazısı.</summary>
+    [Parameter] public string SubmitButtonText { get; set; } = "Kaydet";
+
+    /// <summary>Submit sürerken UI'yı kilitleme bayrağı.</summary>
+    [Parameter] public bool IsSubmitting { get; set; }
+
+    /// <summary>İptal butonu için bağlantı (null → buton gizli).</summary>
+    [Parameter] public string? CancelHref { get; set; }
+
+    private MudForm _form = default!;
+    private CompanyFormValidator _validator = new(CompanyFormMode.Create);
+
+    /// <summary>MudForm.Validation parametresine bağlanan tipli delegate.</summary>
+    public Func<object?, string, Task<IEnumerable<string>>> ValidateValue { get; }
+
+    /// <summary>Ctor — delegate'i bir kez bağlar.</summary>
+    public CompanyForm()
+    {
+        ValidateValue = ValidateValueAsync;
+    }
+
+    /// <inheritdoc />
+    protected override void OnParametersSet()
+    {
+        _validator = new CompanyFormValidator(Mode);
+    }
+
+    private async Task<IEnumerable<string>> ValidateValueAsync(object? value, string propertyName)
+    {
+        var context = ValidationContext<CompanyFormModel>.CreateWithOptions(
+            Model, x => x.IncludeProperties(propertyName));
+        var result = await _validator.ValidateAsync(context);
+        return result.Errors.Select(e => e.ErrorMessage);
+    }
+
+    /// <summary>Submit butonu tıklandığında çağrılır — önce validate, sonra callback.</summary>
+    private async Task SubmitAsync()
+    {
+        await _form.Validate();
+        if (_form.IsValid)
+        {
+            await OnValidSubmit.InvokeAsync();
+        }
+    }
+}

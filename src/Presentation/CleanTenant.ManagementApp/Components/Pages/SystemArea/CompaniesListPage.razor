@@ -7,9 +7,13 @@
 @inject IJSRuntime JS
 @implements IDisposable
 @using CleanTenant.Application.Common.Export
+@using CleanTenant.Application.Features.Main.Companies
 @using CleanTenant.Application.Features.Main.Readers
 @using CleanTenant.Domain.Tenant.Companies
 @using CleanTenant.ManagementApp.Components.Shared
+@using MediatR
+
+@inject IMediator Mediator
 
 <PageTitle>Siteler — Sistem</PageTitle>
 
@@ -26,13 +30,22 @@
 }
 else
 {
+    <div Class="d-flex justify-between align-center mb-4">
+        <div></div>
+        <MudButton Href="/system/companies/new"
+                   Color="Color.Primary"
+                   Variant="Variant.Filled"
+                   StartIcon="@Icons.Material.Filled.Add">
+            Yeni Site
+        </MudButton>
+    </div>
+
     <DataTable TItem="CompanyListItem"
                Items="@_items"
                Title="Siteler"
                SearchPlaceholder="Site / Yönetim ara…"
                SearchableFields="@(row => new[] { row.Name, row.UrlCode, row.TenantName, row.LegalName })"
-               ExportColumns="@_exportColumns"
-               RowClick="@OnRowClick">
+               ExportColumns="@_exportColumns">
         <Columns>
             <PropertyColumn T="CompanyListItem" TProperty="string" Property="@(c => c.Name)" Title="Site Adı" />
             <PropertyColumn T="CompanyListItem" TProperty="string" Property="@(c => c.UrlCode)" Title="URL Kodu" />
@@ -46,13 +59,23 @@ else
                     </MudChip>
                 </CellTemplate>
             </PropertyColumn>
-            <TemplateColumn T="CompanyListItem" CellClass="d-flex justify-end" Filterable="false" Sortable="false">
+            <TemplateColumn T="CompanyListItem" CellClass="d-flex justify-end gap-1" Filterable="false" Sortable="false">
                 <CellTemplate>
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                   Size="Size.Small"
+                                   Color="Color.Info"
+                                   Title="Düzenle"
+                                   Href="@($"/system/companies/{context.Item.Id}/edit")" />
                     <MudIconButton Icon="@Icons.Material.Filled.Login"
                                    Size="Size.Small"
                                    Color="Color.Primary"
-                                   title="Bu Site bağlamına geç"
+                                   Title="Bu Site bağlamına geç"
                                    OnClick="@(() => SwitchAsync(context.Item.TenantId, context.Item.Id))" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                   Size="Size.Small"
+                                   Color="Color.Error"
+                                   Title="Sil"
+                                   OnClick="@(() => DeleteAsync(context.Item.Id))" />
                 </CellTemplate>
             </TemplateColumn>
         </Columns>
@@ -101,9 +124,6 @@ else
         });
     }
 
-    private Task OnRowClick(DataGridRowClickEventArgs<CompanyListItem> args)
-        => SwitchAsync(args.Item.TenantId, args.Item.Id);
-
     private async Task SwitchAsync(Guid tenantId, Guid companyId)
     {
         var returnUrl = "/" + Nav.ToBaseRelativePath(Nav.Uri);
@@ -112,6 +132,21 @@ else
             tenantId.ToString(),
             returnUrl,
             companyId.ToString());
+    }
+
+    private async Task DeleteAsync(Guid companyId)
+    {
+        var confirmed = await JS.InvokeAsync<bool>("confirm", "Bu siteyi silmek istediğinizden emin misiniz?");
+        if (!confirmed) return;
+
+        var command = new DeleteCompanyCommand(companyId);
+        var result = await Mediator.Send(command);
+
+        if (result.IsSuccess)
+        {
+            // Refresh list
+            _items = await CompanyReader.GetAllGlobalAsync();
+        }
     }
 
     public void Dispose() => _persistSubscription.Dispose();

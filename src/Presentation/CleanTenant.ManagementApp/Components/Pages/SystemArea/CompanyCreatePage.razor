@@ -1,0 +1,92 @@
+@page "/system/companies/new"
+
+@using CleanTenant.Application.Features.Main.Companies
+@using CleanTenant.ManagementApp.Components.Shared
+@using MediatR
+@using Microsoft.AspNetCore.Components
+
+@inject IMediator Mediator
+@inject NavigationManager Nav
+
+<PageTitle>Yeni Site — CleanTenant</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="py-8">
+    <MudBreadcrumbs Items="@_breadcrumbs" Class="px-0 mb-4"></MudBreadcrumbs>
+
+    @if (_initialized)
+    {
+        <CompanyForm Model="@_model"
+                     Mode="@CompanyFormMode.Create"
+                     OnValidSubmit="@CreateAsync"
+                     IsSubmitting="@_isSubmitting"
+                     SubmitButtonText="Oluştur"
+                     CancelHref="/system/companies" />
+
+        @if (!string.IsNullOrEmpty(_errorMessage))
+        {
+            <MudAlert Severity="Severity.Error" Class="mt-4">@_errorMessage</MudAlert>
+        }
+    }
+    else
+    {
+        <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="200px" Class="mb-4" />
+        <MudSkeleton SkeletonType="SkeletonType.Text" />
+    }
+</MudContainer>
+
+@code {
+    private List<BreadcrumbItem> _breadcrumbs = [];
+    private CompanyFormModel _model = new();
+    private bool _initialized = false;
+    private bool _isSubmitting = false;
+    private string _errorMessage = string.Empty;
+
+    protected override void OnInitialized()
+    {
+        _breadcrumbs =
+        [
+            new BreadcrumbItem("Yönetim", href: "/system"),
+            new BreadcrumbItem("Siteler", href: "/system/companies"),
+            new BreadcrumbItem("Yeni Site", href: null, disabled: true),
+        ];
+
+        _model = new CompanyFormModel();
+        _initialized = true;
+    }
+
+    private async Task CreateAsync()
+    {
+        _isSubmitting = true;
+        _errorMessage = string.Empty;
+
+        try
+        {
+            var command = new CreateCompanyCommand(
+                TenantId: Guid.Empty, // System context — placeholder, WebApi Authorization behavior'ı set eder
+                Name: _model.Name,
+                LegalName: _model.LegalName,
+                Vkn: _model.Vkn,
+                Email: _model.Email,
+                Phone: _model.Phone);
+
+            var result = await Mediator.Send(command);
+
+            if (result.IsSuccess && result.Value is not null)
+            {
+                Nav.NavigateTo($"/system/companies/{result.Value.Id}/edit");
+            }
+            else
+            {
+                _errorMessage = result.FirstError.Message;
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Hata: {ex.Message}";
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+}

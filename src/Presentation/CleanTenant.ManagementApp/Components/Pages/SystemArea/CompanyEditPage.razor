@@ -1,0 +1,119 @@
+@page "/system/companies/{CompanyId:guid}/edit"
+
+@using CleanTenant.Application.Features.Main.Companies
+@using CleanTenant.Application.Features.Main.Readers
+@using CleanTenant.ManagementApp.Components.Shared
+@using MediatR
+@using Microsoft.AspNetCore.Components
+
+@inject IMainCatalogReader Reader
+@inject IMediator Mediator
+@inject NavigationManager Nav
+
+<PageTitle>Site Düzenle — CleanTenant</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="py-8">
+    <MudBreadcrumbs Items="@_breadcrumbs" Class="px-0 mb-4"></MudBreadcrumbs>
+
+    @if (_initialized)
+    {
+        @if (_detail is not null)
+        {
+            <CompanyForm Model="@_model"
+                         Mode="@CompanyFormMode.Edit"
+                         OnValidSubmit="@UpdateAsync"
+                         IsSubmitting="@_isSubmitting"
+                         SubmitButtonText="Güncelle"
+                         CancelHref="/system/companies" />
+
+            @if (!string.IsNullOrEmpty(_errorMessage))
+            {
+                <MudAlert Severity="Severity.Error" Class="mt-4">@_errorMessage</MudAlert>
+            }
+        }
+        else
+        {
+            <MudAlert Severity="Severity.Warning">Site bulunamadı.</MudAlert>
+        }
+    }
+    else
+    {
+        <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="200px" Class="mb-4" />
+        <MudSkeleton SkeletonType="SkeletonType.Text" />
+    }
+</MudContainer>
+
+@code {
+    [Parameter]
+    public Guid CompanyId { get; set; }
+
+    private List<BreadcrumbItem> _breadcrumbs = [];
+    private CompanyFormModel _model = new();
+    private CompanyDetail? _detail;
+    private bool _initialized = false;
+    private bool _isSubmitting = false;
+    private string _errorMessage = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _detail = await Reader.GetDetailByIdAsync(CompanyId);
+
+        if (_detail is not null)
+        {
+            _model = new CompanyFormModel
+            {
+                Id = _detail.Id,
+                Name = _detail.Name,
+                LegalName = _detail.LegalName,
+                Vkn = _detail.Vkn,
+                Email = _detail.Email,
+                Phone = _detail.Phone,
+            };
+
+            _breadcrumbs =
+            [
+                new BreadcrumbItem("Yönetim", href: "/system"),
+                new BreadcrumbItem("Siteler", href: "/system/companies"),
+                new BreadcrumbItem(_detail.Name, href: null, disabled: true),
+            ];
+        }
+
+        _initialized = true;
+    }
+
+    private async Task UpdateAsync()
+    {
+        _isSubmitting = true;
+        _errorMessage = string.Empty;
+
+        try
+        {
+            var command = new UpdateCompanyCommand(
+                CompanyId: _model.Id,
+                Name: _model.Name,
+                LegalName: _model.LegalName,
+                Vkn: _model.Vkn,
+                Email: _model.Email,
+                Phone: _model.Phone);
+
+            var result = await Mediator.Send(command);
+
+            if (result.IsSuccess)
+            {
+                Nav.NavigateTo("/system/companies");
+            }
+            else
+            {
+                _errorMessage = result.FirstError.Message;
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Hata: {ex.Message}";
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+}
