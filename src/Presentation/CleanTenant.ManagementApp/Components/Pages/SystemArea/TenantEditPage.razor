@@ -1,0 +1,145 @@
+@page "/system/tenants/{TenantId:guid}/edit"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject MediatR.IMediator Mediator
+@inject ITenantCatalogReader TenantReader
+@inject AuthenticationStateProvider AuthProvider
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+@using CleanTenant.Application.Features.Catalog.Readers
+@using CleanTenant.Application.Features.Catalog.Tenants
+@using CleanTenant.ManagementApp.Components.Shared
+
+<PageTitle>Yönetim Düzenle — Sistem</PageTitle>
+
+@*
+    v0.2.4.b.3 — Yönetim düzenleme (Sistem operatör için). Detay reader'dan
+    yüklenir, TenantForm Edit modunda kullanılır, UpdateTenantCommand
+    Mediator'a gönderilir.
+*@
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    <MudBreadcrumbs Items="_breadcrumbs" Class="mb-4" />
+
+    @if (_unauthorized)
+    {
+        <MudAlert Severity="Severity.Warning">
+            Bu sayfa yalnız Sistem kullanıcıları için. Aktif bağlamınız Sistem değil.
+        </MudAlert>
+    }
+    else if (_loading)
+    {
+        <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+    }
+    else if (_notFound)
+    {
+        <MudAlert Severity="Severity.Error">
+            Yönetim bulunamadı (Id: <code>@TenantId</code>).
+        </MudAlert>
+    }
+    else
+    {
+        <MudText Typo="Typo.h5" Class="mb-1">Yönetim Düzenle</MudText>
+        <MudText Typo="Typo.caption" Color="Color.Default" Class="mb-4">
+            URL Kodu: <code>@_urlCode</code>
+        </MudText>
+
+        <TenantForm Model="_model"
+                    Mode="TenantFormMode.Edit"
+                    OnValidSubmit="@SubmitAsync"
+                    IsSubmitting="@_busy"
+                    SubmitButtonText="Değişiklikleri Kaydet"
+                    CancelHref="/system/tenants" />
+    }
+</MudContainer>
+
+@code {
+    [Parameter] public Guid TenantId { get; set; }
+
+    private TenantFormModel _model = new();
+    private string _urlCode = string.Empty;
+    private bool _loading = true;
+    private bool _notFound;
+    private bool _busy;
+    private bool _unauthorized;
+
+    private List<BreadcrumbItem> _breadcrumbs = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user?.Identity?.IsAuthenticated != true
+            || !string.Equals(user.FindFirst("scope")?.Value, "System", StringComparison.OrdinalIgnoreCase))
+        {
+            _unauthorized = true;
+            _loading = false;
+            return;
+        }
+
+        var detail = await TenantReader.GetDetailByIdAsync(TenantId);
+        if (detail is null)
+        {
+            _notFound = true;
+            _loading = false;
+            return;
+        }
+
+        _model = MapToFormModel(detail);
+        _urlCode = detail.UrlCode;
+        _breadcrumbs =
+        [
+            new("Yönetimler", "/system/tenants"),
+            new(detail.Name, null, disabled: true),
+            new("Düzenle", null, disabled: true),
+        ];
+        _loading = false;
+    }
+
+    private static TenantFormModel MapToFormModel(TenantDetail d) => new()
+    {
+        Name = d.Name,
+        LegalName = d.LegalName,
+        LegalIdentityType = d.LegalIdentityType,
+        LegalIdentityNumber = d.LegalIdentityNumber,
+        Address = d.Address,
+        BillingTier = d.BillingTier,
+        HasDedicatedDatabase = d.HasDedicatedDatabase,
+        AllowSystemWriteAccess = d.AllowSystemWriteAccess,
+    };
+
+    private async Task SubmitAsync()
+    {
+        _busy = true;
+        try
+        {
+            var command = new UpdateTenantCommand(
+                TenantId: TenantId,
+                Name: _model.Name,
+                LegalName: string.IsNullOrWhiteSpace(_model.LegalName) ? null : _model.LegalName,
+                LegalIdentityType: _model.LegalIdentityType,
+                LegalIdentityNumber: _model.LegalIdentityNumber,
+                Address: string.IsNullOrWhiteSpace(_model.Address) ? null : _model.Address,
+                BillingTier: _model.BillingTier,
+                HasDedicatedDatabase: _model.HasDedicatedDatabase,
+                AllowSystemWriteAccess: _model.AllowSystemWriteAccess);
+
+            var result = await Mediator.Send(command);
+            if (result.IsFailure)
+            {
+                Snackbar.Add($"Güncelleme başarısız: {result.FirstError.Message}", Severity.Error);
+                return;
+            }
+
+            Snackbar.Add("Yönetim güncellendi.", Severity.Success);
+            Nav.NavigateTo("/system/tenants");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Beklenmedik hata: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

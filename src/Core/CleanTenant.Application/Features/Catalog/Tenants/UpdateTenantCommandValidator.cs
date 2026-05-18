@@ -31,13 +31,13 @@ public sealed class UpdateTenantCommandValidator : AbstractValidator<UpdateTenan
         RuleFor(x => x.LegalIdentityNumber)
             .NotEmpty().WithMessage("Kimlik numarası zorunlu.")
             .Matches(@"^[1-9][0-9]{9}$")
-                .When(x => x.LegalIdentityType == LegalIdentityType.Vkn)
+                .When(x => x.LegalIdentityType == LegalIdentityType.Vkn, ApplyConditionTo.CurrentValidator)
                 .WithMessage("VKN 10 haneli, ilk hane 1-9 arasında olmalı.")
             .Matches(@"^[1-9][0-9]{10}$")
-                .When(x => x.LegalIdentityType == LegalIdentityType.Tckn)
+                .When(x => x.LegalIdentityType == LegalIdentityType.Tckn, ApplyConditionTo.CurrentValidator)
                 .WithMessage("TCKN 11 haneli, ilk hane 1-9 arasında olmalı.")
             .Matches(@"^99[0-9]{9}$")
-                .When(x => x.LegalIdentityType == LegalIdentityType.Ykn)
+                .When(x => x.LegalIdentityType == LegalIdentityType.Ykn, ApplyConditionTo.CurrentValidator)
                 .WithMessage("YKN 11 haneli, '99' ile başlamalı.");
 
         RuleFor(x => x.BillingTier)

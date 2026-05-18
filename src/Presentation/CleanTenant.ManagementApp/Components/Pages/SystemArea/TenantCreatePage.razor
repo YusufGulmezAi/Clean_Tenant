@@ -1,0 +1,99 @@
+@page "/system/tenants/new"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject MediatR.IMediator Mediator
+@inject AuthenticationStateProvider AuthProvider
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+@using CleanTenant.Application.Features.Catalog.Tenants
+@using CleanTenant.ManagementApp.Components.Shared
+
+<PageTitle>Yeni Yönetim — Sistem</PageTitle>
+
+@*
+    v0.2.4.b.3 — Yeni Yönetim oluşturma sayfası (Sistem operatör için).
+    TenantForm bileşenini Create modunda kullanır; submit'te CreateTenantCommand
+    Mediator'a gönderilir.
+*@
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    <MudBreadcrumbs Items="_breadcrumbs" Class="mb-4" />
+
+    @if (_unauthorized)
+    {
+        <MudAlert Severity="Severity.Warning">
+            Bu sayfa yalnız Sistem kullanıcıları için. Aktif bağlamınız Sistem değil.
+        </MudAlert>
+    }
+    else
+    {
+        <MudText Typo="Typo.h5" Class="mb-4">Yeni Yönetim</MudText>
+
+        <TenantForm Model="_model"
+                    Mode="TenantFormMode.Create"
+                    OnValidSubmit="@SubmitAsync"
+                    IsSubmitting="@_busy"
+                    SubmitButtonText="Yönetim Oluştur"
+                    CancelHref="/system/tenants" />
+    }
+</MudContainer>
+
+@code {
+    private readonly TenantFormModel _model = new();
+    private bool _busy;
+    private bool _unauthorized;
+
+    private readonly List<BreadcrumbItem> _breadcrumbs =
+    [
+        new("Yönetimler", "/system/tenants"),
+        new("Yeni Yönetim", null, disabled: true),
+    ];
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user?.Identity?.IsAuthenticated != true
+            || !string.Equals(user.FindFirst("scope")?.Value, "System", StringComparison.OrdinalIgnoreCase))
+        {
+            _unauthorized = true;
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        _busy = true;
+        try
+        {
+            var command = new CreateTenantCommand(
+                Name: _model.Name,
+                LegalName: string.IsNullOrWhiteSpace(_model.LegalName) ? null : _model.LegalName,
+                LegalIdentityType: _model.LegalIdentityType,
+                LegalIdentityNumber: _model.LegalIdentityNumber,
+                Address: string.IsNullOrWhiteSpace(_model.Address) ? null : _model.Address,
+                BillingTier: _model.BillingTier,
+                HasDedicatedDatabase: _model.HasDedicatedDatabase,
+                AdminFirstName: _model.AdminFirstName,
+                AdminLastName: _model.AdminLastName,
+                AdminEmail: _model.AdminEmail,
+                AdminPhone: _model.AdminPhone);
+
+            var result = await Mediator.Send(command);
+            if (result.IsFailure)
+            {
+                Snackbar.Add($"Yönetim oluşturulamadı: {result.FirstError.Message}", Severity.Error);
+                return;
+            }
+
+            Snackbar.Add($"Yönetim oluşturuldu: {result.Value!.AdminEmail}", Severity.Success);
+            Nav.NavigateTo("/system/tenants");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Beklenmedik hata: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

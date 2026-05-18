@@ -1,21 +1,26 @@
 @page "/system/tenants"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @inject ITenantCatalogReader TenantReader
+@inject MediatR.IMediator Mediator
 @inject AuthenticationStateProvider AuthProvider
 @inject PersistentComponentState PersistentState
 @inject NavigationManager Nav
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
 @inject IJSRuntime JS
 @implements IDisposable
 @using CleanTenant.Application.Common.Export
 @using CleanTenant.Application.Features.Catalog.Readers
+@using CleanTenant.Application.Features.Catalog.Tenants
 @using CleanTenant.Domain.Identity.Tenants
 @using CleanTenant.ManagementApp.Components.Shared
 
 <PageTitle>Yönetimler — Sistem</PageTitle>
 
 @*
-    v0.2.4.a — DataTable<TItem> generic component'a migrate edildi. Cache
-    reader pattern + PersistentComponentState + Excel/PDF export tek satırla.
+    v0.2.4.b.3 — CRUD aksiyonları (Yeni / Düzenle / Sil) eklendi. DataTable
+    ToolbarRight slot'una "Yeni Yönetim" butonu, satır eylemleri sütununa
+    edit/delete butonları + MudMessageBox onayı. Bağlama geçiş butonu korundu.
 *@
 
 @if (_unauthorized)
@@ -33,6 +38,15 @@ else
                SearchableFields="@(row => new[] { row.Name, row.UrlCode, row.LegalName })"
                ExportColumns="@_exportColumns"
                RowClick="@OnRowClick">
+        <ToolbarRight>
+            <MudButton StartIcon="@Icons.Material.Filled.Add"
+                       Color="Color.Primary"
+                       Variant="Variant.Filled"
+                       Href="/system/tenants/new"
+                       Class="ml-2">
+                Yeni Yönetim
+            </MudButton>
+        </ToolbarRight>
         <Columns>
             <PropertyColumn T="TenantListItem" TProperty="string" Property="@(t => t.Name)" Title="Yönetim Adı" />
             <PropertyColumn T="TenantListItem" TProperty="string" Property="@(t => t.UrlCode)" Title="URL Kodu" />
@@ -60,6 +74,16 @@ else
                                    Color="Color.Primary"
                                    title="Bu Yönetim bağlamına geç"
                                    OnClick="@(() => SwitchToTenantAsync(context.Item.Id))" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                   Size="Size.Small"
+                                   Color="Color.Default"
+                                   title="Düzenle"
+                                   OnClick="@(() => GoToEdit(context.Item.Id))" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                   Size="Size.Small"
+                                   Color="Color.Error"
+                                   title="Sil"
+                                   OnClick="@(() => DeleteAsync(context.Item))" />
                 </CellTemplate>
             </TemplateColumn>
         </Columns>
@@ -119,6 +143,32 @@ else
             tenantId.ToString(),
             returnUrl,
             string.Empty);
+    }
+
+    private void GoToEdit(Guid tenantId)
+        => Nav.NavigateTo($"/system/tenants/{tenantId}/edit");
+
+    private async Task DeleteAsync(TenantListItem tenant)
+    {
+        var confirm = await DialogService.ShowMessageBox(
+            title: "Yönetim Sil",
+            markupMessage: new MarkupString(
+                $"<b>{tenant.Name}</b> Yönetim'i silinecek (soft delete). " +
+                "Tüm kullanıcı rol atamaları pasif olur. Devam edilsin mi?"),
+            yesText: "Sil",
+            cancelText: "Vazgeç");
+
+        if (confirm != true) return;
+
+        var result = await Mediator.Send(new DeleteTenantCommand(tenant.Id));
+        if (result.IsFailure)
+        {
+            Snackbar.Add($"Silme başarısız: {result.FirstError.Message}", Severity.Error);
+            return;
+        }
+
+        Snackbar.Add($"Yönetim silindi: {tenant.Name}", Severity.Success);
+        _items = await TenantReader.GetAllActiveAsync();
     }
 
     public void Dispose() => _persistSubscription.Dispose();

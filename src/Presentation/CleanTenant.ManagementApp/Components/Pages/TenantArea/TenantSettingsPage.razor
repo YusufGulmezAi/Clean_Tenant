@@ -1,0 +1,145 @@
+@page "/tenant/settings"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject MediatR.IMediator Mediator
+@inject ITenantCatalogReader TenantReader
+@inject AuthenticationStateProvider AuthProvider
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+@using CleanTenant.Application.Features.Catalog.Readers
+@using CleanTenant.Application.Features.Catalog.Tenants
+@using CleanTenant.ManagementApp.Components.Shared
+
+<PageTitle>Yönetim Ayarları</PageTitle>
+
+@*
+    v0.2.4.b.3 — TenantAdmin'in kendi Yönetim'inin ayarlarını düzenlemesi
+    için sayfa. TenantForm Settings modunda kullanılır: yalnız Name,
+    LegalName, Address, AllowSystemWriteAccess düzenlenebilir; kimlik /
+    BillingTier / dedicated DB read-only.
+*@
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    @if (_unauthorized)
+    {
+        <MudAlert Severity="Severity.Warning">
+            Bu sayfa Yönetim Admin (TenantAdmin) için. Aktif bağlamınız Yönetim değil.
+        </MudAlert>
+    }
+    else if (_loading)
+    {
+        <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+    }
+    else if (_notFound)
+    {
+        <MudAlert Severity="Severity.Error">
+            Aktif Yönetim bulunamadı. Lütfen oturumu yenileyin.
+        </MudAlert>
+    }
+    else
+    {
+        <MudText Typo="Typo.h5" Class="mb-1">Yönetim Ayarları</MudText>
+        <MudText Typo="Typo.caption" Color="Color.Default" Class="mb-4">
+            URL Kodu: <code>@_urlCode</code> — kimlik bilgisi ve katman bilgisi
+            yalnız sistem yöneticisi tarafından değiştirilebilir.
+        </MudText>
+
+        <TenantForm Model="_model"
+                    Mode="TenantFormMode.Settings"
+                    OnValidSubmit="@SubmitAsync"
+                    IsSubmitting="@_busy"
+                    SubmitButtonText="Ayarları Kaydet" />
+    }
+</MudContainer>
+
+@code {
+    private TenantFormModel _model = new();
+    private string _urlCode = string.Empty;
+    private Guid _tenantId;
+    private bool _loading = true;
+    private bool _notFound;
+    private bool _busy;
+    private bool _unauthorized;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user?.Identity?.IsAuthenticated != true
+            || !string.Equals(user.FindFirst("scope")?.Value, "Tenant", StringComparison.OrdinalIgnoreCase))
+        {
+            _unauthorized = true;
+            _loading = false;
+            return;
+        }
+
+        if (user.FindFirst("tenant_id") is not { Value: var tid }
+            || !Guid.TryParseExact(tid, "N", out _tenantId))
+        {
+            _notFound = true;
+            _loading = false;
+            return;
+        }
+
+        var detail = await TenantReader.GetDetailByIdAsync(_tenantId);
+        if (detail is null)
+        {
+            _notFound = true;
+            _loading = false;
+            return;
+        }
+
+        _model = MapToFormModel(detail);
+        _urlCode = detail.UrlCode;
+        _loading = false;
+    }
+
+    private static TenantFormModel MapToFormModel(TenantDetail d) => new()
+    {
+        Name = d.Name,
+        LegalName = d.LegalName,
+        LegalIdentityType = d.LegalIdentityType,
+        LegalIdentityNumber = d.LegalIdentityNumber,
+        Address = d.Address,
+        BillingTier = d.BillingTier,
+        HasDedicatedDatabase = d.HasDedicatedDatabase,
+        AllowSystemWriteAccess = d.AllowSystemWriteAccess,
+    };
+
+    private async Task SubmitAsync()
+    {
+        _busy = true;
+        try
+        {
+            // Settings modunda kimlik / BillingTier / dedicated DB read-only;
+            // form model'i sunucudan yüklenen değerlerle koruyor.
+            var command = new UpdateTenantCommand(
+                TenantId: _tenantId,
+                Name: _model.Name,
+                LegalName: string.IsNullOrWhiteSpace(_model.LegalName) ? null : _model.LegalName,
+                LegalIdentityType: _model.LegalIdentityType,
+                LegalIdentityNumber: _model.LegalIdentityNumber,
+                Address: string.IsNullOrWhiteSpace(_model.Address) ? null : _model.Address,
+                BillingTier: _model.BillingTier,
+                HasDedicatedDatabase: _model.HasDedicatedDatabase,
+                AllowSystemWriteAccess: _model.AllowSystemWriteAccess);
+
+            var result = await Mediator.Send(command);
+            if (result.IsFailure)
+            {
+                Snackbar.Add($"Ayarlar kaydedilemedi: {result.FirstError.Message}", Severity.Error);
+                return;
+            }
+
+            Snackbar.Add("Yönetim ayarları kaydedildi.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Beklenmedik hata: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

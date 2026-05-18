@@ -91,23 +91,26 @@
 
         var tenantAdminChildren = new[]
         {
-            ("Kullanıcılar", "/tenant/users", Icons.Material.Filled.People, "Faz 1.5"),
-            ("Roller ve İzinler", "/tenant/roles", Icons.Material.Filled.Security, "Faz 1.5"),
-            ("Audit Geçmişi", "/tenant/audit", Icons.Material.Filled.History, "Faz 1.6"),
-            ("Destek Erişim Geçmişi", "/tenant/support-access", Icons.Material.Filled.Support, "Faz 1.6"),
-            ("Yönetim Ayarları", "/tenant/settings", Icons.Material.Filled.Settings, "Faz 1.5"),
+            ("Kullanıcılar", "/tenant/users", Icons.Material.Filled.People, "Faz 1.5", true),
+            ("Roller ve İzinler", "/tenant/roles", Icons.Material.Filled.Security, "Faz 1.5", true),
+            ("Audit Geçmişi", "/tenant/audit", Icons.Material.Filled.History, "Faz 1.6", true),
+            ("Destek Erişim Geçmişi", "/tenant/support-access", Icons.Material.Filled.Support, "Faz 1.6", true),
+            ("Yönetim Ayarları", "/tenant/settings", Icons.Material.Filled.Settings, string.Empty, false),
         };
         var tenantAdminVisible = AnyMatch(tenantAdminChildren.Select(c => c.Item1));
         @if (tenantAdminVisible)
         {
             <MudNavGroup Title="Yönetim" Icon="@Icons.Material.Filled.AdminPanelSettings" Expanded="@IsSearching">
-                @foreach (var (title, href, icon, phase) in tenantAdminChildren)
+                @foreach (var (title, href, icon, phase, disabled) in tenantAdminChildren)
                 {
                     if (Matches(title))
                     {
-                        <MudNavLink Href="@href" Icon="@icon" Disabled="true">
+                        <MudNavLink Href="@href" Icon="@icon" Disabled="@disabled">
                             @title
-                            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="ml-2">@phase</MudChip>
+                            @if (disabled)
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="ml-2">@phase</MudChip>
+                            }
                         </MudNavLink>
                     }
                 }
