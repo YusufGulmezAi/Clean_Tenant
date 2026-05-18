@@ -35,7 +35,22 @@ public static class DependencyInjection
             ConnectionMultiplexer.Connect(redisConnectionString));
 
         services.AddSingleton<SessionKeyBuilder>();
-        services.AddScoped<IAuthSessionStore, RedisAuthSessionStore>();
+
+        // v0.2.3.e — AuthSession L1 cache:
+        // RedisAuthSessionStore stateless (ConnectionMultiplexer + SessionKeyBuilder)
+        // → singleton güvenli. CachedAuthSessionStore decorator de singleton; instance
+        // id pub/sub origin filtresi için stabil olmalı.
+        services.AddSingleton<RedisAuthSessionStore>();
+        services.AddSingleton<CachedAuthSessionStore>(sp => new CachedAuthSessionStore(
+            sp.GetRequiredService<RedisAuthSessionStore>(),
+            sp.GetRequiredService<IMemoryCache>(),
+            sp.GetRequiredService<IConnectionMultiplexer>(),
+            sp.GetRequiredService<ILogger<CachedAuthSessionStore>>(),
+            instanceId: Guid.NewGuid().ToString("N")));
+        services.AddSingleton<IAuthSessionStore>(sp => sp.GetRequiredService<CachedAuthSessionStore>());
+
+        // Pub/sub subscriber — multi-instance L1 senkronizasyonu
+        services.AddHostedService<AuthSessionInvalidationSubscriber>();
 
         // v0.1.5.c — 2FA login challenge store'u (5 dk TTL).
         services.AddScoped<ITwoFactorChallengeStore, RedisTwoFactorChallengeStore>();
