@@ -2,6 +2,7 @@ using Blazored.LocalStorage;
 using CleanTenant.Application;
 using CleanTenant.Infrastructure.Caching;
 using CleanTenant.Infrastructure.Identity;
+using CleanTenant.Infrastructure.Identity.Middleware;
 using CleanTenant.Infrastructure.Logging;
 using CleanTenant.Infrastructure.Persistence;
 using CleanTenant.ManagementApp.Auth;
@@ -105,6 +106,12 @@ app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages:
 app.UseHttpsRedirection();
 
 app.UseAuthentication();
+// v0.2.3.b — Cookie auth doğrulamasından sonra Redis session lookup.
+// sid claim'inden (AuthEndpoints.SignInWithSessionAsync ekledi) AuthSession
+// Redis'ten çekilir + HttpUserContext.Current set edilir. SwitchTenantCommand /
+// SwitchToSystemCommand handler'ları bu sayede ICurrentSessionAccessor.Current'a
+// erişebilir; aksi takdirde InvalidOperationException fırlatılır.
+app.UseSessionLookup();
 app.UseAuthorization();
 app.UseAntiforgery();
 
