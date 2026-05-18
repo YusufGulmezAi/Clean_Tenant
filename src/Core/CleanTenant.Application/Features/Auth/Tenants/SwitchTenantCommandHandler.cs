@@ -1,5 +1,6 @@
 using CleanTenant.Application.Common.Auth;
 using CleanTenant.Application.Common.Persistence;
+using CleanTenant.Domain.Identity.Support;
 using CleanTenant.SharedKernel.Common.Errors;
 using CleanTenant.SharedKernel.Common.Results;
 using CleanTenant.SharedKernel.Context;
@@ -67,15 +68,16 @@ public sealed class SwitchTenantCommandHandler : IRequestHandler<SwitchTenantCom
                     $"Persona '{current.PersonaSide}' tenant geçişi yapamaz — Portal yalnız Unit scope'unda çalışır."));
         }
 
-        // Hedef tenant Active mi?
+        // Hedef tenant Active mi? AllowSystemWriteAccess bilgisini de çek (Sistem
+        // kullanıcı için Support Mode v2 — WriteEnabled / ReadOnly seçimi).
         var tenant = await _db.Tenants.AsNoTracking()
             .Where(t => t.Id == command.TargetTenantId && t.Status == TenantStatus.Active)
-            .Select(t => new { t.Id, t.Name })
+            .Select(t => new { t.Id, t.Name, t.AllowSystemWriteAccess })
             .FirstOrDefaultAsync(cancellationToken);
         if (tenant is null)
         {
             return Result<TokenPair>.Failure(
-                Error.NotFound("AUTH-TENANT-NOT-FOUND", "Tenant bulunamadı veya aktif değil."));
+                Error.NotFound("AUTH-TENANT-NOT-FOUND", "Yönetim bulunamadı veya aktif değil."));
         }
 
         var isSystemUser = current.ScopeLevel == ScopeLevel.System;
@@ -91,7 +93,7 @@ public sealed class SwitchTenantCommandHandler : IRequestHandler<SwitchTenantCom
             if (!hasAssignment)
             {
                 return Result<TokenPair>.Failure(
-                    Error.Forbidden("AUTH-011", "Bu tenant için aktif atama yok."));
+                    Error.Forbidden("AUTH-011", "Bu Yönetim için aktif atama yok."));
             }
         }
 
@@ -153,12 +155,49 @@ public sealed class SwitchTenantCommandHandler : IRequestHandler<SwitchTenantCom
         var newSessionId = Guid.CreateVersion7(now);
 
         // Company hedef verildiyse ScopeLevel = Company. System scope kullanıcı
-        // cross-company erişebilir (permissions System'den miras kalır); alt scope
-        // için yukarıdaki `hasAssignment` Tenant rolünü doğruladı, Company ataması
-        // varsayılır (Faz 1.5'te explicit Company assignment kontrolü eklenir).
-        var targetScopeLevel = command.TargetCompanyId.HasValue
-            ? ScopeLevel.Company
-            : (isSystemUser ? ScopeLevel.System : ScopeLevel.Tenant);
+        // cross-company erişebilir; alt scope için yukarıdaki `hasAssignment`
+        // Tenant rolünü doğruladı, Company ataması varsayılır (Faz 1.5'te explicit
+        // Company assignment kontrolü eklenir).
+        //
+        // v0.2.3.c — Support Mode v2: Sistem kullanıcısı bir Yönetim'e geçtiğinde
+        // **scope hâlâ System** olarak kalır (Sistem permission'larını korur), ama
+        // TenantId / CompanyId set edilir ve SupportSession açılır. AuthSession.SupportMode
+        // ile WriteEnabled / ReadOnly ayrımı yapılır; AuthorizationBehavior bu flag'i
+        // okuyarak yazma operasyonlarını yönetir.
+        var targetScopeLevel = isSystemUser
+            ? ScopeLevel.System
+            : (command.TargetCompanyId.HasValue ? ScopeLevel.Company : ScopeLevel.Tenant);
+
+        // Sistem kullanıcısı için SupportSession otomatik aç (KVKK + audit izi).
+        Guid? supportSessionId = null;
+        string supportMode = "None";
+        Guid? originalSessionId = null;
+
+        if (isSystemUser)
+        {
+            var supportSession = new SupportSession
+            {
+                OperatorUserId = current.UserId,
+                TargetTenantId = command.TargetTenantId,
+                TargetCompanyId = command.TargetCompanyId,
+                TargetUserId = null,
+                Mode = tenant.AllowSystemWriteAccess
+                    ? SupportSessionMode.WriteEnabled
+                    : SupportSessionMode.ReadOnly,
+                Reason = "Sistem operatörü context switcher üzerinden destek bağlamına geçti.",
+                StartedAt = now,
+                WriteActionCount = 0,
+                IpAddress = command.IpAddress,
+                UserAgent = command.UserAgent,
+                CustomerNotified = false,
+            };
+            _db.SupportSessions.Add(supportSession);
+            await _db.SaveChangesAsync(cancellationToken);
+
+            supportSessionId = supportSession.Id;
+            supportMode = tenant.AllowSystemWriteAccess ? "WriteEnabled" : "ReadOnly";
+            originalSessionId = current.SessionId;
+        }
 
         var newSession = new AuthSession
         {
@@ -177,6 +216,9 @@ public sealed class SwitchTenantCommandHandler : IRequestHandler<SwitchTenantCom
             Permissions = permissions,
             PersonaSide = current.PersonaSide,
             IsSystemSession = current.IsSystemSession,
+            SupportSessionId = supportSessionId,
+            SupportMode = supportMode,
+            OriginalSessionId = originalSessionId,
             IssuedAt = now,
             LastActivity = now,
         };

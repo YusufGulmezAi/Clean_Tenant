@@ -1,8 +1,21 @@
+@inject AuthenticationStateProvider AuthProvider
+@inject CleanTenant.Application.Common.Persistence.ICatalogDbContext Catalog
+@inject IServiceProvider Services
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@using Microsoft.EntityFrameworkCore
+@using CleanTenant.Application.Common.Persistence
+
 @*
-    Sol drawer'ın içeriği — AdminLTE+ nested menu pattern.
-    v0.2.2.c: Üstte canlı arama kutusu (NavMenu link'lerini filtreler);
-    eşleşmeyen MudNavLink'ler ve eşleşmeyen MudNavGroup'lar gizlenir.
-    Faz 1.4-1.6: scope-aware visibility eklenecek.
+    v0.2.3.c — Scope-aware sol drawer.
+
+    Bağlama göre menü tamamen değişir:
+      - Sistem        → "Sistem Yönetimi" + Yönetimler (liste) + Siteler (liste)
+      - Yönetim       → o Yönetim'in Siteleri + Kullanıcılar + Roller + Audit + Destek Erişim Geçmişi + Yönetim Ayarları
+      - Site          → Birimler + Kullanıcılar + Site Ayarları
+
+    Üstte canlı arama kutusu (link'leri filtreler); eşleşmeyen MudNavLink ve
+    MudNavGroup'lar gizlenir. Tüm scope'larda altta "Ayarlar" grubu (Tema, Dil, Hakkında).
 *@
 
 <div class="pa-2">
@@ -27,53 +40,139 @@
         </MudNavLink>
     }
 
-    @{
-        var managementChildren = new[]
-        {
-            ("Tenant Yönetimi", "/tenants", Icons.Material.Filled.Domain, "Faz 1.4", true),
-            ("Roller & İzinler", "/roles", Icons.Material.Filled.Security, "Faz 1.5", true),
-            ("Kullanıcılar", "/users", Icons.Material.Filled.People, "Faz 1.4", true),
-        };
-        var managementVisible = AnyMatch(managementChildren.Select(c => c.Item1));
-    }
-    @if (managementVisible)
+    @* ─── SİSTEM BAĞLAMI ─────────────────────────────────────────────── *@
+    @if (_scope == "System")
     {
-        <MudNavGroup Title="Yönetim" Icon="@Icons.Material.Filled.AdminPanelSettings" Expanded="@(IsSearching || true)">
-            @foreach (var (title, href, icon, phase, disabled) in managementChildren)
-            {
-                if (Matches(title))
+        @if (_tenants is { Count: > 0 } && AnyMatch(_tenants.Select(t => "Yönetim " + t.Name)))
+        {
+            <MudNavGroup Title="Yönetimler" Icon="@Icons.Material.Filled.Domain" Expanded="@(IsSearching || _scope == "System")">
+                @foreach (var tenant in _tenants)
                 {
-                    <MudNavLink Href="@href" Icon="@icon" Disabled="@disabled">
-                        @title
-                        <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="ml-2">@phase</MudChip>
-                    </MudNavLink>
+                    if (Matches("Yönetim " + tenant.Name) || Matches(tenant.UrlCode))
+                    {
+                        <MudNavLink Icon="@Icons.Material.Filled.Domain"
+                                    OnClick="@(() => OnTenantClick(tenant.Id))">
+                            @tenant.Name
+                        </MudNavLink>
+                    }
                 }
-            }
-        </MudNavGroup>
+            </MudNavGroup>
+        }
+
+        @if (_companies is { Count: > 0 } && AnyMatch(_companies.Select(c => "Site " + c.Name)))
+        {
+            <MudNavGroup Title="Siteler" Icon="@Icons.Material.Filled.Apartment" Expanded="@(IsSearching)">
+                @foreach (var company in _companies)
+                {
+                    if (Matches("Site " + company.Name) || Matches(company.UrlCode))
+                    {
+                        <MudNavLink Icon="@Icons.Material.Filled.Apartment"
+                                    OnClick="@(() => OnCompanyClick(company.TenantId, company.Id))">
+                            @company.Name
+                            <MudText Typo="Typo.caption" Color="Color.Default" Style="margin-left: 6px;">@company.TenantName</MudText>
+                        </MudNavLink>
+                    }
+                }
+            </MudNavGroup>
+        }
+
+        var systemAdminChildren = new[]
+        {
+            ("Global Audit", "/audit", Icons.Material.Filled.History, "Faz 1.6"),
+            ("Log Görüntüleyici", "/logs", Icons.Material.Filled.Article, "Faz 1.6"),
+            ("Permission Kataloğu", "/permissions", Icons.Material.Filled.Security, "Faz 1.5"),
+            ("Sistem Ayarları", "/system/settings", Icons.Material.Filled.Tune, "Faz 1.4"),
+        };
+        var systemAdminVisible = AnyMatch(systemAdminChildren.Select(c => c.Item1));
+        @if (systemAdminVisible)
+        {
+            <MudNavGroup Title="Sistem Yönetimi" Icon="@Icons.Material.Filled.AdminPanelSettings" Expanded="@IsSearching">
+                @foreach (var (title, href, icon, phase) in systemAdminChildren)
+                {
+                    if (Matches(title))
+                    {
+                        <MudNavLink Href="@href" Icon="@icon" Disabled="true">
+                            @title
+                            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="ml-2">@phase</MudChip>
+                        </MudNavLink>
+                    }
+                }
+            </MudNavGroup>
+        }
     }
 
-    @{
-        var supervisionChildren = new[]
-        {
-            ("Audit & Loglar", "/audit", Icons.Material.Filled.History, "Faz 1.6", true),
-            ("Destek Oturumları", "/support-sessions", Icons.Material.Filled.Support, "Faz 1.6", true),
-        };
-        var supervisionVisible = AnyMatch(supervisionChildren.Select(c => c.Item1));
-    }
-    @if (supervisionVisible)
+    @* ─── YÖNETİM (TENANT) BAĞLAMI ─────────────────────────────────── *@
+    @if (_scope == "Tenant" && _activeTenantId.HasValue)
     {
-        <MudNavGroup Title="Gözetim" Icon="@Icons.Material.Filled.QueryStats" Expanded="@(IsSearching || true)">
-            @foreach (var (title, href, icon, phase, disabled) in supervisionChildren)
-            {
-                if (Matches(title))
+        @if (_companies is { Count: > 0 } && AnyMatch(_companies.Select(c => "Site " + c.Name)))
+        {
+            <MudNavGroup Title="Siteler" Icon="@Icons.Material.Filled.Apartment" Expanded="@(IsSearching || true)">
+                @foreach (var company in _companies)
                 {
-                    <MudNavLink Href="@href" Icon="@icon" Disabled="@disabled">
-                        @title
-                        <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="ml-2">@phase</MudChip>
-                    </MudNavLink>
+                    if (Matches("Site " + company.Name) || Matches(company.UrlCode))
+                    {
+                        <MudNavLink Icon="@Icons.Material.Filled.Apartment"
+                                    OnClick="@(() => OnCompanyClick(company.TenantId, company.Id))">
+                            @company.Name
+                        </MudNavLink>
+                    }
                 }
-            }
-        </MudNavGroup>
+            </MudNavGroup>
+        }
+
+        var tenantAdminChildren = new[]
+        {
+            ("Kullanıcılar", "/tenant/users", Icons.Material.Filled.People, "Faz 1.5"),
+            ("Roller ve İzinler", "/tenant/roles", Icons.Material.Filled.Security, "Faz 1.5"),
+            ("Audit Geçmişi", "/tenant/audit", Icons.Material.Filled.History, "Faz 1.6"),
+            ("Destek Erişim Geçmişi", "/tenant/support-access", Icons.Material.Filled.Support, "Faz 1.6"),
+            ("Yönetim Ayarları", "/tenant/settings", Icons.Material.Filled.Settings, "Faz 1.5"),
+        };
+        var tenantAdminVisible = AnyMatch(tenantAdminChildren.Select(c => c.Item1));
+        @if (tenantAdminVisible)
+        {
+            <MudNavGroup Title="Yönetim" Icon="@Icons.Material.Filled.AdminPanelSettings" Expanded="@IsSearching">
+                @foreach (var (title, href, icon, phase) in tenantAdminChildren)
+                {
+                    if (Matches(title))
+                    {
+                        <MudNavLink Href="@href" Icon="@icon" Disabled="true">
+                            @title
+                            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="ml-2">@phase</MudChip>
+                        </MudNavLink>
+                    }
+                }
+            </MudNavGroup>
+        }
+    }
+
+    @* ─── SİTE (COMPANY) BAĞLAMI ─────────────────────────────────── *@
+    @if (_scope == "Company" && _activeCompanyId.HasValue)
+    {
+        var companyChildren = new[]
+        {
+            ("Birimler", "/company/units", Icons.Material.Filled.HomeWork, "Faz 1.6"),
+            ("Sakinler", "/company/residents", Icons.Material.Filled.People, "Faz 1.7"),
+            ("Kullanıcılar", "/company/users", Icons.Material.Filled.PersonOutline, "Faz 1.5"),
+            ("Faturalar", "/company/invoices", Icons.Material.Filled.Receipt, "Faz 1.7"),
+            ("Site Ayarları", "/company/settings", Icons.Material.Filled.Settings, "Faz 1.6"),
+        };
+        var companyVisible = AnyMatch(companyChildren.Select(c => c.Item1));
+        @if (companyVisible)
+        {
+            <MudNavGroup Title="Site" Icon="@Icons.Material.Filled.Apartment" Expanded="@(IsSearching || true)">
+                @foreach (var (title, href, icon, phase) in companyChildren)
+                {
+                    if (Matches(title))
+                    {
+                        <MudNavLink Href="@href" Icon="@icon" Disabled="true">
+                            @title
+                            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="ml-2">@phase</MudChip>
+                        </MudNavLink>
+                    }
+                }
+            </MudNavGroup>
+        }
     }
 
     <MudDivider Class="my-2" />
@@ -103,8 +202,110 @@
 
 @code {
     private string _search = string.Empty;
+    private string? _scope;
+    private Guid? _activeTenantId;
+    private Guid? _activeCompanyId;
+    private List<TenantRow> _tenants = [];
+    private List<CompanyRow> _companies = [];
+
+    private sealed record TenantRow(Guid Id, string UrlCode, string Name);
+    private sealed record CompanyRow(Guid Id, Guid TenantId, string TenantName, string UrlCode, string Name);
 
     private bool IsSearching => !string.IsNullOrWhiteSpace(_search);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user?.Identity?.IsAuthenticated != true)
+        {
+            return;
+        }
+
+        _scope = user.FindFirst("scope")?.Value;
+
+        if (user.FindFirst("tenant_id") is { Value: var tid } && Guid.TryParseExact(tid, "N", out var tenantGuid))
+        {
+            _activeTenantId = tenantGuid;
+        }
+        if (user.FindFirst("company_id") is { Value: var cid } && Guid.TryParseExact(cid, "N", out var companyGuid))
+        {
+            _activeCompanyId = companyGuid;
+        }
+
+        await LoadContextDataAsync();
+    }
+
+    private async Task LoadContextDataAsync()
+    {
+        var main = Services.GetService<IMainDbContext>();
+
+        if (string.Equals(_scope, "System", StringComparison.OrdinalIgnoreCase))
+        {
+            // Sistem bağlamında: tüm aktif Yönetimler + tüm Siteler
+            _tenants = await Catalog.Tenants
+                .AsNoTracking()
+                .Where(t => t.Status == CleanTenant.Domain.Identity.Tenants.TenantStatus.Active)
+                .OrderBy(t => t.Name)
+                .Select(t => new TenantRow(t.Id, t.UrlCode, t.Name))
+                .ToListAsync();
+
+            if (main is not null)
+            {
+                var tenantNames = _tenants.ToDictionary(t => t.Id, t => t.Name);
+                var companies = await main.Companies
+                    .IgnoreQueryFilters()
+                    .AsNoTracking()
+                    .OrderBy(c => c.Name)
+                    .Select(c => new { c.Id, c.TenantId, c.UrlCode, c.Name })
+                    .ToListAsync();
+
+                _companies = [.. companies.Select(c => new CompanyRow(
+                    c.Id,
+                    c.TenantId,
+                    tenantNames.TryGetValue(c.TenantId, out var tn) ? tn : "?",
+                    c.UrlCode,
+                    c.Name))];
+            }
+        }
+        else if (string.Equals(_scope, "Tenant", StringComparison.OrdinalIgnoreCase) && _activeTenantId.HasValue)
+        {
+            // Yönetim bağlamında: sadece bu yönetime ait Siteler
+            if (main is not null)
+            {
+                var tenantId = _activeTenantId.Value;
+                var companies = await main.Companies
+                    .IgnoreQueryFilters()
+                    .AsNoTracking()
+                    .Where(c => c.TenantId == tenantId)
+                    .OrderBy(c => c.Name)
+                    .Select(c => new { c.Id, c.TenantId, c.UrlCode, c.Name })
+                    .ToListAsync();
+
+                _companies = [.. companies.Select(c => new CompanyRow(c.Id, c.TenantId, "", c.UrlCode, c.Name))];
+            }
+        }
+    }
+
+    private async Task OnTenantClick(Guid tenantId)
+    {
+        var returnUrl = "/" + Nav.ToBaseRelativePath(Nav.Uri);
+        await JS.InvokeVoidAsync(
+            "cleantenant.submitTenantSwitch",
+            tenantId.ToString(),
+            returnUrl,
+            string.Empty);
+    }
+
+    private async Task OnCompanyClick(Guid tenantId, Guid companyId)
+    {
+        var returnUrl = "/" + Nav.ToBaseRelativePath(Nav.Uri);
+        await JS.InvokeVoidAsync(
+            "cleantenant.submitTenantSwitch",
+            tenantId.ToString(),
+            returnUrl,
+            companyId.ToString());
+    }
 
     private void OnSearchChanged(string value)
     {

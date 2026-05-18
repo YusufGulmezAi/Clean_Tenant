@@ -24,6 +24,8 @@ public sealed class AuditDbContext : DbContext
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        modelBuilder.ApplyConfigurationsFromAssembly(typeof(AuditDbContext).Assembly);
+        modelBuilder.ApplyConfigurationsFromAssembly(
+            typeof(AuditDbContext).Assembly,
+            type => type.Namespace?.StartsWith(typeof(AuditDbContext).Namespace + ".Configurations", StringComparison.Ordinal) == true);
     }
 }

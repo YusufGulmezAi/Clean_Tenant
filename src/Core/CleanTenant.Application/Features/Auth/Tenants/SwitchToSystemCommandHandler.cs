@@ -95,6 +95,21 @@ public sealed class SwitchToSystemCommandHandler : IRequestHandler<SwitchToSyste
         var now = _clock.UtcNow;
         var newSessionId = Guid.CreateVersion7(now);
 
+        // v0.2.3.c — Support Mode v2: Eğer mevcut session bir SupportSession
+        // taşıyorsa (Sistem operatörü destek bağlamından çıkıyor), o oturumu
+        // EndedAt ile kapat. UI banner kalkar; tenant admin "Destek Erişim
+        // Geçmişi" sayfasında bu kaydı kapalı görür.
+        if (current.SupportSessionId is { } supportSessionId)
+        {
+            var openSession = await _db.SupportSessions
+                .FirstOrDefaultAsync(s => s.Id == supportSessionId && s.EndedAt == null, cancellationToken);
+            if (openSession is not null)
+            {
+                openSession.EndedAt = now;
+                await _db.SaveChangesAsync(cancellationToken);
+            }
+        }
+
         var newSession = new AuthSession
         {
             SessionId = newSessionId,

@@ -1,8 +1,10 @@
 using Blazored.LocalStorage;
 using Bunit.JSInterop;
+using CleanTenant.Application.Common.Persistence;
 using CleanTenant.ManagementApp.Services;
 using CleanTenant.ManagementApp.Themes;
 using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using MudBlazor.Services;
 
@@ -45,5 +47,11 @@ public abstract class MudTestContextBase : TestContext
                     new System.Security.Claims.ClaimsPrincipal(new System.Security.Claims.ClaimsIdentity()))));
             return stub;
         });
+
+        // v0.2.3.c — NavMenu / TenantSwitcher artık ICatalogDbContext + (opsiyonel)
+        // IMainDbContext inject ediyor. Anonim auth state'de DB sorgusu yapılmaz
+        // (NavMenu OnInitializedAsync IsAuthenticated=false'da erken döner), ancak
+        // DI graph'i tatmin etmek için boş mock'lar register edilir.
+        Services.AddScoped(_ => Substitute.For<ICatalogDbContext>());
     }
 }

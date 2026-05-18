@@ -43,6 +43,13 @@ public sealed class TenantConfiguration : IEntityTypeConfiguration<Tenant>
         builder.Property(t => t.DatabaseSchemaName)
             .HasMaxLength(63);
 
+        // v0.2.3.c — Support Mode v2: Sistem kullanıcısının bu Yönetim'de
+        // write erişimine izin var mı? Default true; YönetimAdmin parametreyi
+        // mail link onayıyla kapatabilir.
+        builder.Property(t => t.AllowSystemWriteAccess)
+            .IsRequired()
+            .HasDefaultValue(true);
+
         // xmin → RowVersion (PostgreSQL optimistic concurrency)
         builder.UseXminAsConcurrencyToken();
 

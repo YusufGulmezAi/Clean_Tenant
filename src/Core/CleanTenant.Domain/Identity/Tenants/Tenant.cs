@@ -48,4 +48,21 @@ public sealed class Tenant : BaseEntity, IAggregateRoot, IHasUrlCode
     /// Shared mode'da null.
     /// </summary>
     public string? DatabaseSchemaName { get; set; }
+
+    /// <summary>
+    /// <para>
+    /// Sistem kullanıcılarının (SaaS operatör personeli) bu Yönetim ve altındaki
+    /// Site'lere destek amaçlı erişiminde <b>yazma yetkisi</b> ile girip
+    /// giremeyeceğini belirler. v0.2.3.c "Support Mode v2" modeli:
+    /// </para>
+    /// <list type="bullet">
+    ///   <item><c>true</c> (default): Sistem kullanıcı doğrudan WriteEnabled modunda girer; her aksiyon <see cref="Support.SupportSession"/>'a kaydedilir.</item>
+    ///   <item><c>false</c>: Sistem kullanıcı yalnızca ReadOnly görüntüleme; yazma denemesi <c>AUTH-SUPPORT-WRITE-DENIED</c> ile reddedilir.</item>
+    /// </list>
+    /// <para>
+    /// Yönetim Admin (TenantAdmin) parametre değiştirme akışı mail link onayı
+    /// ile korunur — token imzalı, tek kullanımlık, TTL'li.
+    /// </para>
+    /// </summary>
+    public bool AllowSystemWriteAccess { get; set; } = true;
 }

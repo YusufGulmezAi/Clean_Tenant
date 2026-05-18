@@ -71,8 +71,12 @@ public sealed class CatalogDbContext : IdentityDbContext<User, Role, Guid>, ICat
     {
         base.OnModelCreating(builder);
 
-        // Tüm IEntityTypeConfiguration<T> implementasyonları aynı assembly'den
-        // otomatik yüklenir; Configurations klasöründeki dosyalar buraya akar.
-        builder.ApplyConfigurationsFromAssembly(typeof(CatalogDbContext).Assembly);
+        // Sadece Catalog/Configurations namespace'indeki IEntityTypeConfiguration<T>
+        // implementasyonlarını yükle. Filtre olmadan tüm assembly taranır ve
+        // Main/Audit DbContext'lerine ait configuration'lar da Catalog model'ine
+        // sızar (v0.2.3.c'de tespit edildi).
+        builder.ApplyConfigurationsFromAssembly(
+            typeof(CatalogDbContext).Assembly,
+            type => type.Namespace?.StartsWith(typeof(CatalogDbContext).Namespace + ".Configurations", StringComparison.Ordinal) == true);
     }
 }

@@ -36,7 +36,9 @@ public sealed class MainDbContext : DbContext, IMainDbContext
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        modelBuilder.ApplyConfigurationsFromAssembly(typeof(MainDbContext).Assembly);
+        modelBuilder.ApplyConfigurationsFromAssembly(
+            typeof(MainDbContext).Assembly,
+            type => type.Namespace?.StartsWith(typeof(MainDbContext).Namespace + ".Configurations", StringComparison.Ordinal) == true);
 
         // Global query filter: tüm ITenantScoped entity'lerde
         // - soft-delete (IsDeleted=false)

@@ -1,3 +1,4 @@
+using CleanTenant.Application.Common.Auth;
 using CleanTenant.Application.Common.Authorization;
 using CleanTenant.Application.Common.Pipeline;
 using CleanTenant.SharedKernel.Common.Errors;
@@ -16,7 +17,8 @@ public sealed class AuthorizationBehaviorTests
     public async Task Attribute_yoksa_handler_calismali()
     {
         var checker = Substitute.For<IPermissionChecker>();
-        var behavior = new AuthorizationBehavior<UnprotectedRequest, Result<string>>(checker);
+        var sessionAccessor = Substitute.For<ICurrentSessionAccessor>();
+        var behavior = new AuthorizationBehavior<UnprotectedRequest, Result<string>>(checker, sessionAccessor);
 
         var nextCalled = false;
         var response = await behavior.Handle(
@@ -35,8 +37,9 @@ public sealed class AuthorizationBehaviorTests
     {
         var checker = Substitute.For<IPermissionChecker>();
         checker.HasAnyPermission(Arg.Any<IReadOnlyList<string>>()).Returns(true);
+        var sessionAccessor = Substitute.For<ICurrentSessionAccessor>();
 
-        var behavior = new AuthorizationBehavior<ProtectedRequest, Result<string>>(checker);
+        var behavior = new AuthorizationBehavior<ProtectedRequest, Result<string>>(checker, sessionAccessor);
 
         var response = await behavior.Handle(
             new ProtectedRequest(),
@@ -52,8 +55,9 @@ public sealed class AuthorizationBehaviorTests
     {
         var checker = Substitute.For<IPermissionChecker>();
         checker.HasAnyPermission(Arg.Any<IReadOnlyList<string>>()).Returns(false);
+        var sessionAccessor = Substitute.For<ICurrentSessionAccessor>();
 
-        var behavior = new AuthorizationBehavior<ProtectedRequest, Result<string>>(checker);
+        var behavior = new AuthorizationBehavior<ProtectedRequest, Result<string>>(checker, sessionAccessor);
 
         var nextCalled = false;
         var response = await behavior.Handle(

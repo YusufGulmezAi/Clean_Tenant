@@ -4,15 +4,19 @@
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 @using Microsoft.EntityFrameworkCore
+@using CleanTenant.SharedKernel.Context
 
 @*
-    v0.2.3.b — AppBar bağlam (context) seçici.
+    v0.2.3.c — AppBar bağlam (context) seçici.
+    Sadece kullanıcının **gerçek rol atamaları** listelenir (UserRoleAssignments
+    tablosu). Sistem operatörünün "tüm Yönetim/Site listesi" sol menüde — burada
+    değil. Bu ayrım: gerçek atama = tam yetki vs. destek erişimi = ReadOnly/WriteEnabled.
+
     Hiyerarşik:
-      ⚙ Sistem          (Color.Warning)         — sadece System scope kullanıcı
-      🏢 Tenant         (Color.Info)
-          🏬 Şirket     (Color.Tertiary)        — pl-8 girintili
+      ⚙ Sistem          (Color.Warning)         — System scope rol ataması varsa
+      🏢 Yönetim        (Color.Info)            — UserRoleAssignments.TenantId
+          🏬 Site       (Color.Tertiary)        — pl-8 girintili
     Aktif satır ✓ (Color.Success).
-    "Aktif Bağlam: <ad>" buton metni AppBar'da görünür.
 *@
 
 @if (_canShow)
@@ -50,7 +54,7 @@
             </div>
             <MudDivider />
 
-            @if (_isSystemUser && SystemMatchesFilter())
+            @if (_hasSystemAssignment && SystemMatchesFilter())
             {
                 var systemActive = ActiveTenantId is null;
                 <MudMenuItem Icon="@Icons.Material.Filled.AdminPanelSettings"
@@ -67,15 +71,15 @@
                 <MudDivider />
             }
 
-            @if (_allContexts is { Count: 0 })
+            @if (_assignedContexts is { Count: 0 } && !_hasSystemAssignment)
             {
                 <div class="px-4 py-3 d-flex justify-center">
-                    <MudText Typo="Typo.body2" Color="Color.Default">Tenant kaydı yok</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Default">Atanmış bağlam yok</MudText>
                 </div>
             }
             else
             {
-                @foreach (var ctx in _allContexts ?? [])
+                @foreach (var ctx in _assignedContexts ?? [])
                 {
                     var tenantNameMatches = TenantMatchesFilter(ctx);
                     var anyCompanyMatches = ctx.Companies.Any(CompanyMatchesFilter);
@@ -135,10 +139,11 @@
     [Parameter] public Guid? ActiveCompanyId { get; set; }
     [Parameter] public string? ActiveCompanyName { get; set; }
 
-    private List<TenantContextRow>? _allContexts;
+    private List<TenantContextRow>? _assignedContexts;
     private string _searchText = string.Empty;
-    private bool _isSystemUser;
+    private bool _hasSystemAssignment;
     private bool _canShow;
+    private Guid _userId;
 
     private sealed record TenantContextRow(Guid TenantId, string UrlCode, string Name, IReadOnlyList<CompanyRow> Companies);
     private sealed record CompanyRow(Guid CompanyId, string UrlCode, string Name);
@@ -155,7 +160,7 @@
             {
                 return ActiveTenantName!;
             }
-            return _isSystemUser ? "Sistem" : "Bağlam seç";
+            return _hasSystemAssignment ? "Sistem" : "Bağlam seç";
         }
     }
 
@@ -175,35 +180,73 @@
         var user = authState.User;
         if (user?.Identity?.IsAuthenticated != true) return;
 
-        var scope = user.FindFirst("scope")?.Value;
-        _isSystemUser = string.Equals(scope, "System", StringComparison.OrdinalIgnoreCase);
-
-        // Şu an yalnız System scope kullanıcı için dropdown gösteriliyor.
-        // Tenant scope kullanıcının zaten tek tenant'ı var.
-        if (!_isSystemUser)
+        // Kullanıcı id'sini sub claim'inden veya nameidentifier'dan oku
+        var userIdStr = user.FindFirst("sub")?.Value
+                     ?? user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (!Guid.TryParse(userIdStr, out _userId))
         {
             _canShow = false;
             return;
         }
 
-        var tenants = await Catalog.Tenants
+        // Kullanıcının rol atamalarını sorgula — System / Tenant / Company.
+        var assignments = await Catalog.UserRoleAssignments
             .AsNoTracking()
-            .Where(t => t.Status == CleanTenant.Domain.Identity.Tenants.TenantStatus.Active)
+            .Where(a => a.UserId == _userId && a.IsActive)
+            .Select(a => new { a.ScopeLevel, a.TenantId, a.CompanyId })
+            .ToListAsync();
+
+        _hasSystemAssignment = assignments.Any(a => a.ScopeLevel == ScopeLevel.System);
+
+        // Tenant ataması olan Yönetimler — kullanıcı bu Yönetim seviyesine + alt
+        // tüm Sitelerine erişebilir. Company ataması olan Site'ler ek olarak
+        // (parent Tenant ayrıca atanmış olmasa bile) tek başına görünür.
+        var assignedTenantIds = assignments
+            .Where(a => a.TenantId.HasValue)
+            .Select(a => a.TenantId!.Value)
+            .Distinct()
+            .ToHashSet();
+
+        if (assignedTenantIds.Count == 0 && !_hasSystemAssignment)
+        {
+            _canShow = false;
+            return;
+        }
+
+        var tenantList = await Catalog.Tenants
+            .AsNoTracking()
+            .Where(t => assignedTenantIds.Contains(t.Id)
+                     && t.Status == CleanTenant.Domain.Identity.Tenants.TenantStatus.Active)
             .OrderBy(t => t.Name)
             .Select(t => new { t.Id, t.UrlCode, t.Name })
             .ToListAsync();
 
-        var tenantIds = tenants.Select(t => t.Id).ToHashSet();
+        // Tenant scope ataması varsa o Tenant'ın tüm Siteleri'ne erişim verir.
+        // Company scope ataması varsa sadece o Site'ye.
+        var tenantLevelTenantIds = assignments
+            .Where(a => a.ScopeLevel == ScopeLevel.Tenant && a.TenantId.HasValue)
+            .Select(a => a.TenantId!.Value)
+            .Distinct()
+            .ToHashSet();
 
-        // Main DB Companies — System scope ITenantContext.TenantId=null olduğu için
+        var assignedCompanyIds = assignments
+            .Where(a => a.ScopeLevel == ScopeLevel.Company && a.CompanyId.HasValue)
+            .Select(a => a.CompanyId!.Value)
+            .Distinct()
+            .ToHashSet();
+
+        // Main DB Companies — System scope ITenantContext.TenantId=null nedeniyle
         // global query filter boş döner; IgnoreQueryFilters ile bypass.
-        var companies = await Main.Companies
-            .IgnoreQueryFilters()
-            .AsNoTracking()
-            .Where(c => tenantIds.Contains(c.TenantId))
-            .OrderBy(c => c.Name)
-            .Select(c => new { c.Id, c.TenantId, c.UrlCode, c.Name })
-            .ToListAsync();
+        var companies = assignedTenantIds.Count > 0
+            ? await Main.Companies
+                .IgnoreQueryFilters()
+                .AsNoTracking()
+                .Where(c => assignedTenantIds.Contains(c.TenantId)
+                         && (tenantLevelTenantIds.Contains(c.TenantId) || assignedCompanyIds.Contains(c.Id)))
+                .OrderBy(c => c.Name)
+                .Select(c => new { c.Id, c.TenantId, c.UrlCode, c.Name })
+                .ToListAsync()
+            : [];
 
         var byTenant = companies
             .GroupBy(c => c.TenantId)
@@ -211,13 +254,13 @@
                 g => g.Key,
                 g => (IReadOnlyList<CompanyRow>)g.Select(c => new CompanyRow(c.Id, c.UrlCode, c.Name)).ToList());
 
-        _allContexts = tenants
+        _assignedContexts = tenantList
             .Select(t => new TenantContextRow(
                 t.Id, t.UrlCode, t.Name,
                 byTenant.TryGetValue(t.Id, out var cs) ? cs : []))
             .ToList();
 
-        _canShow = true;
+        _canShow = _hasSystemAssignment || _assignedContexts.Count > 0;
     }
 
     private bool SystemMatchesFilter() =>
