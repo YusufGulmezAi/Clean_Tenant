@@ -1,7 +1,7 @@
 @inherits LayoutComponentBase
 @implements IDisposable
 @inject IThemeService ThemeService
-@inject CleanTenant.Application.Common.Auth.ICurrentSessionAccessor SessionAccessor
+@inject AuthenticationStateProvider AuthProvider
 
 @*
     AdminLTE+ pateni MudBlazor ile (v0.2.2.c — Routes seviyesinde InteractiveServer
@@ -97,17 +97,32 @@
     {
         ThemeService.ThemeChanged += OnThemeChanged;
         ApplyTheme();
+    }
 
-        // Aktif bağlamı AuthSession'dan oku — SessionLookupMiddleware her HTTP
-        // isteğinde populate eder. Tenant ID/Name AuthSession'da yaşıyor;
-        // CompanyName için Main DB lookup gerekirdi — v0.2.3.c sonrasında
-        // CompanyId set olduğunda AuthSession'a CompanyName denormalize edilebilir.
-        // Şimdilik CompanyId varsa label "Tenant → (Şirket id)" gösterir.
-        var session = SessionAccessor.Current;
-        _activeTenantId = session?.TenantId;
-        _activeTenantName = session?.TenantName;
-        _activeCompanyId = session?.CompanyId;
-        _activeCompanyName = null; // Faz 1.X'te AuthSession'a CompanyName denormalize edilecek
+    protected override async Task OnInitializedAsync()
+    {
+        // Aktif bağlamı cookie claim'lerinden oku. ICurrentSessionAccessor.Current
+        // SignalR circuit'inde null olabilir (HttpUserContext HTTP scope'unda set'leniyor);
+        // claim'ler ise hem prerender hem interactive render'da AuthenticationState
+        // üzerinden erişilebilir, daha güvenilir.
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user?.Identity?.IsAuthenticated != true)
+        {
+            return;
+        }
+
+        if (user.FindFirst("tenant_id") is { Value: var tid } && Guid.TryParseExact(tid, "N", out var tenantGuid))
+        {
+            _activeTenantId = tenantGuid;
+        }
+        _activeTenantName = user.FindFirst("tenant_name")?.Value;
+
+        if (user.FindFirst("company_id") is { Value: var cid } && Guid.TryParseExact(cid, "N", out var companyGuid))
+        {
+            _activeCompanyId = companyGuid;
+        }
+        _activeCompanyName = user.FindFirst("company_name")?.Value;
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)

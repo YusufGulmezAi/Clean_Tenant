@@ -29,6 +29,18 @@ public static class AuthEndpoints
     /// <summary>Aktif scope seviyesi claim adı (System/Tenant/Company/Unit).</summary>
     public const string ScopeClaim = "scope";
 
+    /// <summary>v0.2.3.b — Aktif tenant kimliği claim adı (UI gösterimi için, Blazor circuit'inde HttpUserContext null olduğundan claim'den okuyoruz).</summary>
+    public const string TenantIdClaim = "tenant_id";
+
+    /// <summary>v0.2.3.b — Aktif tenant adı claim adı (AppBar bağlam etiketi).</summary>
+    public const string TenantNameClaim = "tenant_name";
+
+    /// <summary>v0.2.3.b — Aktif şirket (company) kimliği claim adı.</summary>
+    public const string CompanyIdClaim = "company_id";
+
+    /// <summary>v0.2.3.b — Aktif şirket adı claim adı (CompanyName AuthSession'da denormalize edildiğinde set edilir).</summary>
+    public const string CompanyNameClaim = "company_name";
+
     // v0.2.2.d — 2FA challenge / enrollment token'ları artık query string yerine
     // kısa ömürlü HttpOnly cookie ile taşınır. Önceki davranışta token URL bar'da
     // görünüyordu: hem profesyonel olmayan görüntü, hem browser history / Referer
@@ -344,6 +356,26 @@ public static class AuthEndpoints
             new(ContextIdClaim, tokens.ContextId.ToString("N")),
             new(ScopeClaim, tokens.CurrentScope.Level.ToString()),
         };
+
+        // v0.2.3.b — Aktif bağlam claim'leri (UI gösterimi için). Blazor Server
+        // SignalR circuit'inde HttpUserContext.Current null olduğundan AppBar
+        // bağlamı claim'lerden okur.
+        if (tokens.CurrentScope.TenantId is { } tenantId)
+        {
+            claims.Add(new Claim(TenantIdClaim, tenantId.ToString("N")));
+            if (!string.IsNullOrEmpty(tokens.CurrentScope.TenantName))
+            {
+                claims.Add(new Claim(TenantNameClaim, tokens.CurrentScope.TenantName));
+            }
+        }
+        if (tokens.CurrentScope.CompanyId is { } companyId)
+        {
+            claims.Add(new Claim(CompanyIdClaim, companyId.ToString("N")));
+            if (!string.IsNullOrEmpty(tokens.CurrentScope.CompanyName))
+            {
+                claims.Add(new Claim(CompanyNameClaim, tokens.CurrentScope.CompanyName));
+            }
+        }
         var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
         var principal = new ClaimsPrincipal(identity);
 
