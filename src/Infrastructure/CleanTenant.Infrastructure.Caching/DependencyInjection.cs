@@ -1,19 +1,29 @@
 using CleanTenant.Application.Common.Auth;
+using CleanTenant.Application.Common.Caching;
+using CleanTenant.Application.Features.Catalog.Readers;
+using CleanTenant.Application.Features.Main.Readers;
+using CleanTenant.Infrastructure.Caching.Cache;
+using CleanTenant.Infrastructure.Caching.Readers;
 using CleanTenant.Infrastructure.Caching.Sessions;
 using CleanTenant.Infrastructure.Caching.TwoFactor;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using StackExchange.Redis;
 
 namespace CleanTenant.Infrastructure.Caching;
 
 /// <summary>
-/// Caching katmanının DI kayıtları. Redis connection multiplexer'ı singleton
-/// olarak kayıt eder; session store'u scoped olarak.
+/// Caching katmanının DI kayıtları. Redis connection multiplexer'ı + session
+/// store'u + v0.2.3.d hybrid cache mimarisi (HybridCacheStore + pub/sub +
+/// reader pattern + invalidator).
 /// </summary>
 public static class DependencyInjection
 {
     /// <summary>
-    /// Redis bağlantısını, session store'unu ve key builder'ı kayıt eder.
+    /// Redis bağlantısını, session store'unu, key builder'ı ve v0.2.3.d hybrid
+    /// cache altyapısını kayıt eder.
     /// </summary>
     /// <param name="services">DI servis koleksiyonu.</param>
     /// <param name="redisConnectionString">StackExchange.Redis bağlantı dizgesi.</param>
@@ -32,6 +42,29 @@ public static class DependencyInjection
 
         // v0.2.2.a — System scope kullanıcıları için pre-auth 2FA enrollment store (10 dk TTL).
         services.AddScoped<IPreAuthEnrollmentStore, RedisPreAuthEnrollmentStore>();
+
+        // ─── v0.2.3.d — Generic hybrid cache mimarisi ───
+        services.AddMemoryCache();
+
+        // Singleton — instance id stabil olmalı (her boot'ta yeni). Origin filter
+        // pub/sub'de kullanılır.
+        services.AddSingleton(sp => new HybridCacheStore(
+            sp.GetRequiredService<IConnectionMultiplexer>(),
+            sp.GetRequiredService<IMemoryCache>(),
+            sp.GetRequiredService<ILogger<HybridCacheStore>>(),
+            instanceId: Guid.NewGuid().ToString("N")));
+        services.AddSingleton<ICacheStore>(sp => sp.GetRequiredService<HybridCacheStore>());
+
+        // Subscriber: pub/sub channel'a abone olur — diğer instance'ların
+        // invalidation mesajları gelince local L1'i temizler.
+        services.AddHostedService<CacheInvalidationSubscriber>();
+
+        // Domain-specific reader'lar (cache + EF fallback)
+        services.AddScoped<ITenantCatalogReader, TenantCatalogReader>();
+        services.AddScoped<IMainCatalogReader, MainCatalogReader>();
+
+        // CRUD handler'larının kullanacağı invalidator
+        services.AddScoped<ICacheInvalidator, CacheInvalidator>();
 
         return services;
     }

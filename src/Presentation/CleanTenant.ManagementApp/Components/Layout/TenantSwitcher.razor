@@ -1,22 +1,28 @@
 @inject CleanTenant.Application.Common.Persistence.ICatalogDbContext Catalog
-@inject CleanTenant.Application.Common.Persistence.IMainDbContext Main
+@inject CleanTenant.Application.Common.Caching.ICacheStore Cache
+@inject CleanTenant.Application.Features.Catalog.Readers.ITenantCatalogReader TenantReader
+@inject CleanTenant.Application.Features.Main.Readers.IMainCatalogReader CompanyReader
 @inject AuthenticationStateProvider AuthProvider
+@inject PersistentComponentState PersistentState
 @inject NavigationManager Nav
 @inject IJSRuntime JS
+@implements IDisposable
 @using Microsoft.EntityFrameworkCore
 @using CleanTenant.SharedKernel.Context
+@using CleanTenant.Application.Common.Caching
 
 @*
-    v0.2.3.c — AppBar bağlam (context) seçici.
-    Sadece kullanıcının **gerçek rol atamaları** listelenir (UserRoleAssignments
-    tablosu). Sistem operatörünün "tüm Yönetim/Site listesi" sol menüde — burada
-    değil. Bu ayrım: gerçek atama = tam yetki vs. destek erişimi = ReadOnly/WriteEnabled.
+    v0.2.3.d — AppBar bağlam (context) seçici. Generic hybrid cache + reader pattern
+    + PersistentComponentState ile yeniden yapılandırıldı:
 
-    Hiyerarşik:
-      ⚙ Sistem          (Color.Warning)         — System scope rol ataması varsa
-      🏢 Yönetim        (Color.Info)            — UserRoleAssignments.TenantId
-          🏬 Site       (Color.Tertiary)        — pl-8 girintili
-    Aktif satır ✓ (Color.Success).
+    - Atanmış Yönetim/Site listesi: ICacheStore key `user:contexts:{userId}` — 5 dk TTL.
+    - Tenant adları: ITenantCatalogReader cache'inden lookup (cascade hit).
+    - Company adları: IMainCatalogReader cache'inden lookup.
+    - PersistentComponentState ile prerender → interactive double-render önlendi.
+
+    Sadece kullanıcının **gerçek rol atamaları** listelenir (UserRoleAssignments).
+    Sistem operatörü tüm Yönetim/Site listesini sol menü üzerinden /system/* sayfalarına
+    erişir; bu dropdown'da değil.
 *@
 
 @if (_canShow)
@@ -54,7 +60,7 @@
             </div>
             <MudDivider />
 
-            @if (_hasSystemAssignment && SystemMatchesFilter())
+            @if (_view?.HasSystemAssignment == true && SystemMatchesFilter())
             {
                 var systemActive = ActiveTenantId is null;
                 <MudMenuItem Icon="@Icons.Material.Filled.AdminPanelSettings"
@@ -71,15 +77,15 @@
                 <MudDivider />
             }
 
-            @if (_assignedContexts is { Count: 0 } && !_hasSystemAssignment)
+            @if (_view is { Contexts.Count: 0, HasSystemAssignment: false })
             {
                 <div class="px-4 py-3 d-flex justify-center">
                     <MudText Typo="Typo.body2" Color="Color.Default">Atanmış bağlam yok</MudText>
                 </div>
             }
-            else
+            else if (_view is not null)
             {
-                @foreach (var ctx in _assignedContexts ?? [])
+                @foreach (var ctx in _view.Contexts)
                 {
                     var tenantNameMatches = TenantMatchesFilter(ctx);
                     var anyCompanyMatches = ctx.Companies.Any(CompanyMatchesFilter);
@@ -139,14 +145,23 @@
     [Parameter] public Guid? ActiveCompanyId { get; set; }
     [Parameter] public string? ActiveCompanyName { get; set; }
 
-    private List<TenantContextRow>? _assignedContexts;
+    private const string PersistKeyPrefix = "tenantswitcher.contexts.";
+
     private string _searchText = string.Empty;
-    private bool _hasSystemAssignment;
     private bool _canShow;
     private Guid _userId;
+    private UserContextView? _view;
+    private PersistingComponentStateSubscription _persistSubscription;
 
-    private sealed record TenantContextRow(Guid TenantId, string UrlCode, string Name, IReadOnlyList<CompanyRow> Companies);
-    private sealed record CompanyRow(Guid CompanyId, string UrlCode, string Name);
+    /// <summary>Serialize edilebilir + cache'lenebilir model — TenantSwitcher dropdown'unun
+    /// ihtiyacı olan bilginin tamamını taşır.</summary>
+    public sealed record UserContextView(
+        bool HasSystemAssignment,
+        IReadOnlyList<TenantContextRow> Contexts);
+
+    public sealed record TenantContextRow(Guid TenantId, string UrlCode, string Name, IReadOnlyList<CompanyRow> Companies);
+
+    public sealed record CompanyRow(Guid CompanyId, string UrlCode, string Name);
 
     private string CurrentLabel
     {
@@ -160,7 +175,7 @@
             {
                 return ActiveTenantName!;
             }
-            return _hasSystemAssignment ? "Sistem" : "Bağlam seç";
+            return _view?.HasSystemAssignment == true ? "Sistem" : "Bağlam seç";
         }
     }
 
@@ -180,8 +195,6 @@
         var user = authState.User;
         if (user?.Identity?.IsAuthenticated != true) return;
 
-        // v0.2.3.c — UserId claim'i: AuthEndpoints "user_id" + NameIdentifier'a yazar.
-        // "sub" JWT'de var, cookie scheme'da yok — legacy fallback.
         var userIdStr = user.FindFirst("user_id")?.Value
                      ?? user.FindFirst("sub")?.Value
                      ?? user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
@@ -191,40 +204,58 @@
             return;
         }
 
-        // Kullanıcının rol atamalarını sorgula — System / Tenant / Company.
+        var persistKey = PersistKeyPrefix + _userId.ToString("N");
+
+        // Prerender → interactive transfer
+        if (PersistentState.TryTakeFromJson<UserContextView>(persistKey, out var cached) && cached is not null)
+        {
+            _view = cached;
+            _canShow = _view.HasSystemAssignment || _view.Contexts.Count > 0;
+            return;
+        }
+
+        _view = await Cache.GetOrCreateAsync(
+            CacheKeys.User.Contexts(_userId),
+            LoadContextsAsync,
+            CacheOptions.ListShortLived);
+
+        _canShow = _view.HasSystemAssignment || _view.Contexts.Count > 0;
+
+        _persistSubscription = PersistentState.RegisterOnPersisting(() =>
+        {
+            PersistentState.PersistAsJson(persistKey, _view);
+            return Task.CompletedTask;
+        });
+    }
+
+    private async Task<UserContextView> LoadContextsAsync(CancellationToken ct)
+    {
+        // UserRoleAssignments — per-user küçük sorgu; cache'in factory'i.
         var assignments = await Catalog.UserRoleAssignments
             .AsNoTracking()
             .Where(a => a.UserId == _userId && a.IsActive)
             .Select(a => new { a.ScopeLevel, a.TenantId, a.CompanyId })
-            .ToListAsync();
+            .ToListAsync(ct);
 
-        _hasSystemAssignment = assignments.Any(a => a.ScopeLevel == ScopeLevel.System);
+        var hasSystem = assignments.Any(a => a.ScopeLevel == ScopeLevel.System);
 
-        // Tenant ataması olan Yönetimler — kullanıcı bu Yönetim seviyesine + alt
-        // tüm Sitelerine erişebilir. Company ataması olan Site'ler ek olarak
-        // (parent Tenant ayrıca atanmış olmasa bile) tek başına görünür.
         var assignedTenantIds = assignments
             .Where(a => a.TenantId.HasValue)
             .Select(a => a.TenantId!.Value)
             .Distinct()
             .ToHashSet();
 
-        if (assignedTenantIds.Count == 0 && !_hasSystemAssignment)
+        if (assignedTenantIds.Count == 0)
         {
-            _canShow = false;
-            return;
+            return new UserContextView(hasSystem, []);
         }
 
-        var tenantList = await Catalog.Tenants
-            .AsNoTracking()
-            .Where(t => assignedTenantIds.Contains(t.Id)
-                     && t.Status == CleanTenant.Domain.Identity.Tenants.TenantStatus.Active)
-            .OrderBy(t => t.Name)
-            .Select(t => new { t.Id, t.UrlCode, t.Name })
-            .ToListAsync();
+        // Reader'lar — cache hit'lerden faydalan
+        var allTenants = await TenantReader.GetAllActiveAsync(ct);
+        var assignedTenants = allTenants
+            .Where(t => assignedTenantIds.Contains(t.Id))
+            .ToList();
 
-        // Tenant scope ataması varsa o Tenant'ın tüm Siteleri'ne erişim verir.
-        // Company scope ataması varsa sadece o Site'ye.
         var tenantLevelTenantIds = assignments
             .Where(a => a.ScopeLevel == ScopeLevel.Tenant && a.TenantId.HasValue)
             .Select(a => a.TenantId!.Value)
@@ -237,32 +268,28 @@
             .Distinct()
             .ToHashSet();
 
-        // Main DB Companies — System scope ITenantContext.TenantId=null nedeniyle
-        // global query filter boş döner; IgnoreQueryFilters ile bypass.
-        var companies = assignedTenantIds.Count > 0
-            ? await Main.Companies
-                .IgnoreQueryFilters()
-                .AsNoTracking()
-                .Where(c => assignedTenantIds.Contains(c.TenantId)
-                         && (tenantLevelTenantIds.Contains(c.TenantId) || assignedCompanyIds.Contains(c.Id)))
-                .OrderBy(c => c.Name)
-                .Select(c => new { c.Id, c.TenantId, c.UrlCode, c.Name })
-                .ToListAsync()
-            : [];
+        // Company listesi: tenant-level ataması olan Yönetim'lerin tüm site'leri +
+        // company-level ataması olan tek site'ler. Reader cache'ten global hit
+        // çekilir, local filter.
+        var allCompanies = await CompanyReader.GetAllGlobalAsync(ct);
+        var visibleCompanies = allCompanies
+            .Where(c => assignedTenantIds.Contains(c.TenantId)
+                     && (tenantLevelTenantIds.Contains(c.TenantId) || assignedCompanyIds.Contains(c.Id)))
+            .ToList();
 
-        var byTenant = companies
+        var byTenant = visibleCompanies
             .GroupBy(c => c.TenantId)
             .ToDictionary(
                 g => g.Key,
                 g => (IReadOnlyList<CompanyRow>)g.Select(c => new CompanyRow(c.Id, c.UrlCode, c.Name)).ToList());
 
-        _assignedContexts = tenantList
+        var contexts = assignedTenants
             .Select(t => new TenantContextRow(
                 t.Id, t.UrlCode, t.Name,
                 byTenant.TryGetValue(t.Id, out var cs) ? cs : []))
             .ToList();
 
-        _canShow = _hasSystemAssignment || _assignedContexts.Count > 0;
+        return new UserContextView(hasSystem, contexts);
     }
 
     private bool SystemMatchesFilter() =>
@@ -304,4 +331,6 @@
         var returnUrl = "/" + Nav.ToBaseRelativePath(Nav.Uri);
         await JS.InvokeVoidAsync("cleantenant.submitSwitchToSystem", returnUrl);
     }
+
+    public void Dispose() => _persistSubscription.Dispose();
 }

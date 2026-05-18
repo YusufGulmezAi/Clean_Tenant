@@ -1,19 +1,22 @@
 @page "/system/tenants"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
-@inject CleanTenant.Application.Common.Persistence.ICatalogDbContext Catalog
+@inject ITenantCatalogReader TenantReader
 @inject AuthenticationStateProvider AuthProvider
+@inject PersistentComponentState PersistentState
 @inject NavigationManager Nav
 @inject IJSRuntime JS
-@using Microsoft.EntityFrameworkCore
+@implements IDisposable
+@using CleanTenant.Application.Features.Catalog.Readers
 @using CleanTenant.Domain.Identity.Tenants
 
 <PageTitle>Yönetimler — Sistem</PageTitle>
 
 @*
-    v0.2.3.c.2 — Sistem operatörü için tüm aktif Yönetim'leri (Tenant) listeler.
-    Satıra tıklayınca o Yönetim bağlamına geçer (cleantenant.submitTenantSwitch).
-    Yetki: yalnız Sistem scope erişebilir; başka scope'tan gelen kullanıcı 403'e
-    benzer şekilde "yetkisiz" bilgisi görür (basit guard).
+    v0.2.3.d — Hybrid cache reader pattern + PersistentComponentState.
+    OnInitializedAsync prerender'da DB'ye gider → PersistentState'a yazar → interactive
+    geçişte yeniden DB sorgulamaz, state'ten okur. Sonraki açılışlarda reader L1 hit.
+
+    Yetki: yalnız Sistem scope erişebilir.
 *@
 
 <MudText Typo="Typo.h5" Class="mb-3">
@@ -27,13 +30,13 @@
         Bu sayfa yalnız Sistem kullanıcıları için. Aktif bağlamınız Sistem değil.
     </MudAlert>
 }
-else if (_loading)
+else if (_items is null)
 {
     <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
 }
 else
 {
-    <MudDataGrid T="TenantRow"
+    <MudDataGrid T="TenantListItem"
                  Items="@_items"
                  Filterable="true"
                  SortMode="@SortMode.Multiple"
@@ -91,19 +94,11 @@ else
 }
 
 @code {
+    private const string PersistKey = "systemarea.tenants.list";
     private string _searchText = string.Empty;
-    private bool _loading = true;
     private bool _unauthorized;
-    private List<TenantRow> _items = [];
-
-    public sealed record TenantRow(
-        Guid Id,
-        string UrlCode,
-        string Name,
-        string? LegalName,
-        TenantStatus Status,
-        BillingTier BillingTier,
-        bool AllowSystemWriteAccess);
+    private IReadOnlyList<TenantListItem>? _items;
+    private PersistingComponentStateSubscription _persistSubscription;
 
     protected override async Task OnInitializedAsync()
     {
@@ -113,27 +108,27 @@ else
             || !string.Equals(user.FindFirst("scope")?.Value, "System", StringComparison.OrdinalIgnoreCase))
         {
             _unauthorized = true;
-            _loading = false;
             return;
         }
 
-        _items = await Catalog.Tenants
-            .AsNoTracking()
-            .OrderBy(t => t.Name)
-            .Select(t => new TenantRow(
-                t.Id,
-                t.UrlCode,
-                t.Name,
-                t.LegalName,
-                t.Status,
-                t.BillingTier,
-                t.AllowSystemWriteAccess))
-            .ToListAsync();
+        // Prerender → interactive transfer: state varsa direkt al, yoksa reader'dan
+        if (PersistentState.TryTakeFromJson<List<TenantListItem>>(PersistKey, out var cached) && cached is not null)
+        {
+            _items = cached;
+            return;
+        }
 
-        _loading = false;
+        _items = await TenantReader.GetAllActiveAsync();
+
+        // Prerender'da çalışıyorsa state'e yaz (interactive geçişte alınacak)
+        _persistSubscription = PersistentState.RegisterOnPersisting(() =>
+        {
+            PersistentState.PersistAsJson(PersistKey, _items);
+            return Task.CompletedTask;
+        });
     }
 
-    private Func<TenantRow, bool> QuickFilter => row =>
+    private Func<TenantListItem, bool> QuickFilter => row =>
     {
         if (string.IsNullOrWhiteSpace(_searchText)) return true;
         return row.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase)
@@ -141,7 +136,7 @@ else
             || (row.LegalName?.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ?? false);
     };
 
-    private Task OnRowClick(DataGridRowClickEventArgs<TenantRow> args)
+    private Task OnRowClick(DataGridRowClickEventArgs<TenantListItem> args)
         => SwitchToTenantAsync(args.Item.Id);
 
     private async Task SwitchToTenantAsync(Guid tenantId)
@@ -153,4 +148,6 @@ else
             returnUrl,
             string.Empty);
     }
+
+    public void Dispose() => _persistSubscription.Dispose();
 }

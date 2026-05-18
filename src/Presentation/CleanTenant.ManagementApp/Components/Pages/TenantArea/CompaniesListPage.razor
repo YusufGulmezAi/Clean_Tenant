@@ -1,19 +1,20 @@
 @page "/tenant/companies"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
-@inject CleanTenant.Application.Common.Persistence.IMainDbContext Main
+@inject IMainCatalogReader CompanyReader
 @inject AuthenticationStateProvider AuthProvider
+@inject PersistentComponentState PersistentState
 @inject NavigationManager Nav
 @inject IJSRuntime JS
-@using Microsoft.EntityFrameworkCore
+@implements IDisposable
+@using CleanTenant.Application.Features.Main.Readers
 @using CleanTenant.Domain.Tenant.Companies
 
 <PageTitle>Siteler — Yönetim</PageTitle>
 
 @*
-    v0.2.3.c.2 — Aktif Yönetim bağlamındaki Site listesi. Main DB query filter
-    ITenantContext.TenantId = aktif tenant'a göre otomatik filtreliyor; IgnoreQueryFilters
-    GEREK YOK. Sistem kullanıcı destek bağlamında ise yine bu sayfada o yönetimin
-    Site'leri görünür (SupportSession + claim'den TenantId).
+    v0.2.3.d — Hybrid cache reader + PersistentComponentState. Aktif Yönetim
+    bağlamındaki Site listesi. Reader IMainCatalogReader.GetByTenantAsync ile
+    Yönetim'e filtreli sorgu yapar; L1/L2 cache otomatik.
 *@
 
 <MudText Typo="Typo.h5" Class="mb-3">
@@ -31,7 +32,7 @@
         Aktif Yönetim bağlamı yok. Önce bir Yönetim seçin.
     </MudAlert>
 }
-else if (_loading)
+else if (_items is null)
 {
     <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
 }
@@ -45,7 +46,7 @@ else if (_items.Count == 0)
 }
 else
 {
-    <MudDataGrid T="CompanyRow"
+    <MudDataGrid T="CompanyListItem"
                  Items="@_items"
                  Filterable="true"
                  SortMode="@SortMode.Multiple"
@@ -96,20 +97,13 @@ else
 }
 
 @code {
+    private const string PersistKey = "tenantarea.companies.list";
     private string _searchText = string.Empty;
-    private bool _loading = true;
     private bool _unauthorized;
     private Guid? _activeTenantId;
     private string? _tenantName;
-    private List<CompanyRow> _items = [];
-
-    public sealed record CompanyRow(
-        Guid Id,
-        string UrlCode,
-        string Name,
-        string? LegalName,
-        string? Vkn,
-        CompanyStatus Status);
+    private IReadOnlyList<CompanyListItem>? _items;
+    private PersistingComponentStateSubscription _persistSubscription;
 
     protected override async Task OnInitializedAsync()
     {
@@ -118,7 +112,6 @@ else
         if (user?.Identity?.IsAuthenticated != true)
         {
             _unauthorized = true;
-            _loading = false;
             return;
         }
 
@@ -130,25 +123,25 @@ else
         else
         {
             _unauthorized = true;
-            _loading = false;
             return;
         }
 
-        // Sistem operatör destek bağlamında ise query filter ITenantContext.TenantId
-        // null olabilir → IgnoreQueryFilters + explicit TenantId filter ile güvenli yol.
-        var companies = await Main.Companies
-            .IgnoreQueryFilters()
-            .AsNoTracking()
-            .Where(c => c.TenantId == _activeTenantId.Value)
-            .OrderBy(c => c.Name)
-            .Select(c => new CompanyRow(c.Id, c.UrlCode, c.Name, c.LegalName, c.Vkn, c.Status))
-            .ToListAsync();
+        if (PersistentState.TryTakeFromJson<List<CompanyListItem>>(PersistKey, out var cached) && cached is not null)
+        {
+            _items = cached;
+            return;
+        }
 
-        _items = companies;
-        _loading = false;
+        _items = await CompanyReader.GetByTenantAsync(_activeTenantId.Value);
+
+        _persistSubscription = PersistentState.RegisterOnPersisting(() =>
+        {
+            PersistentState.PersistAsJson(PersistKey, _items);
+            return Task.CompletedTask;
+        });
     }
 
-    private Func<CompanyRow, bool> QuickFilter => row =>
+    private Func<CompanyListItem, bool> QuickFilter => row =>
     {
         if (string.IsNullOrWhiteSpace(_searchText)) return true;
         return row.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase)
@@ -157,7 +150,7 @@ else
             || (row.Vkn?.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ?? false);
     };
 
-    private Task OnRowClick(DataGridRowClickEventArgs<CompanyRow> args)
+    private Task OnRowClick(DataGridRowClickEventArgs<CompanyListItem> args)
         => SwitchAsync(args.Item.Id);
 
     private async Task SwitchAsync(Guid companyId)
@@ -170,4 +163,6 @@ else
             returnUrl,
             companyId.ToString());
     }
+
+    public void Dispose() => _persistSubscription.Dispose();
 }
