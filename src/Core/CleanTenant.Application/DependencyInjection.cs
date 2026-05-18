@@ -18,7 +18,8 @@ public static class DependencyInjection
     /// kayıt eder. Behavior sırası önemlidir:
     /// <list type="number">
     ///   <item><c>AuthorizationBehavior</c> — yetkisiz çağrıyı erkenden reddet.</item>
-    ///   <item><c>ValidationBehavior</c> — input formatını kontrol et.</item>
+    ///   <item><c>CachingBehavior</c> (v0.2.3.f) — <see cref="Common.Caching.CacheableAttribute"/> taşıyan Query'leri cache'le.</item>
+    ///   <item><c>ValidationBehavior</c> — input formatını kontrol et (cache miss path'inde).</item>
     ///   <item><c>LoggingBehavior</c> — handler etrafında timing logla.</item>
     /// </list>
     /// MediatR <c>AddTransient</c> ile kayıt edilenleri sırasıyla zincirler.
@@ -35,6 +36,7 @@ public static class DependencyInjection
 
         // Pipeline behavior sırası (önemli):
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(AuthorizationBehavior<,>));
+        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(CachingBehavior<,>));
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));
 
