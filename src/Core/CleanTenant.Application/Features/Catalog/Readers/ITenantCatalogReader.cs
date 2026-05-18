@@ -26,4 +26,10 @@ public interface ITenantCatalogReader
 
     /// <summary>UrlCode ile tek tenant. Cache TTL <c>DetailMediumLived</c> (10 dk).</summary>
     Task<TenantListItem?> GetByUrlCodeAsync(string urlCode, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Düzenleme formu için tam detay — <see cref="TenantDetail"/>. Cache TTL
+    /// <c>DetailMediumLived</c> (10 dk). Tenant CRUD'da invalidate edilir.
+    /// </summary>
+    Task<TenantDetail?> GetDetailByIdAsync(Guid id, CancellationToken cancellationToken = default);
 }

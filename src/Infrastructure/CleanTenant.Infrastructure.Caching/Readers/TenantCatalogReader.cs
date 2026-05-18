@@ -76,4 +76,28 @@ public sealed class TenantCatalogReader : ITenantCatalogReader
                 .FirstOrDefaultAsync(ct),
             CacheOptions.DetailMediumLived,
             cancellationToken);
+
+    /// <inheritdoc />
+    public Task<TenantDetail?> GetDetailByIdAsync(Guid id, CancellationToken cancellationToken = default)
+        => _cache.GetOrCreateAsync<TenantDetail?>(
+            CacheKeys.Tenant.DetailById(id),
+            async ct => await _db.Tenants
+                .AsNoTracking()
+                .Where(t => t.Id == id)
+                .Select(t => new TenantDetail(
+                    t.Id,
+                    t.UrlCode,
+                    t.Name,
+                    t.LegalName,
+                    t.LegalIdentityType,
+                    t.LegalIdentityNumber,
+                    t.Address,
+                    t.Status,
+                    t.BillingTier,
+                    t.HasDedicatedDatabase,
+                    t.DatabaseSchemaName,
+                    t.AllowSystemWriteAccess))
+                .FirstOrDefaultAsync(ct),
+            CacheOptions.DetailMediumLived,
+            cancellationToken);
 }

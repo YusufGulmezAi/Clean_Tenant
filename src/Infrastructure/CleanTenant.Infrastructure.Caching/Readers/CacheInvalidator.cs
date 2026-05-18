@@ -27,9 +27,12 @@ public sealed class CacheInvalidator : ICacheInvalidator
     public async Task InvalidateTenantAsync(Guid tenantId, CancellationToken cancellationToken = default)
     {
         await _cache.RemoveAsync(CacheKeys.Tenant.ById(tenantId), cancellationToken);
+        await _cache.RemoveAsync(CacheKeys.Tenant.DetailById(tenantId), cancellationToken);
         await _cache.RemoveAsync(CacheKeys.Tenant.AllActive, cancellationToken);
         // UrlCode by-id'den bilinmediği için prefix temizliği yeterli
         await _cache.RemoveByPrefixAsync($"{CacheKeys.Tenant.Prefix}:by-url-code:", cancellationToken);
+        // MediatR CachingBehavior key (GetTenantDetailQuery — KeyTemplate "catalog:tenants:detail:{TenantId}")
+        await _cache.RemoveAsync($"{CacheKeys.KeyPrefix}:mediatr:catalog:tenants:detail:{tenantId:N}", cancellationToken);
         // Company listelerinde TenantName denormalize olduğu için global liste de temizlenmeli
         await _cache.RemoveAsync(CacheKeys.Company.AllGlobal, cancellationToken);
     }

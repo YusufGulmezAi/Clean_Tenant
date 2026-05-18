@@ -35,6 +35,9 @@ public static class CacheKeys
 
         /// <summary>UrlCode ile tek tenant projection.</summary>
         public static string ByUrlCode(string urlCode) => $"{Prefix}:by-url-code:{urlCode}";
+
+        /// <summary>Detail (Edit formu için tam alan seti) projection.</summary>
+        public static string DetailById(Guid id) => $"{Prefix}:detail:{id:N}";
     }
 
     /// <summary>Company (Site) ile ilgili cache anahtarları (Main DB).</summary>
