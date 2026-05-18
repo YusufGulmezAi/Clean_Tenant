@@ -26,9 +26,15 @@ namespace CleanTenant.Application.Features.Auth.Tenants;
 /// </para>
 /// </summary>
 /// <param name="TargetTenantId">Geçiş yapılacak tenant kimliği.</param>
+/// <param name="TargetCompanyId">
+/// Opsiyonel — verildiyse ScopeLevel.Company moduna geçer; Tenant scope için null.
+/// System scope kullanıcı için cross-tenant + cross-company izin; alt scope için
+/// rol kontrolü.
+/// </param>
 /// <param name="IpAddress">İstemci IP'si (audit).</param>
 /// <param name="UserAgent">İstemci User-Agent (audit).</param>
 public sealed record SwitchTenantCommand(
     Guid TargetTenantId,
+    Guid? TargetCompanyId,
     string IpAddress,
     string UserAgent) : IRequest<Result<TokenPair>>;

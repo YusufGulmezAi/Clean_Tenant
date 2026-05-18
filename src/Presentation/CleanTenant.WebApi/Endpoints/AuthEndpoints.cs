@@ -80,7 +80,7 @@ public static class AuthEndpoints
     {
         var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
         var ua = httpContext.Request.Headers.UserAgent.ToString();
-        var command = new SwitchTenantCommand(request.TenantId, ip, ua);
+        var command = new SwitchTenantCommand(request.TenantId, request.CompanyId, ip, ua);
         var result = await mediator.Send(command, cancellationToken);
         return result.IsSuccess
             ? Results.Ok(result.Value)
@@ -196,4 +196,5 @@ public sealed record SwitchContextRequest(
 
 /// <summary>v0.2.3.b — Switch-tenant isteği gövdesi (AppBar dropdown).</summary>
 /// <param name="TenantId">Geçilecek tenant kimliği.</param>
-public sealed record SwitchTenantRequest(Guid TenantId);
+/// <param name="CompanyId">Opsiyonel; verildiyse Company scope'a geçilir.</param>
+public sealed record SwitchTenantRequest(Guid TenantId, Guid? CompanyId = null);

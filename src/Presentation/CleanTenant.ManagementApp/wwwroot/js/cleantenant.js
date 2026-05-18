@@ -176,8 +176,12 @@ window.cleantenant.downloadTextFile = function (filename, content) {
 // Blazor circuit içinden cookie set'lemek mümkün değil; form post HttpContext
 // yolunu kullanır. Component MudMenuItem OnClick'inde bunu çağırır.
 // ---------------------------------------------------------------------------
-window.cleantenant.submitTenantSwitch = function (tenantId, returnUrl) {
-    submitFormWithReturn('/auth/switch-tenant', returnUrl, { tenantId: tenantId });
+window.cleantenant.submitTenantSwitch = function (tenantId, returnUrl, companyId) {
+    const fields = { tenantId: tenantId };
+    if (companyId) {
+        fields.companyId = companyId;
+    }
+    submitFormWithReturn('/auth/switch-tenant', returnUrl, fields);
 };
 
 // System scope'a geri dönüş (TenantSwitcher dropdown'undaki "System Scope" seçeneği)

@@ -236,13 +236,14 @@ public static class AuthEndpoints
     private static async Task<IResult> SwitchTenantFormAsync(
         HttpContext httpContext,
         [FromForm] Guid tenantId,
+        [FromForm] Guid? companyId,
         [FromForm] string? returnUrl,
         [FromServices] IMediator mediator,
         CancellationToken cancellationToken)
     {
         var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
         var ua = httpContext.Request.Headers.UserAgent.ToString();
-        var command = new SwitchTenantCommand(tenantId, ip, ua);
+        var command = new SwitchTenantCommand(tenantId, companyId, ip, ua);
 
         var result = await mediator.Send(command, cancellationToken);
         if (result.IsFailure)

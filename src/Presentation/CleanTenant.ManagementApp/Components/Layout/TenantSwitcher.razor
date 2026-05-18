@@ -1,17 +1,18 @@
-@inject CleanTenant.Application.Common.Persistence.ICatalogDbContext Db
+@inject CleanTenant.Application.Common.Persistence.ICatalogDbContext Catalog
+@inject CleanTenant.Application.Common.Persistence.IMainDbContext Main
 @inject AuthenticationStateProvider AuthProvider
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 @using Microsoft.EntityFrameworkCore
 
 @*
-    v0.2.3.b — AppBar'da "Aktif Tenant" dropdown'u.
-    - Cookie claim'lerinden scope ve user id okur; Mediator bypass.
-    - System scope kullanıcı: tüm Active tenant'lar + "System Scope" (geri dönüş için).
-    - Tenant scope kullanıcı: yalnız kendi atamasındaki tenant'lar (genelde 1; bu durumda
-      dropdown hâlâ render edilir ama tek seçenek görünür — bilgi amaçlı).
-    - Dropdown içinde anlık arama kutusu (Tenant adı + URL kodu üzerinde).
-    - Tıklama → JS form post → cookie yenile → returnUrl'e full reload.
+    v0.2.3.b — AppBar bağlam (context) seçici.
+    Hiyerarşik:
+      ⚙ Sistem          (Color.Warning)         — sadece System scope kullanıcı
+      🏢 Tenant         (Color.Info)
+          🏬 Şirket     (Color.Tertiary)        — pl-8 girintili
+    Aktif satır ✓ (Color.Success).
+    "Aktif Bağlam: <ad>" buton metni AppBar'da görünür.
 *@
 
 @if (_canShow)
@@ -24,18 +25,21 @@
         <ActivatorContent>
             <MudButton Variant="Variant.Filled"
                        Color="Color.Secondary"
-                       StartIcon="@Icons.Material.Filled.Business"
+                       StartIcon="@CurrentIcon"
                        EndIcon="@Icons.Material.Filled.ArrowDropDown"
                        Class="text-transform-none">
-                @CurrentLabel
+                <span style="white-space: nowrap; display: inline-flex; align-items: baseline;">
+                    <MudText Typo="Typo.caption" Style="opacity:.75; margin-right:6px;">Aktif Bağlam:</MudText>
+                    <MudText Typo="Typo.body2"><b>@CurrentLabel</b></MudText>
+                </span>
             </MudButton>
         </ActivatorContent>
         <ChildContent>
-            <div class="px-3 pt-3 pb-2" style="min-width: 320px;">
+            <div class="px-3 pt-3 pb-2" style="min-width: 360px;">
                 <MudTextField T="string"
                               Value="@_searchText"
                               ValueChanged="@OnSearchChanged"
-                              Placeholder="Tenant ara…"
+                              Placeholder="Bağlam ara…"
                               Adornment="Adornment.Start"
                               AdornmentIcon="@Icons.Material.Filled.Search"
                               Variant="Variant.Outlined"
@@ -44,48 +48,81 @@
                               Clearable="true"
                               DebounceInterval="100" />
             </div>
-
             <MudDivider />
 
-            @if (_isSystemUser)
+            @if (_isSystemUser && SystemMatchesFilter())
             {
-                @* "System Scope" — Tenant'tan geri dönüş kanalı. *@
+                var systemActive = ActiveTenantId is null;
                 <MudMenuItem Icon="@Icons.Material.Filled.AdminPanelSettings"
-                             IconColor="@(ActiveTenantId is null ? Color.Success : Color.Error)"
+                             IconColor="@(systemActive ? Color.Success : Color.Warning)"
                              OnClick="@SubmitSwitchToSystemAsync">
-                    <div class="d-flex flex-column">
-                        <span><b>System Scope</b></span>
-                        <MudText Typo="Typo.caption" Color="Color.Default">
-                            Cross-tenant operasyonel görünürlük
-                        </MudText>
-                    </div>
+                    <span style="white-space: nowrap;">
+                        <b>Sistem</b>
+                        @if (systemActive)
+                        {
+                            <MudText Typo="Typo.caption" Color="Color.Success" Class="ml-2">aktif</MudText>
+                        }
+                    </span>
                 </MudMenuItem>
                 <MudDivider />
             }
 
-            @if (_filteredTenants.Count == 0)
+            @if (_allContexts is { Count: 0 })
             {
                 <div class="px-4 py-3 d-flex justify-center">
-                    <MudText Typo="Typo.body2" Color="Color.Default">
-                        Sonuç bulunamadı
-                    </MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Default">Tenant kaydı yok</MudText>
                 </div>
             }
             else
             {
-                @foreach (var tenant in _filteredTenants)
+                @foreach (var ctx in _allContexts ?? [])
                 {
-                    var isActive = ActiveTenantId == tenant.Id;
-                    <MudMenuItem Icon="@(isActive ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Domain)"
-                                 IconColor="@(isActive ? Color.Success : Color.Tertiary)"
-                                 OnClick="@(() => SubmitSwitchAsync(tenant.Id))">
-                        <div class="d-flex flex-column">
-                            <span>@tenant.Name</span>
-                            <MudText Typo="Typo.caption" Color="Color.Default" Style="font-family: monospace;">
-                                @tenant.UrlCode
-                            </MudText>
-                        </div>
+                    var tenantNameMatches = TenantMatchesFilter(ctx);
+                    var anyCompanyMatches = ctx.Companies.Any(CompanyMatchesFilter);
+
+                    if (!tenantNameMatches && !anyCompanyMatches)
+                    {
+                        continue;
+                    }
+
+                    var tenantActive = ActiveTenantId == ctx.TenantId && ActiveCompanyId is null;
+                    <MudMenuItem Icon="@Icons.Material.Filled.Domain"
+                                 IconColor="@(tenantActive ? Color.Success : Color.Info)"
+                                 OnClick="@(() => SubmitSwitchAsync(ctx.TenantId, null))">
+                        <span style="white-space: nowrap;">
+                            <b>@ctx.Name</b>
+                            <MudText Typo="Typo.caption" Color="Color.Default"
+                                     Style="font-family: monospace; margin-left: 8px;">@ctx.UrlCode</MudText>
+                            @if (tenantActive)
+                            {
+                                <MudText Typo="Typo.caption" Color="Color.Success" Class="ml-2">aktif</MudText>
+                            }
+                        </span>
                     </MudMenuItem>
+
+                    @foreach (var company in ctx.Companies)
+                    {
+                        if (!tenantNameMatches && !CompanyMatchesFilter(company))
+                        {
+                            continue;
+                        }
+
+                        var companyActive = ActiveTenantId == ctx.TenantId && ActiveCompanyId == company.CompanyId;
+                        <MudMenuItem Icon="@Icons.Material.Filled.Apartment"
+                                     IconColor="@(companyActive ? Color.Success : Color.Tertiary)"
+                                     Class="pl-8"
+                                     OnClick="@(() => SubmitSwitchAsync(ctx.TenantId, company.CompanyId))">
+                            <span style="white-space: nowrap;">
+                                @company.Name
+                                <MudText Typo="Typo.caption" Color="Color.Default"
+                                         Style="font-family: monospace; margin-left: 8px;">@company.UrlCode</MudText>
+                                @if (companyActive)
+                                {
+                                    <MudText Typo="Typo.caption" Color="Color.Success" Class="ml-2">aktif</MudText>
+                                }
+                            </span>
+                        </MudMenuItem>
+                    }
                 }
             }
         </ChildContent>
@@ -95,24 +132,40 @@
 @code {
     [Parameter] public Guid? ActiveTenantId { get; set; }
     [Parameter] public string? ActiveTenantName { get; set; }
+    [Parameter] public Guid? ActiveCompanyId { get; set; }
+    [Parameter] public string? ActiveCompanyName { get; set; }
 
-    private List<TenantOption>? _allTenants;
-    private List<TenantOption> _filteredTenants = [];
+    private List<TenantContextRow>? _allContexts;
     private string _searchText = string.Empty;
     private bool _isSystemUser;
     private bool _canShow;
 
-    private sealed record TenantOption(Guid Id, string UrlCode, string Name);
+    private sealed record TenantContextRow(Guid TenantId, string UrlCode, string Name, IReadOnlyList<CompanyRow> Companies);
+    private sealed record CompanyRow(Guid CompanyId, string UrlCode, string Name);
 
     private string CurrentLabel
     {
         get
         {
-            if (ActiveTenantId is null && _isSystemUser)
+            if (ActiveCompanyId is not null && !string.IsNullOrWhiteSpace(ActiveCompanyName))
             {
-                return "System Scope";
+                return $"{ActiveTenantName} → {ActiveCompanyName}";
             }
-            return ActiveTenantName ?? "Tenant seç";
+            if (ActiveTenantId is not null && !string.IsNullOrWhiteSpace(ActiveTenantName))
+            {
+                return ActiveTenantName!;
+            }
+            return _isSystemUser ? "Sistem" : "Bağlam seç";
+        }
+    }
+
+    private string CurrentIcon
+    {
+        get
+        {
+            if (ActiveCompanyId is not null) return Icons.Material.Filled.Apartment;
+            if (ActiveTenantId is not null) return Icons.Material.Filled.Domain;
+            return Icons.Material.Filled.AdminPanelSettings;
         }
     }
 
@@ -120,61 +173,85 @@
     {
         var authState = await AuthProvider.GetAuthenticationStateAsync();
         var user = authState.User;
-        if (user?.Identity?.IsAuthenticated != true)
-        {
-            return;
-        }
+        if (user?.Identity?.IsAuthenticated != true) return;
 
         var scope = user.FindFirst("scope")?.Value;
         _isSystemUser = string.Equals(scope, "System", StringComparison.OrdinalIgnoreCase);
 
-        if (_isSystemUser)
+        // Şu an yalnız System scope kullanıcı için dropdown gösteriliyor.
+        // Tenant scope kullanıcının zaten tek tenant'ı var.
+        if (!_isSystemUser)
         {
-            // System scope: tüm Active tenant'lar görünür.
-            _allTenants = await Db.Tenants
-                .AsNoTracking()
-                .Where(t => t.Status == CleanTenant.Domain.Identity.Tenants.TenantStatus.Active)
-                .OrderBy(t => t.Name)
-                .Select(t => new TenantOption(t.Id, t.UrlCode, t.Name))
-                .ToListAsync();
-        }
-        else
-        {
-            // Alt scope: yalnız tek tenant; dropdown UI'ı çok bilgi vermez.
-            // Şimdilik gizliyoruz; v0.2.4 Tenant onboarding wizard'ında multi-tenant
-            // kullanıcı senaryosu eklenince genişletiriz.
-            _allTenants = null;
+            _canShow = false;
+            return;
         }
 
-        _filteredTenants = _allTenants ?? [];
-        _canShow = _isSystemUser; // Sadece System için dropdown göster
+        var tenants = await Catalog.Tenants
+            .AsNoTracking()
+            .Where(t => t.Status == CleanTenant.Domain.Identity.Tenants.TenantStatus.Active)
+            .OrderBy(t => t.Name)
+            .Select(t => new { t.Id, t.UrlCode, t.Name })
+            .ToListAsync();
+
+        var tenantIds = tenants.Select(t => t.Id).ToHashSet();
+
+        // Main DB Companies — System scope ITenantContext.TenantId=null olduğu için
+        // global query filter boş döner; IgnoreQueryFilters ile bypass.
+        var companies = await Main.Companies
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .Where(c => tenantIds.Contains(c.TenantId))
+            .OrderBy(c => c.Name)
+            .Select(c => new { c.Id, c.TenantId, c.UrlCode, c.Name })
+            .ToListAsync();
+
+        var byTenant = companies
+            .GroupBy(c => c.TenantId)
+            .ToDictionary(
+                g => g.Key,
+                g => (IReadOnlyList<CompanyRow>)g.Select(c => new CompanyRow(c.Id, c.UrlCode, c.Name)).ToList());
+
+        _allContexts = tenants
+            .Select(t => new TenantContextRow(
+                t.Id, t.UrlCode, t.Name,
+                byTenant.TryGetValue(t.Id, out var cs) ? cs : []))
+            .ToList();
+
+        _canShow = true;
+    }
+
+    private bool SystemMatchesFilter() =>
+        string.IsNullOrWhiteSpace(_searchText)
+        || "sistem".Contains(_searchText, StringComparison.OrdinalIgnoreCase);
+
+    private bool TenantMatchesFilter(TenantContextRow tenant)
+    {
+        if (string.IsNullOrWhiteSpace(_searchText)) return true;
+        return tenant.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase)
+            || tenant.UrlCode.Contains(_searchText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool CompanyMatchesFilter(CompanyRow company)
+    {
+        if (string.IsNullOrWhiteSpace(_searchText)) return true;
+        return company.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase)
+            || company.UrlCode.Contains(_searchText, StringComparison.OrdinalIgnoreCase);
     }
 
     private void OnSearchChanged(string value)
     {
         _searchText = value ?? string.Empty;
-        if (_allTenants is null)
-        {
-            _filteredTenants = [];
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(_searchText))
-        {
-            _filteredTenants = _allTenants;
-            return;
-        }
-
-        _filteredTenants = _allTenants
-            .Where(t => t.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase)
-                     || t.UrlCode.Contains(_searchText, StringComparison.OrdinalIgnoreCase))
-            .ToList();
+        StateHasChanged();
     }
 
-    private async Task SubmitSwitchAsync(Guid tenantId)
+    private async Task SubmitSwitchAsync(Guid tenantId, Guid? companyId)
     {
         var returnUrl = "/" + Nav.ToBaseRelativePath(Nav.Uri);
-        await JS.InvokeVoidAsync("cleantenant.submitTenantSwitch", tenantId.ToString(), returnUrl);
+        await JS.InvokeVoidAsync(
+            "cleantenant.submitTenantSwitch",
+            tenantId.ToString(),
+            returnUrl,
+            companyId?.ToString() ?? string.Empty);
     }
 
     private async Task SubmitSwitchToSystemAsync()

@@ -152,6 +152,14 @@ public sealed class SwitchTenantCommandHandler : IRequestHandler<SwitchTenantCom
         var now = _clock.UtcNow;
         var newSessionId = Guid.CreateVersion7(now);
 
+        // Company hedef verildiyse ScopeLevel = Company. System scope kullanıcı
+        // cross-company erişebilir (permissions System'den miras kalır); alt scope
+        // için yukarıdaki `hasAssignment` Tenant rolünü doğruladı, Company ataması
+        // varsayılır (Faz 1.5'te explicit Company assignment kontrolü eklenir).
+        var targetScopeLevel = command.TargetCompanyId.HasValue
+            ? ScopeLevel.Company
+            : (isSystemUser ? ScopeLevel.System : ScopeLevel.Tenant);
+
         var newSession = new AuthSession
         {
             SessionId = newSessionId,
@@ -160,10 +168,10 @@ public sealed class SwitchTenantCommandHandler : IRequestHandler<SwitchTenantCom
             Email = current.Email,
             UserName = current.UserName,
             FullName = current.FullName,
-            ScopeLevel = isSystemUser ? ScopeLevel.System : ScopeLevel.Tenant,
+            ScopeLevel = targetScopeLevel,
             TenantId = command.TargetTenantId,
             TenantName = tenant.Name,
-            CompanyId = null,
+            CompanyId = command.TargetCompanyId,
             UnitId = null,
             Roles = roles,
             Permissions = permissions,
