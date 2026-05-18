@@ -3,6 +3,12 @@ using CleanTenant.Domain.Identity.Authorization;
 using CleanTenant.Domain.Identity.Support;
 using CleanTenant.Domain.Identity.Tenants;
 using CleanTenant.Domain.Identity.Users;
+using CleanTenant.Domain.LookUp.Banks;
+using CleanTenant.Domain.LookUp.BuildingTypes;
+using CleanTenant.Domain.LookUp.Districts;
+using CleanTenant.Domain.LookUp.Neighborhoods;
+using CleanTenant.Domain.LookUp.Provinces;
+using CleanTenant.Domain.LookUp.ResidentialTypes;
 using CleanTenant.Infrastructure.Persistence.Identifiers;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -56,6 +62,24 @@ public sealed class CatalogDbContext : IdentityDbContext<User, Role, Guid>, ICat
 
     /// <inheritdoc />
     public DbSet<SupportSession> SupportSessions => Set<SupportSession>();
+
+    /// <inheritdoc />
+    public DbSet<Province> Provinces => Set<Province>();
+
+    /// <inheritdoc />
+    public DbSet<District> Districts => Set<District>();
+
+    /// <inheritdoc />
+    public DbSet<Neighborhood> Neighborhoods => Set<Neighborhood>();
+
+    /// <inheritdoc />
+    public DbSet<ResidentialType> ResidentialTypes => Set<ResidentialType>();
+
+    /// <inheritdoc />
+    public DbSet<BuildingType> BuildingTypes => Set<BuildingType>();
+
+    /// <inheritdoc />
+    public DbSet<Bank> Banks => Set<Bank>();
 
     /// <summary>
     /// URL kod havuzu (Infrastructure-only; <see cref="ICatalogDbContext"/>

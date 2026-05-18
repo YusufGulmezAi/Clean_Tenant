@@ -18,9 +18,9 @@
 <PageTitle>Yönetimler — Sistem</PageTitle>
 
 @*
-    v0.2.4.b.3 — CRUD aksiyonları (Yeni / Düzenle / Sil) eklendi. DataTable
-    ToolbarRight slot'una "Yeni Yönetim" butonu, satır eylemleri sütununa
-    edit/delete butonları + MudMessageBox onayı. Bağlama geçiş butonu korundu.
+    v0.2.4.b.4 — Özet widget'lar (Yönetim / Site / Bağımsız Bölüm sayısı) DataTable
+    üstüne eklendi. "Yeni Yönetim" butonu DataTable toolbar'ından çıkarılıp tablonun
+    hemen üst satırına sağa taşındı. DataTable Title/Toplam satırı kaldırıldı.
 *@
 
 @if (_unauthorized)
@@ -29,24 +29,91 @@
         Bu sayfa yalnız Sistem kullanıcıları için. Aktif bağlamınız Sistem değil.
     </MudAlert>
 }
+else if (!_initialized)
+{
+    @* ── Yükleme durumu: skeleton widget'lar ──────────────────────────── *@
+    <MudGrid Spacing="2" Class="mb-3">
+        <MudItem xs="12" sm="4">
+            <MudPaper Elevation="3" Class="pa-4" Style="background: var(--mud-palette-primary); border-radius: 8px; height: 100px;">
+                <MudSkeleton SkeletonType="SkeletonType.Text" Width="40%" />
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <MudPaper Elevation="3" Class="pa-4" Style="background: var(--mud-palette-success); border-radius: 8px; height: 100px;">
+                <MudSkeleton SkeletonType="SkeletonType.Text" Width="40%" />
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <MudPaper Elevation="3" Class="pa-4" Style="background: var(--mud-palette-info); border-radius: 8px; height: 100px;">
+                <MudSkeleton SkeletonType="SkeletonType.Text" Width="40%" />
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+}
 else
 {
+    @* ── Özet widget'lar ──────────────────────────────────────────────── *@
+    <MudGrid Spacing="2" Class="mb-3">
+        <MudItem xs="12" sm="4">
+            <MudPaper Elevation="3" Class="pa-4 d-flex align-center"
+                      Style="background: var(--mud-palette-primary); border-radius: 8px;">
+                <MudIcon Icon="@Icons.Material.Filled.Domain"
+                         Style="font-size: 2.5rem; color: rgba(255,255,255,0.85);" Class="mr-3" />
+                <div>
+                    <MudText Typo="Typo.h4" Style="color: #fff; font-weight: 700; line-height: 1.2;">
+                        @(_items?.Count.ToString() ?? "—")
+                    </MudText>
+                    <MudText Typo="Typo.body2" Style="color: rgba(255,255,255,0.8);">
+                        Mevcut Yönetim Sayısı
+                    </MudText>
+                </div>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <MudPaper Elevation="3" Class="pa-4 d-flex align-center"
+                      Style="background: var(--mud-palette-success); border-radius: 8px;">
+                <MudIcon Icon="@Icons.Material.Filled.Apartment"
+                         Style="font-size: 2.5rem; color: rgba(255,255,255,0.85);" Class="mr-3" />
+                <div>
+                    <MudText Typo="Typo.h4" Style="color: #fff; font-weight: 700; line-height: 1.2;">—</MudText>
+                    <MudText Typo="Typo.body2" Style="color: rgba(255,255,255,0.8);">
+                        Mevcut Site Sayısı
+                    </MudText>
+                </div>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <MudPaper Elevation="3" Class="pa-4 d-flex align-center"
+                      Style="background: var(--mud-palette-info); border-radius: 8px;">
+                <MudIcon Icon="@Icons.Material.Filled.HomeWork"
+                         Style="font-size: 2.5rem; color: rgba(255,255,255,0.85);" Class="mr-3" />
+                <div>
+                    <MudText Typo="Typo.h4" Style="color: #fff; font-weight: 700; line-height: 1.2;">—</MudText>
+                    <MudText Typo="Typo.body2" Style="color: rgba(255,255,255,0.8);">
+                        Mevcut Bağımsız Bölüm Sayısı
+                    </MudText>
+                </div>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    @* ── Tablo üstü aksiyon satırı ───────────────────────────────────── *@
+    <div class="d-flex justify-end mb-2">
+        <MudButton StartIcon="@Icons.Material.Filled.Add"
+                   Color="Color.Primary"
+                   Variant="Variant.Filled"
+                   Href="/system/tenants/new">
+            Yeni Yönetim
+        </MudButton>
+    </div>
+
+    @* ── Veri tablosu ─────────────────────────────────────────────────── *@
     <DataTable TItem="TenantListItem"
                Items="@_items"
-               Title="Yönetimler"
                SearchPlaceholder="Yönetim ara…"
                SearchableFields="@(row => new[] { row.Name, row.UrlCode, row.LegalName })"
                ExportColumns="@_exportColumns"
                RowClick="@OnRowClick">
-        <ToolbarRight>
-            <MudButton StartIcon="@Icons.Material.Filled.Add"
-                       Color="Color.Primary"
-                       Variant="Variant.Filled"
-                       Href="/system/tenants/new"
-                       Class="ml-2">
-                Yeni Yönetim
-            </MudButton>
-        </ToolbarRight>
         <Columns>
             <PropertyColumn T="TenantListItem" TProperty="string" Property="@(t => t.Name)" Title="Yönetim Adı" />
             <PropertyColumn T="TenantListItem" TProperty="string" Property="@(t => t.UrlCode)" Title="URL Kodu" />
@@ -93,6 +160,7 @@ else
 @code {
     private const string PersistKey = "systemarea.tenants.list";
     private bool _unauthorized;
+    private bool _initialized;
     private IReadOnlyList<TenantListItem>? _items;
     private PersistingComponentStateSubscription _persistSubscription;
 
@@ -114,16 +182,19 @@ else
             || !string.Equals(user.FindFirst("scope")?.Value, "System", StringComparison.OrdinalIgnoreCase))
         {
             _unauthorized = true;
+            _initialized = true;
             return;
         }
 
         if (PersistentState.TryTakeFromJson<List<TenantListItem>>(PersistKey, out var cached) && cached is not null)
         {
             _items = cached;
+            _initialized = true;
             return;
         }
 
         _items = await TenantReader.GetAllActiveAsync();
+        _initialized = true;
 
         _persistSubscription = PersistentState.RegisterOnPersisting(() =>
         {

@@ -62,15 +62,28 @@ if (!string.IsNullOrWhiteSpace(mainConnection))
 // ─── UI services ───
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
-builder.Services.AddMudServices();
-// v0.2.3.e — MudBlazor default İngilizce metinlerini TR'ye override eder
-// (MudDataGrid filtre/gruplama/loading, dialog/input vs.).
+// v0.2.4.b.4 — Localizer AddMudServices'den ÖNCE kayıt edilmeli: AddMudServices içindeki
+// TryAddTransient<MudLocalizer> zaten kayıtlı gördüğünde skip eder → tek kayıt kalır.
+// Sonra kayıt edilirse iki descriptor oluşur; bazı sürümlerde ilk descriptor kazanır → TR çalışmaz.
 builder.Services.AddTransient<MudBlazor.MudLocalizer, CleanTenantMudLocalizer>();
+builder.Services.AddMudServices();
 // v0.2.4.a — Excel (ClosedXML) + PDF (QuestPDF Community) export servisleri.
 builder.Services.AddCleanTenantExport();
 builder.Services.AddBlazoredLocalStorage();
 builder.Services.AddScoped<IThemeService, LocalStorageThemeService>();
 builder.Services.AddLocalization(opts => opts.ResourcesPath = "Localization/Resources");
+
+// v0.2.4.b.4 — Desteklenen diller; kültür cookie'si (.AspNetCore.Culture) üzerinden seçilir.
+// Varsayılan TR; diğer dillerde MudBlazor İngilizce fallback'ine düşer (tam çeviri ilerleyen fazda).
+var supportedCultures = new[] { "tr-TR", "en-US", "de-DE", "ru-RU", "ar-SA" };
+builder.Services.Configure<Microsoft.AspNetCore.Builder.RequestLocalizationOptions>(opts =>
+{
+    opts.SetDefaultCulture("tr-TR")
+        .AddSupportedCultures(supportedCultures)
+        .AddSupportedUICultures(supportedCultures);
+    opts.FallBackToParentCultures = true;
+    opts.FallBackToParentUICultures = true;
+});
 
 // ─── Auth — Cookie scheme (Blazor Server için) ───
 // AddIdentityServices içinde JWT Bearer zaten kayıt edildi (WebApi için).
@@ -111,6 +124,7 @@ if (!app.Environment.IsDevelopment())
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseHttpsRedirection();
 
+app.UseRequestLocalization();
 app.UseAuthentication();
 // v0.2.3.b — Cookie auth doğrulamasından sonra Redis session lookup.
 // sid claim'inden (AuthEndpoints.SignInWithSessionAsync ekledi) AuthSession

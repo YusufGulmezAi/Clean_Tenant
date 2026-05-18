@@ -1,4 +1,5 @@
 using CleanTenant.Application.Common.Persistence;
+using CleanTenant.Domain.Tenant.BuildingSchema;
 using CleanTenant.Domain.Tenant.Companies;
 using CleanTenant.SharedKernel.Context;
 using CleanTenant.SharedKernel.Entities;
@@ -32,6 +33,18 @@ public sealed class MainDbContext : DbContext, IMainDbContext
 
     /// <inheritdoc />
     public DbSet<Company> Companies => Set<Company>();
+
+    /// <inheritdoc />
+    public DbSet<Block> Blocks => Set<Block>();
+
+    /// <inheritdoc />
+    public DbSet<Parcel> Parcels => Set<Parcel>();
+
+    /// <inheritdoc />
+    public DbSet<Building> Buildings => Set<Building>();
+
+    /// <inheritdoc />
+    public DbSet<Unit> Units => Set<Unit>();
 
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder modelBuilder)

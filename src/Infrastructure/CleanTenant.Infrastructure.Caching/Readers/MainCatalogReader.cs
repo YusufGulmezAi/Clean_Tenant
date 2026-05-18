@@ -92,4 +92,18 @@ public sealed class MainCatalogReader : IMainCatalogReader
                 .FirstOrDefaultAsync(ct),
             CacheOptions.DetailMediumLived,
             cancellationToken);
+
+    /// <inheritdoc />
+    public Task<CompanyDetail?> GetDetailByIdAsync(Guid id, CancellationToken cancellationToken = default)
+        => _cache.GetOrCreateAsync<CompanyDetail?>(
+            CacheKeys.Company.DetailById(id),
+            async ct => await _db.Companies
+                .IgnoreQueryFilters()
+                .AsNoTracking()
+                .Where(c => c.Id == id)
+                .Select(c => new CompanyDetail(
+                    c.Id, c.TenantId, c.UrlCode, c.Name, c.LegalName, c.Vkn, c.Email, c.Phone, c.Status))
+                .FirstOrDefaultAsync(ct),
+            CacheOptions.DetailMediumLived,
+            cancellationToken);
 }

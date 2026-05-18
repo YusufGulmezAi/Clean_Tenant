@@ -57,6 +57,9 @@ public static class CacheKeys
 
         /// <summary>UrlCode ile tek company projection.</summary>
         public static string ByUrlCode(string urlCode) => $"{Prefix}:by-url-code:{urlCode}";
+
+        /// <summary>Detail (Edit formu için tam alan seti) projection.</summary>
+        public static string DetailById(Guid id) => $"{Prefix}:detail:{id:N}";
     }
 
     /// <summary>Kullanıcı (user) bazlı projection cache anahtarları.</summary>

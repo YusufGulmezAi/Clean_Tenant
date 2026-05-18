@@ -2,6 +2,10 @@
 @implements IDisposable
 @inject IThemeService ThemeService
 @inject AuthenticationStateProvider AuthProvider
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+@using CleanTenant.ManagementApp.Services
+@using System.Globalization
 
 @*
     AdminLTE+ pateni MudBlazor ile (v0.2.2.c — Routes seviyesinde InteractiveServer
@@ -49,6 +53,36 @@
                        Color="Color.Inherit"
                        title="Bildirimler (Faz 1+)" />
 
+        @* ── Dil seçici ────────────────────────────────────────────── *@
+        <MudMenu Dense="true"
+                 AnchorOrigin="Origin.BottomRight"
+                 TransformOrigin="Origin.TopRight">
+            <ActivatorContent>
+                <MudButton Color="Color.Inherit" Variant="Variant.Text"
+                           Class="px-2 min-width-0"
+                           Style="font-size: 1.35rem; min-width: auto; line-height: 1;"
+                           title="Dil / Language">
+                    @_currentLang.Flag
+                </MudButton>
+            </ActivatorContent>
+            <ChildContent>
+                @foreach (var lang in LanguageService.Supported)
+                {
+                    <MudMenuItem OnClick="@(() => ChangeLanguageAsync(lang.Code))">
+                        <div class="d-flex align-center gap-2">
+                            <span style="font-size: 1.2rem;">@lang.Flag</span>
+                            <MudText>@lang.Name</MudText>
+                            @if (string.Equals(lang.Code, _currentLang.Code, StringComparison.OrdinalIgnoreCase))
+                            {
+                                <MudIcon Icon="@Icons.Material.Filled.Check"
+                                         Size="Size.Small" Color="Color.Primary" Class="ml-1" />
+                            }
+                        </div>
+                    </MudMenuItem>
+                }
+            </ChildContent>
+        </MudMenu>
+
         <MudMenu Icon="@Icons.Material.Filled.AccountCircle"
                  Color="Color.Inherit"
                  AnchorOrigin="Origin.BottomRight"
@@ -92,11 +126,13 @@
     private string? _activeTenantName;
     private Guid? _activeCompanyId;
     private string? _activeCompanyName;
+    private LanguageOption _currentLang = LanguageService.Supported[0];
 
     protected override void OnInitialized()
     {
         ThemeService.ThemeChanged += OnThemeChanged;
         ApplyTheme();
+        _currentLang = LanguageService.Resolve(CultureInfo.CurrentUICulture.Name);
     }
 
     protected override async Task OnInitializedAsync()
@@ -146,6 +182,12 @@
     {
         _currentTheme = CleanTenantThemes.Resolve(ThemeService.CurrentPreset);
         _isDark = ThemeService.IsDarkMode;
+    }
+
+    private async Task ChangeLanguageAsync(string code)
+    {
+        await JS.InvokeVoidAsync("cleantenant.setLanguageCookie", code);
+        Nav.NavigateTo(Nav.Uri, forceLoad: true);
     }
 
     private void DrawerToggle() => _drawerOpen = !_drawerOpen;

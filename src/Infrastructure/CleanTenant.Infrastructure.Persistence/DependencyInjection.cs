@@ -1,10 +1,12 @@
 using CleanTenant.Application.Common.Auditing;
 using CleanTenant.Application.Common.MultiTenancy;
 using CleanTenant.Application.Common.Persistence;
+using CleanTenant.Application.Features.Catalog.Readers;
 using CleanTenant.Domain.Identity.Authorization;
 using CleanTenant.Domain.Identity.Users;
 using CleanTenant.Infrastructure.Persistence.Audit;
 using CleanTenant.Infrastructure.Persistence.Catalog;
+using CleanTenant.Infrastructure.Persistence.Catalog.Readers;
 using CleanTenant.Infrastructure.Persistence.Context;
 using CleanTenant.Infrastructure.Persistence.Interceptors;
 using CleanTenant.Infrastructure.Persistence.Log;
@@ -89,6 +91,9 @@ public static class DependencyInjection
         });
 
         services.AddScoped<ICatalogDbContext>(sp => sp.GetRequiredService<CatalogDbContext>());
+
+        // ---- LookUp Catalog Reader (EF Core based) ----
+        services.AddScoped<ILookUpCatalogReader, LookUpCatalogReader>();
 
         // ---- ASP.NET Core Identity entegrasyonu ----
         services.AddIdentityCore<User>(opts =>

@@ -212,6 +212,17 @@ window.cleantenant.submitSwitchToSystem = function (returnUrl) {
     submitFormWithReturn('/auth/switch-to-system', returnUrl, {});
 };
 
+// ---------------------------------------------------------------------------
+// v0.2.4.b.4 — Dil tercihi: ASP.NET Core kültür cookie'sini (.AspNetCore.Culture)
+// ayarlar. RequestLocalizationMiddleware bu cookie'yi okur; sayfa yenilendikten
+// sonra CleanTenantMudLocalizer doğru kültürde çalışır.
+// ---------------------------------------------------------------------------
+window.cleantenant.setLanguageCookie = function (code) {
+    const val = encodeURIComponent('c=' + code + '|uic=' + code);
+    // SameSite=Lax: forceLoad yönlendirmesinde cookie gönderilir
+    document.cookie = '.AspNetCore.Culture=' + val + ';path=/;samesite=lax';
+};
+
 function submitFormWithReturn(action, returnUrl, extraFields) {
     const form = document.createElement('form');
     form.method = 'POST';

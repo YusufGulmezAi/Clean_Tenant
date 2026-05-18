@@ -2,6 +2,12 @@ using CleanTenant.Domain.Identity.Authorization;
 using CleanTenant.Domain.Identity.Support;
 using CleanTenant.Domain.Identity.Tenants;
 using CleanTenant.Domain.Identity.Users;
+using CleanTenant.Domain.LookUp.Banks;
+using CleanTenant.Domain.LookUp.BuildingTypes;
+using CleanTenant.Domain.LookUp.Districts;
+using CleanTenant.Domain.LookUp.Neighborhoods;
+using CleanTenant.Domain.LookUp.Provinces;
+using CleanTenant.Domain.LookUp.ResidentialTypes;
 using Microsoft.EntityFrameworkCore;
 
 namespace CleanTenant.Application.Common.Persistence;
@@ -52,6 +58,24 @@ public interface ICatalogDbContext
 
     /// <summary>System operatörü destek oturum kayıtları.</summary>
     DbSet<SupportSession> SupportSessions { get; }
+
+    /// <summary>LookUp: İl (Province) referans verisi.</summary>
+    DbSet<Province> Provinces { get; }
+
+    /// <summary>LookUp: İlçe (District) referans verisi.</summary>
+    DbSet<District> Districts { get; }
+
+    /// <summary>LookUp: Mahalle (Neighborhood) referans verisi.</summary>
+    DbSet<Neighborhood> Neighborhoods { get; }
+
+    /// <summary>LookUp: Mesken tipi referans verisi (Daire, Ofis, Dükkan vb.).</summary>
+    DbSet<ResidentialType> ResidentialTypes { get; }
+
+    /// <summary>LookUp: Yapı tipi referans verisi (Apartman, AVM vb.).</summary>
+    DbSet<BuildingType> BuildingTypes { get; }
+
+    /// <summary>LookUp: Banka referans verisi (EFT, sanal POS, tahsilat entegrasyonları).</summary>
+    DbSet<Bank> Banks { get; }
 
     /// <summary>Bekleyen değişiklikleri persist eder. Cancellation desteği var.</summary>
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);

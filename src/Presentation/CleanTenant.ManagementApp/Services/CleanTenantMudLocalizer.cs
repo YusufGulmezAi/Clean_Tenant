@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.Extensions.Localization;
 using MudBlazor;
 
@@ -5,21 +6,31 @@ namespace CleanTenant.ManagementApp.Services;
 
 /// <summary>
 /// <para>
-/// MudBlazor'ın default İngilizce resource'larını Türkçe karşılıklarıyla
-/// override eder. <see cref="MudDataGrid{T}"/> filtre/gruplama/sıralama/loading
-/// mesajları + ortak buton metinleri (Apply/Cancel/Clear/Save/Reset) Türkçeleştirildi.
+/// MudBlazor'ın default İngilizce resource'larını aktif UI kültürüne göre override eder.
+/// Türkçe (tr) kültüründe Türkçe karşılıklar döner; diğer dillerde
+/// <c>resourceNotFound: true</c> dönerek MudBlazor'ın kendi İngilizce fallback'ine düşer.
 /// </para>
 /// <para>
-/// Eşleştirilmemiş key'ler için <c>resourceNotFound: true</c> dönülür — MudBlazor
-/// kendi fallback'ine düşer (default İngilizce). Bu sayede yeni MudBlazor sürümü
-/// yeni key'ler eklediğinde uygulama kırılmaz, sadece o key'ler İngilizce kalır.
+/// Program.cs'de <c>AddMudServices()</c>'den ÖNCE kayıt edilmeli — aksi takdirde
+/// MudBlazor'ın <c>TryAddTransient</c>'i bizimkini geçersiz kılabilir.
 /// </para>
 /// </summary>
 public sealed class CleanTenantMudLocalizer : MudLocalizer
 {
     /// <inheritdoc />
-    public override LocalizedString this[string key] => key switch
+    public override LocalizedString this[string key]
     {
+        get
+        {
+            // Türkçe dışındaki kültürlerde MudBlazor'ın kendi İngilizce metnine düş.
+            if (!CultureInfo.CurrentUICulture.TwoLetterISOLanguageName
+                    .Equals("tr", StringComparison.OrdinalIgnoreCase))
+            {
+                return new LocalizedString(key, key, resourceNotFound: true);
+            }
+
+            return key switch
+            {
         // ─── MudDataGrid — Filter / Sort / Group / Loading ────────────────
         "MudDataGrid.AddFilter" => Tr(key, "Filtre Ekle"),
         "MudDataGrid.Apply" => Tr(key, "Uygula"),
@@ -114,9 +125,11 @@ public sealed class CleanTenantMudLocalizer : MudLocalizer
         "MudMessageBox.Yes" => Tr(key, "Evet"),
         "MudMessageBox.No" => Tr(key, "Hayır"),
 
-        // Eşleştirme yok → resourceNotFound:true → MudBlazor default'a düşer
-        _ => new LocalizedString(key, key, resourceNotFound: true),
-    };
+                // Eşleştirme yok → resourceNotFound:true → MudBlazor default'a düşer
+                _ => new LocalizedString(key, key, resourceNotFound: true),
+            };
+        }
+    }
 
     private static LocalizedString Tr(string key, string value)
         => new(key, value, resourceNotFound: false);

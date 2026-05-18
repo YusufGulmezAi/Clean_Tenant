@@ -26,4 +26,8 @@ public interface IMainCatalogReader
 
     /// <summary>Tek company id ile. Cache TTL <c>DetailMediumLived</c> (10 dk).</summary>
     Task<CompanyListItem?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>Düzenleme formu için tam detay — <see cref="CompanyDetail"/>. Cache TTL
+    /// <c>DetailMediumLived</c> (10 dk). Company CRUD'da invalidate edilir.</summary>
+    Task<CompanyDetail?> GetDetailByIdAsync(Guid id, CancellationToken cancellationToken = default);
 }

@@ -16,6 +16,8 @@
     <PackageReference Include="Blazored.LocalStorage" />
     <!-- v0.2.2 — TOTP enrollment QR kodu -->
     <PackageReference Include="QRCoder" />
+    <!-- EF Core migrations — startup project -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" />
   </ItemGroup>
 
   <PropertyGroup>

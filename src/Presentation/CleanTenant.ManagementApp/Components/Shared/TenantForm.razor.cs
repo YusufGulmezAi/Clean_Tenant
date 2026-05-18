@@ -83,6 +83,58 @@ public sealed partial class TenantForm : ComponentBase
     private bool ShowAdminBlock => Mode == TenantFormMode.Create;
     private bool ShowSystemWriteAccess => Mode != TenantFormMode.Create;
 
+    private string _lastFormattedPhone = string.Empty;
+
+    private void FormatAdminPhone()
+    {
+        var raw = Model.AdminPhone ?? string.Empty;
+        var digits = new string(raw.Where(char.IsDigit).ToArray());
+
+        // Kullanıcı yapısal karakter (`)`, boşluk, `-`) sildi: raw kısaldı ama
+        // rakam sayısı değişmedi → bir rakam daha sil ki geri gidebilelim.
+        var prevDigits = new string(_lastFormattedPhone.Where(char.IsDigit).ToArray());
+        if (raw.Length < _lastFormattedPhone.Length
+            && digits.Length == prevDigits.Length
+            && digits.Length > 0)
+        {
+            digits = digits[..^1];
+        }
+
+        _lastFormattedPhone = FormatPhone(digits);
+        Model.AdminPhone = _lastFormattedPhone;
+    }
+
+    private static string FormatPhone(string digits)
+    {
+        if (digits.Length > 11) digits = digits[..11];
+        int n = digits.Length;
+        if (n == 0) return string.Empty;
+
+        var sb = new System.Text.StringBuilder();
+        sb.Append(digits[0]);
+        if (n == 1) return sb.ToString();
+        sb.Append('(').Append(digits[1]);
+        if (n == 2) return sb.ToString();
+        sb.Append(digits[2]);
+        if (n == 3) return sb.ToString();
+        sb.Append(digits[3]).Append(')');
+        if (n == 4) return sb.ToString();
+        sb.Append(' ').Append(digits[4]);
+        if (n == 5) return sb.ToString();
+        sb.Append(digits[5]);
+        if (n == 6) return sb.ToString();
+        sb.Append(digits[6]);
+        if (n == 7) return sb.ToString();
+        sb.Append('-').Append(digits[7]);
+        if (n == 8) return sb.ToString();
+        sb.Append(digits[8]);
+        if (n == 9) return sb.ToString();
+        sb.Append('-').Append(digits[9]);
+        if (n == 10) return sb.ToString();
+        sb.Append(digits[10]);
+        return sb.ToString();
+    }
+
     private string IdentityNumberLabel => Model.LegalIdentityType switch
     {
         LegalIdentityType.Vkn => "VKN *",
