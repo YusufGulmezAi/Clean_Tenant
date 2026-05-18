@@ -6,48 +6,87 @@
 
 @*
     v0.2.3.b — AppBar'da "Aktif Tenant" dropdown'u.
-    - Cookie claim'lerinden (scope, sid) yetkiyi okur; Mediator'a bağlanmaz çünkü
-      SignalR circuit'inde ICurrentSessionAccessor.Current null oluyor.
-    - System scope kullanıcı tüm Active tenant'ları listeler (cross-tenant).
-    - Tenant scope kullanıcı yalnız kendi atamasındaki tenant'ları listeler.
-    - 0 tenant erişimi varsa render etmez.
-    - Tıklama → JS dinamik form post /auth/switch-tenant → SwitchTenantCommand →
-      cookie yenile → returnUrl'e full reload.
+    - Cookie claim'lerinden scope ve user id okur; Mediator bypass.
+    - System scope kullanıcı: tüm Active tenant'lar + "System Scope" (geri dönüş için).
+    - Tenant scope kullanıcı: yalnız kendi atamasındaki tenant'lar (genelde 1; bu durumda
+      dropdown hâlâ render edilir ama tek seçenek görünür — bilgi amaçlı).
+    - Dropdown içinde anlık arama kutusu (Tenant adı + URL kodu üzerinde).
+    - Tıklama → JS form post → cookie yenile → returnUrl'e full reload.
 *@
 
-@if (_tenants is not null && _tenants.Count >= 1)
+@if (_canShow)
 {
     <MudMenu Color="Color.Inherit"
              ActivationEvent="@MouseEvent.LeftClick"
              AnchorOrigin="Origin.BottomLeft"
              TransformOrigin="Origin.TopLeft"
-             Class="mr-2">
+             Class="ml-3">
         <ActivatorContent>
-            <MudButton Variant="Variant.Text"
-                       Color="Color.Inherit"
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Secondary"
                        StartIcon="@Icons.Material.Filled.Business"
                        EndIcon="@Icons.Material.Filled.ArrowDropDown"
                        Class="text-transform-none">
-                @(_activeTenantName ?? "Tenant seç")
+                @CurrentLabel
             </MudButton>
         </ActivatorContent>
         <ChildContent>
-            <MudText Typo="Typo.caption" Color="Color.Default" Class="px-4 pt-2 pb-1 d-block">
-                Aktif tenant
-            </MudText>
-            @foreach (var tenant in _tenants)
+            <div class="px-3 pt-3 pb-2" style="min-width: 320px;">
+                <MudTextField T="string"
+                              Value="@_searchText"
+                              ValueChanged="@OnSearchChanged"
+                              Placeholder="Tenant ara…"
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Search"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Immediate="true"
+                              Clearable="true"
+                              DebounceInterval="100" />
+            </div>
+
+            <MudDivider />
+
+            @if (_isSystemUser)
             {
-                var isActive = ActiveTenantId == tenant.Id;
-                <MudMenuItem Icon="@(isActive ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Domain)"
-                             IconColor="@(isActive ? Color.Success : Color.Default)"
-                             OnClick="@(() => SubmitSwitchAsync(tenant.Id))">
+                @* "System Scope" — Tenant'tan geri dönüş kanalı. *@
+                <MudMenuItem Icon="@Icons.Material.Filled.AdminPanelSettings"
+                             IconColor="@(ActiveTenantId is null ? Color.Success : Color.Error)"
+                             OnClick="@SubmitSwitchToSystemAsync">
                     <div class="d-flex flex-column">
-                        <span>@tenant.Name</span>
-                        <MudText Typo="Typo.caption" Color="Color.Default" Style="font-family: monospace;">
-                            @tenant.UrlCode
+                        <span><b>System Scope</b></span>
+                        <MudText Typo="Typo.caption" Color="Color.Default">
+                            Cross-tenant operasyonel görünürlük
                         </MudText>
                     </div>
                 </MudMenuItem>
+                <MudDivider />
+            }
+
+            @if (_filteredTenants.Count == 0)
+            {
+                <div class="px-4 py-3 d-flex justify-center">
+                    <MudText Typo="Typo.body2" Color="Color.Default">
+                        Sonuç bulunamadı
+                    </MudText>
+                </div>
+            }
+            else
+            {
+                @foreach (var tenant in _filteredTenants)
+                {
+                    var isActive = ActiveTenantId == tenant.Id;
+                    <MudMenuItem Icon="@(isActive ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Domain)"
+                                 IconColor="@(isActive ? Color.Success : Color.Tertiary)"
+                                 OnClick="@(() => SubmitSwitchAsync(tenant.Id))">
+                        <div class="d-flex flex-column">
+                            <span>@tenant.Name</span>
+                            <MudText Typo="Typo.caption" Color="Color.Default" Style="font-family: monospace;">
+                                @tenant.UrlCode
+                            </MudText>
+                        </div>
+                    </MudMenuItem>
+                }
             }
         </ChildContent>
     </MudMenu>
@@ -57,10 +96,25 @@
     [Parameter] public Guid? ActiveTenantId { get; set; }
     [Parameter] public string? ActiveTenantName { get; set; }
 
-    private List<TenantOption>? _tenants;
-    private string? _activeTenantName;
+    private List<TenantOption>? _allTenants;
+    private List<TenantOption> _filteredTenants = [];
+    private string _searchText = string.Empty;
+    private bool _isSystemUser;
+    private bool _canShow;
 
     private sealed record TenantOption(Guid Id, string UrlCode, string Name);
+
+    private string CurrentLabel
+    {
+        get
+        {
+            if (ActiveTenantId is null && _isSystemUser)
+            {
+                return "System Scope";
+            }
+            return ActiveTenantName ?? "Tenant seç";
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -71,47 +125,61 @@
             return;
         }
 
-        // Cookie auth'ta scope claim'i AuthEndpoints.SignInWithSessionAsync tarafından
-        // eklendi (ScopeClaim = "scope"). System scope kullanıcılar cross-tenant
-        // erişebilir; alt scope yalnız UserRoleAssignments üzerinden gelen tenant'lar.
         var scope = user.FindFirst("scope")?.Value;
-        var isSystemScope = string.Equals(scope, "System", StringComparison.OrdinalIgnoreCase);
+        _isSystemUser = string.Equals(scope, "System", StringComparison.OrdinalIgnoreCase);
 
-        IQueryable<CleanTenant.Domain.Identity.Tenants.Tenant> source = Db.Tenants
-            .AsNoTracking()
-            .Where(t => t.Status == CleanTenant.Domain.Identity.Tenants.TenantStatus.Active);
-
-        if (!isSystemScope)
+        if (_isSystemUser)
         {
-            // Kullanıcı id'sini ClaimTypes.NameIdentifier'dan al (cookie'de sid'in
-            // yanında AuthEndpoints'te eklendi).
-            var idClaim = user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-            if (!Guid.TryParse(idClaim, out _))
-            {
-                return;
-            }
+            // System scope: tüm Active tenant'lar görünür.
+            _allTenants = await Db.Tenants
+                .AsNoTracking()
+                .Where(t => t.Status == CleanTenant.Domain.Identity.Tenants.TenantStatus.Active)
+                .OrderBy(t => t.Name)
+                .Select(t => new TenantOption(t.Id, t.UrlCode, t.Name))
+                .ToListAsync();
+        }
+        else
+        {
+            // Alt scope: yalnız tek tenant; dropdown UI'ı çok bilgi vermez.
+            // Şimdilik gizliyoruz; v0.2.4 Tenant onboarding wizard'ında multi-tenant
+            // kullanıcı senaryosu eklenince genişletiriz.
+            _allTenants = null;
+        }
 
-            // NameIdentifier sid'i taşıyor (session id), user id değil. Session id'den
-            // user id'yi okumak için Redis lookup gerekirdi. Daha pragmatik: alt scope
-            // kullanıcı zaten tek tenant'a sahip (login akışı ScopeSelector.SelectPrimary
-            // ile o tenant'a yönlendirdi); dropdown UI'ı sadece System scope için anlamlı.
+        _filteredTenants = _allTenants ?? [];
+        _canShow = _isSystemUser; // Sadece System için dropdown göster
+    }
+
+    private void OnSearchChanged(string value)
+    {
+        _searchText = value ?? string.Empty;
+        if (_allTenants is null)
+        {
+            _filteredTenants = [];
             return;
         }
 
-        _tenants = await source
-            .OrderBy(t => t.Name)
-            .Select(t => new TenantOption(t.Id, t.UrlCode, t.Name))
-            .ToListAsync();
-    }
+        if (string.IsNullOrWhiteSpace(_searchText))
+        {
+            _filteredTenants = _allTenants;
+            return;
+        }
 
-    protected override void OnParametersSet()
-    {
-        _activeTenantName = ActiveTenantName;
+        _filteredTenants = _allTenants
+            .Where(t => t.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase)
+                     || t.UrlCode.Contains(_searchText, StringComparison.OrdinalIgnoreCase))
+            .ToList();
     }
 
     private async Task SubmitSwitchAsync(Guid tenantId)
     {
         var returnUrl = "/" + Nav.ToBaseRelativePath(Nav.Uri);
         await JS.InvokeVoidAsync("cleantenant.submitTenantSwitch", tenantId.ToString(), returnUrl);
+    }
+
+    private async Task SubmitSwitchToSystemAsync()
+    {
+        var returnUrl = "/" + Nav.ToBaseRelativePath(Nav.Uri);
+        await JS.InvokeVoidAsync("cleantenant.submitSwitchToSystem", returnUrl);
     }
 }

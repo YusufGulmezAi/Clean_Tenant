@@ -31,6 +31,7 @@ public static class AuthEndpoints
         // v0.2.3.b — AppBar "Aktif Tenant" dropdown akışı.
         group.MapGet("/accessible-tenants", GetAccessibleTenantsAsync).RequireAuthorization();
         group.MapPost("/switch-tenant", SwitchTenantAsync).RequireAuthorization();
+        group.MapPost("/switch-to-system", SwitchToSystemAsync).RequireAuthorization();
 
         // Self: tüm cihazlardan çıkış
         routes.MapPost("/api/v1/users/me/sessions/logout-all", LogoutAllSessionsAsync)
@@ -81,6 +82,19 @@ public static class AuthEndpoints
         var ua = httpContext.Request.Headers.UserAgent.ToString();
         var command = new SwitchTenantCommand(request.TenantId, ip, ua);
         var result = await mediator.Send(command, cancellationToken);
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : Results.Json(new { errors = result.Errors }, statusCode: MapErrorTypeToStatus(result.FirstError.Type));
+    }
+
+    private static async Task<IResult> SwitchToSystemAsync(
+        [FromServices] IMediator mediator,
+        HttpContext httpContext,
+        CancellationToken cancellationToken)
+    {
+        var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        var ua = httpContext.Request.Headers.UserAgent.ToString();
+        var result = await mediator.Send(new SwitchToSystemCommand(ip, ua), cancellationToken);
         return result.IsSuccess
             ? Results.Ok(result.Value)
             : Results.Json(new { errors = result.Errors }, statusCode: MapErrorTypeToStatus(result.FirstError.Type));

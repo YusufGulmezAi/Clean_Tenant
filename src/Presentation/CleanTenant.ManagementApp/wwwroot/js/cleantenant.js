@@ -177,26 +177,36 @@ window.cleantenant.downloadTextFile = function (filename, content) {
 // yolunu kullanır. Component MudMenuItem OnClick'inde bunu çağırır.
 // ---------------------------------------------------------------------------
 window.cleantenant.submitTenantSwitch = function (tenantId, returnUrl) {
+    submitFormWithReturn('/auth/switch-tenant', returnUrl, { tenantId: tenantId });
+};
+
+// System scope'a geri dönüş (TenantSwitcher dropdown'undaki "System Scope" seçeneği)
+window.cleantenant.submitSwitchToSystem = function (returnUrl) {
+    submitFormWithReturn('/auth/switch-to-system', returnUrl, {});
+};
+
+function submitFormWithReturn(action, returnUrl, extraFields) {
     const form = document.createElement('form');
     form.method = 'POST';
-    form.action = '/auth/switch-tenant';
+    form.action = action;
     form.style.display = 'none';
 
-    const tenantInput = document.createElement('input');
-    tenantInput.type = 'hidden';
-    tenantInput.name = 'tenantId';
-    tenantInput.value = tenantId;
-    form.appendChild(tenantInput);
+    for (const [name, value] of Object.entries(extraFields || {})) {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = name;
+        input.value = value;
+        form.appendChild(input);
+    }
 
     if (returnUrl) {
         const returnInput = document.createElement('input');
         returnInput.type = 'hidden';
         returnInput.name = 'returnUrl';
-        // returnUrl bir relative path; '/' eki için baş slash garantile
         returnInput.value = returnUrl.startsWith('/') ? returnUrl : '/' + returnUrl;
         form.appendChild(returnInput);
     }
 
     document.body.appendChild(form);
     form.submit();
-};
+}

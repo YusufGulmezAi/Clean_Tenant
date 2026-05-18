@@ -29,6 +29,45 @@ public static class AuthEndpoints
     /// <summary>Aktif scope seviyesi claim adı (System/Tenant/Company/Unit).</summary>
     public const string ScopeClaim = "scope";
 
+    // v0.2.2.d — 2FA challenge / enrollment token'ları artık query string yerine
+    // kısa ömürlü HttpOnly cookie ile taşınır. Önceki davranışta token URL bar'da
+    // görünüyordu: hem profesyonel olmayan görüntü, hem browser history / Referer
+    // header / server log'larında leak. HttpOnly cookie XSS'e karşı da korur.
+    internal const string ChallengeCookieName = "__ct_2fa_chal";
+    internal const string EnrollmentCookieName = "__ct_2fa_enroll";
+
+    // Challenge token backend'de 5 dk; cookie TTL'ini eşle.
+    private static readonly CookieOptions ChallengeCookieOptions = new()
+    {
+        HttpOnly = true,
+        Secure = true,
+        SameSite = SameSiteMode.Strict,
+        Path = "/",
+        MaxAge = TimeSpan.FromMinutes(5),
+        IsEssential = true,
+    };
+
+    // Enrollment challenge backend'de 10 dk (UI'da yazılı).
+    private static readonly CookieOptions EnrollmentCookieOptions = new()
+    {
+        HttpOnly = true,
+        Secure = true,
+        SameSite = SameSiteMode.Strict,
+        Path = "/",
+        MaxAge = TimeSpan.FromMinutes(10),
+        IsEssential = true,
+    };
+
+    // Cookie sil: Delete'in attribute'ları set ile birebir uyuşmalı, aksi halde
+    // browser farklı cookie sayar ve eskisi kalır.
+    private static readonly CookieOptions DeleteCookieOptions = new()
+    {
+        HttpOnly = true,
+        Secure = true,
+        SameSite = SameSiteMode.Strict,
+        Path = "/",
+    };
+
     /// <summary>Cookie auth endpoint'lerini route'a bağlar.</summary>
     public static IEndpointRouteBuilder MapAuthEndpoints(this IEndpointRouteBuilder routes)
     {
@@ -67,20 +106,24 @@ public static class AuthEndpoints
               .DisableAntiforgery()
               .RequireAuthorization();
 
+        // v0.2.3.b — System scope'a geri dönüş.
+        routes.MapPost("/auth/switch-to-system", SwitchToSystemFormAsync)
+              .DisableAntiforgery()
+              .RequireAuthorization();
+
         return routes;
     }
 
     private static async Task<IResult> Verify2FaAsync(
         HttpContext httpContext,
-        [FromForm] string token,
         [FromForm] string method,
         [FromForm] string code,
         [FromServices] IMediator mediator,
         CancellationToken cancellationToken)
     {
-        if (!Guid.TryParseExact(token, "N", out var challengeToken) &&
-            !Guid.TryParse(token, out challengeToken))
+        if (!TryReadChallengeCookie(httpContext, out var challengeToken))
         {
+            httpContext.Response.Cookies.Delete(ChallengeCookieName, DeleteCookieOptions);
             return Results.Redirect("/login?error=AUTH-2FA-CHALLENGE-NOT-FOUND");
         }
 
@@ -91,32 +134,55 @@ public static class AuthEndpoints
         var result = await mediator.Send(command, cancellationToken);
         if (result.IsFailure)
         {
-            return Results.Redirect($"/2fa/challenge?token={challengeToken:N}&error={Uri.EscapeDataString(result.FirstError.Code)}");
+            // Cookie hâlâ geçerli — kullanıcı kodu tekrar deneyebilsin diye TTL'i yenile.
+            httpContext.Response.Cookies.Append(ChallengeCookieName, challengeToken.ToString("N"), ChallengeCookieOptions);
+            return Results.Redirect($"/2fa/challenge?error={Uri.EscapeDataString(result.FirstError.Code)}");
         }
 
+        httpContext.Response.Cookies.Delete(ChallengeCookieName, DeleteCookieOptions);
         await SignInWithSessionAsync(httpContext, result.Value!, rememberMe: false);
         return Results.Redirect("/");
     }
 
     private static async Task<IResult> Send2FaCodeAsync(
-        [FromForm] string token,
+        HttpContext httpContext,
         [FromForm] string method,
         [FromServices] IMediator mediator,
         CancellationToken cancellationToken)
     {
-        if (!Guid.TryParseExact(token, "N", out var challengeToken) &&
-            !Guid.TryParse(token, out challengeToken))
+        if (!TryReadChallengeCookie(httpContext, out var challengeToken))
         {
+            httpContext.Response.Cookies.Delete(ChallengeCookieName, DeleteCookieOptions);
             return Results.Redirect("/login?error=AUTH-2FA-CHALLENGE-NOT-FOUND");
         }
 
         var result = await mediator.Send(new SendTwoFactorCodeCommand(challengeToken, method), cancellationToken);
+
+        // Her iki dalda da cookie'yi tazele — kullanıcı kod girmeye devam edecek.
+        httpContext.Response.Cookies.Append(ChallengeCookieName, challengeToken.ToString("N"), ChallengeCookieOptions);
+
         if (result.IsFailure)
         {
-            return Results.Redirect($"/2fa/challenge?token={challengeToken:N}&error={Uri.EscapeDataString(result.FirstError.Code)}");
+            return Results.Redirect($"/2fa/challenge?error={Uri.EscapeDataString(result.FirstError.Code)}");
         }
 
-        return Results.Redirect($"/2fa/challenge?token={challengeToken:N}&info={Uri.EscapeDataString("Kod gönderildi (Development: console log).")}");
+        return Results.Redirect($"/2fa/challenge?info={Uri.EscapeDataString("Kod gönderildi (Development: console log).")}");
+    }
+
+    private static bool TryReadChallengeCookie(HttpContext httpContext, out Guid challengeToken)
+    {
+        challengeToken = Guid.Empty;
+        var raw = httpContext.Request.Cookies[ChallengeCookieName];
+        if (string.IsNullOrEmpty(raw)) return false;
+        return Guid.TryParseExact(raw, "N", out challengeToken) || Guid.TryParse(raw, out challengeToken);
+    }
+
+    private static bool TryReadEnrollmentCookie(HttpContext httpContext, out Guid challengeToken)
+    {
+        challengeToken = Guid.Empty;
+        var raw = httpContext.Request.Cookies[EnrollmentCookieName];
+        if (string.IsNullOrEmpty(raw)) return false;
+        return Guid.TryParseExact(raw, "N", out challengeToken) || Guid.TryParse(raw, out challengeToken);
     }
 
     private static async Task<IResult> SignInAsync(
@@ -149,14 +215,16 @@ public static class AuthEndpoints
         if (login.Status == LoginStatus.TwoFactorRequired)
         {
             var token = login.Challenge!.ChallengeToken;
-            return Results.Redirect($"/2fa/challenge?token={token:N}");
+            httpContext.Response.Cookies.Append(ChallengeCookieName, token.ToString("N"), ChallengeCookieOptions);
+            return Results.Redirect("/2fa/challenge");
         }
 
         // v0.2.2.a — System scope kullanıcısı + 2FA yok → pre-auth enrollment sayfasına
         if (login.Status == LoginStatus.EnrollmentRequired)
         {
             var token = login.EnrollmentChallenge!.ChallengeToken;
-            return Results.Redirect($"/2fa/enroll-pre-auth?token={token:N}");
+            httpContext.Response.Cookies.Append(EnrollmentCookieName, token.ToString("N"), EnrollmentCookieOptions);
+            return Results.Redirect("/2fa/enroll-pre-auth");
         }
 
         // Success → cookie set
@@ -194,15 +262,37 @@ public static class AuthEndpoints
         return Results.Redirect(string.IsNullOrEmpty(returnUrl) ? "/" : returnUrl);
     }
 
-    private static async Task<IResult> FinalizePreAuthEnrollmentAsync(
+    private static async Task<IResult> SwitchToSystemFormAsync(
         HttpContext httpContext,
-        [FromForm] string token,
+        [FromForm] string? returnUrl,
         [FromServices] IMediator mediator,
         CancellationToken cancellationToken)
     {
-        if (!Guid.TryParseExact(token, "N", out var challengeToken) &&
-            !Guid.TryParse(token, out challengeToken))
+        var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        var ua = httpContext.Request.Headers.UserAgent.ToString();
+        var result = await mediator.Send(new SwitchToSystemCommand(ip, ua), cancellationToken);
+
+        if (result.IsFailure)
         {
+            var fallback = string.IsNullOrEmpty(returnUrl) ? "/" : returnUrl;
+            var sep = fallback.Contains('?') ? '&' : '?';
+            return Results.Redirect($"{fallback}{sep}switch-error={Uri.EscapeDataString(result.FirstError.Code)}");
+        }
+
+        await httpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+        await SignInWithSessionAsync(httpContext, result.Value!, rememberMe: false);
+
+        return Results.Redirect(string.IsNullOrEmpty(returnUrl) ? "/" : returnUrl);
+    }
+
+    private static async Task<IResult> FinalizePreAuthEnrollmentAsync(
+        HttpContext httpContext,
+        [FromServices] IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        if (!TryReadEnrollmentCookie(httpContext, out var challengeToken))
+        {
+            httpContext.Response.Cookies.Delete(EnrollmentCookieName, DeleteCookieOptions);
             return Results.Redirect("/login?error=AUTH-2FA-ENROLL-CHALLENGE-NOT-FOUND");
         }
 
@@ -215,9 +305,12 @@ public static class AuthEndpoints
 
         if (result.IsFailure)
         {
+            // Finalize başarısız → cookie sil; kullanıcı baştan login akışına yönlensin.
+            httpContext.Response.Cookies.Delete(EnrollmentCookieName, DeleteCookieOptions);
             return Results.Redirect($"/login?error={Uri.EscapeDataString(result.FirstError.Code)}");
         }
 
+        httpContext.Response.Cookies.Delete(EnrollmentCookieName, DeleteCookieOptions);
         await SignInWithSessionAsync(httpContext, result.Value!, rememberMe: false);
         return Results.Redirect("/");
     }

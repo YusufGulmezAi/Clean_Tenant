@@ -104,6 +104,43 @@ public sealed class TenantSwitchTests
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
+    [Fact]
+    public async Task SwitchToSystem_anonim_401_donmeli()
+    {
+        var client = _fixture.CreateClient();
+        var response = await client.PostAsync("/api/v1/auth/switch-to-system", content: null);
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task SwitchToSystem_System_user_basariyla_donebilmeli()
+    {
+        var tenantId = await _fixture.SeedTenantAsync($"SystemReturn-{Guid.NewGuid():N}");
+
+        var (client, _, _) = await _fixture.CreateAuthenticatedClientAsync();
+
+        // Önce tenant'a geç
+        var switchResp = await client.PostAsJsonAsync(
+            "/api/v1/auth/switch-tenant", new { tenantId });
+        switchResp.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        // Yeni JWT'yi al — tenant scope'ta
+        var tenantTokens = await switchResp.Content.ReadFromJsonAsync<TokenShape>();
+        tenantTokens.Should().NotBeNull();
+        tenantTokens!.CurrentScope.TenantId.Should().Be(tenantId);
+        client.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", tenantTokens.AccessToken);
+
+        // System'e geri dön
+        var systemResp = await client.PostAsync("/api/v1/auth/switch-to-system", content: null);
+        systemResp.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var systemTokens = await systemResp.Content.ReadFromJsonAsync<TokenShape>();
+        systemTokens.Should().NotBeNull();
+        systemTokens!.CurrentScope.Level.Should().Be("System");
+        systemTokens.CurrentScope.TenantId.Should().BeNull();
+    }
+
     private async Task<Guid> SeedInactiveTenantAsync(string name)
     {
         using var scope = _fixture.Services.CreateScope();
