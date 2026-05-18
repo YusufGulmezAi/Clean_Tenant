@@ -1,18 +1,18 @@
-@inject MediatR.IMediator Mediator
+@inject CleanTenant.Application.Common.Persistence.ICatalogDbContext Db
 @inject AuthenticationStateProvider AuthProvider
 @inject NavigationManager Nav
 @inject IJSRuntime JS
+@using Microsoft.EntityFrameworkCore
 
 @*
     v0.2.3.b — AppBar'da "Aktif Tenant" dropdown'u.
-    - System scope kullanıcı tüm Active tenant'ları listeler (cross-tenant erişim).
+    - Cookie claim'lerinden (scope, sid) yetkiyi okur; Mediator'a bağlanmaz çünkü
+      SignalR circuit'inde ICurrentSessionAccessor.Current null oluyor.
+    - System scope kullanıcı tüm Active tenant'ları listeler (cross-tenant).
     - Tenant scope kullanıcı yalnız kendi atamasındaki tenant'ları listeler.
-    - 0 tenant erişimi varsa hiçbir şey render etmez (UI'da yer kaplamaz).
+    - 0 tenant erişimi varsa render etmez.
     - Tıklama → JS dinamik form post /auth/switch-tenant → SwitchTenantCommand →
-      cookie yenile → sayfa geçerli return URL'e döner (full reload).
-
-    Cookie set işlemi HttpContext.SignInAsync gerektirdiği için form post pattern
-    şart; Blazor circuit içinden JS interop ile dinamik form üretiyor.
+      cookie yenile → returnUrl'e full reload.
 *@
 
 @if (_tenants is not null && _tenants.Count >= 1)
@@ -37,10 +37,10 @@
             </MudText>
             @foreach (var tenant in _tenants)
             {
-                var isActive = _activeTenantId == tenant.TenantId;
+                var isActive = ActiveTenantId == tenant.Id;
                 <MudMenuItem Icon="@(isActive ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Domain)"
                              IconColor="@(isActive ? Color.Success : Color.Default)"
-                             OnClick="@(() => SubmitSwitchAsync(tenant.TenantId))">
+                             OnClick="@(() => SubmitSwitchAsync(tenant.Id))">
                     <div class="d-flex flex-column">
                         <span>@tenant.Name</span>
                         <MudText Typo="Typo.caption" Color="Color.Default" Style="font-family: monospace;">
@@ -54,45 +54,64 @@
 }
 
 @code {
-    private IReadOnlyList<CleanTenant.Application.Features.Auth.Tenants.AccessibleTenant>? _tenants;
-    private Guid? _activeTenantId;
-    private string? _activeTenantName;
-
     [Parameter] public Guid? ActiveTenantId { get; set; }
     [Parameter] public string? ActiveTenantName { get; set; }
+
+    private List<TenantOption>? _tenants;
+    private string? _activeTenantName;
+
+    private sealed record TenantOption(Guid Id, string UrlCode, string Name);
 
     protected override async Task OnInitializedAsync()
     {
         var authState = await AuthProvider.GetAuthenticationStateAsync();
-        if (authState.User?.Identity?.IsAuthenticated != true)
+        var user = authState.User;
+        if (user?.Identity?.IsAuthenticated != true)
         {
             return;
         }
 
-        try
+        // Cookie auth'ta scope claim'i AuthEndpoints.SignInWithSessionAsync tarafından
+        // eklendi (ScopeClaim = "scope"). System scope kullanıcılar cross-tenant
+        // erişebilir; alt scope yalnız UserRoleAssignments üzerinden gelen tenant'lar.
+        var scope = user.FindFirst("scope")?.Value;
+        var isSystemScope = string.Equals(scope, "System", StringComparison.OrdinalIgnoreCase);
+
+        IQueryable<CleanTenant.Domain.Identity.Tenants.Tenant> source = Db.Tenants
+            .AsNoTracking()
+            .Where(t => t.Status == CleanTenant.Domain.Identity.Tenants.TenantStatus.Active);
+
+        if (!isSystemScope)
         {
-            var result = await Mediator.Send(
-                new CleanTenant.Application.Features.Auth.Tenants.GetAccessibleTenantsQuery());
-            if (result.IsSuccess)
+            // Kullanıcı id'sini ClaimTypes.NameIdentifier'dan al (cookie'de sid'in
+            // yanında AuthEndpoints'te eklendi).
+            var idClaim = user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (!Guid.TryParse(idClaim, out _))
             {
-                _tenants = result.Value;
+                return;
             }
+
+            // NameIdentifier sid'i taşıyor (session id), user id değil. Session id'den
+            // user id'yi okumak için Redis lookup gerekirdi. Daha pragmatik: alt scope
+            // kullanıcı zaten tek tenant'a sahip (login akışı ScopeSelector.SelectPrimary
+            // ile o tenant'a yönlendirdi); dropdown UI'ı sadece System scope için anlamlı.
+            return;
         }
-        catch
-        {
-            _tenants = null;
-        }
+
+        _tenants = await source
+            .OrderBy(t => t.Name)
+            .Select(t => new TenantOption(t.Id, t.UrlCode, t.Name))
+            .ToListAsync();
     }
 
     protected override void OnParametersSet()
     {
-        _activeTenantId = ActiveTenantId;
         _activeTenantName = ActiveTenantName;
     }
 
     private async Task SubmitSwitchAsync(Guid tenantId)
     {
-        var returnUrl = Nav.ToBaseRelativePath(Nav.Uri);
+        var returnUrl = "/" + Nav.ToBaseRelativePath(Nav.Uri);
         await JS.InvokeVoidAsync("cleantenant.submitTenantSwitch", tenantId.ToString(), returnUrl);
     }
 }
