@@ -1,10 +1,18 @@
 @page "/2fa/challenge"
 @layout EmptyLayout
+@implements IDisposable
+@inject PersistentComponentState ApplicationState
 @attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
 @*
     2FA Challenge sayfası — Login akışında "TwoFactorRequired" sonucu sonrası
-    yönlendirilir. Token query string'den (?token=...) alınır. Form
-    /auth/2fa/verify endpoint'ine POST eder.
+    yönlendirilir. v0.2.2.d: challenge token artık URL query'sinde değil,
+    HttpOnly kısa ömürlü cookie'de (__ct_2fa_chal). Form'lar /auth/2fa/verify ve
+    /auth/2fa/send-code endpoint'lerine POST eder — endpoint cookie'den okur.
+
+    NOT: App.razor'da Routes @rendermode="InteractiveServer" → bu sayfa da çift
+    render edilir (prerender + interactive). HttpContext sadece prerender'da
+    mevcut; cookie'nin VARLIK BİLGİSİ (token değeri değil) PersistentComponentState
+    ile interactive faza taşınır. Form post'larında cookie endpoint'e otomatik gider.
 *@
 
 <PageTitle>2FA Doğrulama — CleanTenant</PageTitle>
@@ -15,10 +23,11 @@
         <MudText Typo="Typo.h4" Class="ml-2">İki Faktörlü Doğrulama</MudText>
     </div>
 
-    @if (string.IsNullOrEmpty(Token))
+    @if (!_hasChallenge)
     {
         <MudAlert Severity="Severity.Error" Class="mb-4">
-            Geçersiz challenge token. <MudLink Href="/login">Giriş sayfasına dön</MudLink>.
+            Aktif bir doğrulama oturumu bulunamadı (süresi dolmuş ya da iptal edilmiş olabilir).
+            <MudLink Href="/login">Giriş sayfasına dön</MudLink>.
         </MudAlert>
     }
     else
@@ -39,8 +48,6 @@
         </MudText>
 
         <form method="post" action="/auth/2fa/verify">
-            <input type="hidden" name="token" value="@Token" />
-
             <div class="mb-3">
                 <label for="method" class="d-block mb-1" style="font-weight: 500;">Yöntem</label>
                 <select id="method" name="method"
@@ -148,7 +155,6 @@
         <MudDivider Class="my-4" />
 
         <form method="post" action="/auth/2fa/send-code">
-            <input type="hidden" name="token" value="@Token" />
             <input type="hidden" name="method" value="Email" />
             <button type="submit"
                     style="width: 100%; padding: 8px; background: transparent; color: var(--mud-palette-primary); border: 1px solid var(--mud-palette-primary); border-radius: 4px; cursor: pointer;">
@@ -163,14 +169,47 @@
 </MudPaper>
 
 @code {
-    [SupplyParameterFromQuery(Name = "token")]
-    public string? Token { get; set; }
+    [CascadingParameter]
+    public HttpContext? HttpContext { get; set; }
 
     [SupplyParameterFromQuery(Name = "error")]
     public string? ErrorCode { get; set; }
 
     [SupplyParameterFromQuery(Name = "info")]
     public string? Info { get; set; }
+
+    // v0.2.2.d — Challenge token cookie'de; sayfa sadece cookie'nin VARLIK
+    // bilgisini bilir (değeri form'lara yansıtmaz, leak yok). Endpoint
+    // Verify/Send-code çağrılarında cookie'den okur. Bayrak interactive faza
+    // PersistentComponentState ile taşınır.
+    private const string PersistStateKey = "2fa-chal-present";
+    private bool _hasChallenge;
+    private PersistingComponentStateSubscription _persistingSubscription;
+
+    protected override void OnInitialized()
+    {
+        _persistingSubscription = ApplicationState.RegisterOnPersisting(PersistFlagAsync);
+
+        if (ApplicationState.TryTakeFromJson<bool>(PersistStateKey, out var saved))
+        {
+            // Interactive faz: prerender'da persist edilen bayrağı al.
+            _hasChallenge = saved;
+        }
+        else
+        {
+            // Prerender (statik SSR): HttpContext'ten cookie varlığını oku.
+            var raw = HttpContext?.Request.Cookies[AuthEndpoints.ChallengeCookieName];
+            _hasChallenge = !string.IsNullOrEmpty(raw);
+        }
+    }
+
+    private Task PersistFlagAsync()
+    {
+        ApplicationState.PersistAsJson(PersistStateKey, _hasChallenge);
+        return Task.CompletedTask;
+    }
+
+    public void Dispose() => _persistingSubscription.Dispose();
 
     private static string MessageFor(string code) => code switch
     {
