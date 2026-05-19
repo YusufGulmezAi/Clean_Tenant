@@ -3,10 +3,13 @@
 @inject MediatR.IMediator Mediator
 @inject AuthenticationStateProvider AuthProvider
 @inject ISnackbar Snackbar
+@inject IMainCatalogReader CompanyReader
 @using CleanTenant.Application.Features.System.Audit
+@using CleanTenant.Application.Features.Main.Readers
 @using CleanTenant.Domain.Auditing
 @using MudBlazor
 @using System.Text.Json
+@using System.Globalization
 
 <PageTitle>Audit Explorer — Sistem</PageTitle>
 
@@ -25,31 +28,46 @@ else
         <MudExpansionPanel Text="Filtreler" Icon="@Icons.Material.Filled.FilterList">
             <MudGrid>
                 <MudItem xs="12" sm="6" md="3">
-                    <MudDatePicker Label="Başlangıç Tarihi"
-                                   @bind-Date="_filterDateFrom"
-                                   Variant="Variant.Outlined"
-                                   Margin="Margin.Dense" />
-                </MudItem>
-                <MudItem xs="12" sm="6" md="3">
-                    <MudDatePicker Label="Bitiş Tarihi"
-                                   @bind-Date="_filterDateTo"
-                                   Variant="Variant.Outlined"
-                                   Margin="Margin.Dense" />
-                </MudItem>
-                <MudItem xs="12" sm="6" md="3">
-                    <MudTextField @bind-Value="_filterUserEmail"
-                                  Label="Kullanıcı E-posta"
+                    <MudTextField @bind-Value="_filterDateFromStr"
+                                  Label="Başlangıç Tarihi"
                                   Variant="Variant.Outlined"
                                   Margin="Margin.Dense"
-                                  Immediate="true" />
+                                  Placeholder="GG.AA.YYYY"
+                                  HelperText="GG.AA.YYYY veya GG/AA/YYYY" />
                 </MudItem>
                 <MudItem xs="12" sm="6" md="3">
-                    <MudTextField @bind-Value="_filterEntityType"
-                                  Label="Entity Tipi"
+                    <MudTextField @bind-Value="_filterDateToStr"
+                                  Label="Bitiş Tarihi"
                                   Variant="Variant.Outlined"
                                   Margin="Margin.Dense"
-                                  Immediate="true"
-                                  HelperText="Örn: Tenant, User, Role" />
+                                  Placeholder="GG.AA.YYYY"
+                                  HelperText="GG.AA.YYYY veya GG/AA/YYYY" />
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudAutocomplete T="string"
+                                     @bind-Value="_filterUserFullName"
+                                     SearchFunc="SearchUserNames"
+                                     Label="Kullanıcı"
+                                     Variant="Variant.Outlined"
+                                     Margin="Margin.Dense"
+                                     Clearable="true"
+                                     ResetValueOnEmptyText="true"
+                                     Immediate="true"
+                                     CoerceText="true"
+                                     CoerceValue="false" />
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudAutocomplete T="string"
+                                     @bind-Value="_filterEntityType"
+                                     SearchFunc="SearchEntityTypes"
+                                     Label="Entity Tipi"
+                                     Variant="Variant.Outlined"
+                                     Margin="Margin.Dense"
+                                     Clearable="true"
+                                     ResetValueOnEmptyText="true"
+                                     Immediate="true"
+                                     CoerceText="true"
+                                     CoerceValue="false" />
                 </MudItem>
                 <MudItem xs="12" sm="6" md="3">
                     <MudSelect T="AuditAction?" @bind-Value="_filterAction"
@@ -64,11 +82,30 @@ else
                     </MudSelect>
                 </MudItem>
                 <MudItem xs="12" sm="6" md="3">
-                    <MudTextField @bind-Value="_filterTenantName"
-                                  Label="Yönetim Adı"
-                                  Variant="Variant.Outlined"
-                                  Margin="Margin.Dense"
-                                  Immediate="true" />
+                    <MudAutocomplete T="string"
+                                     @bind-Value="_filterTenantName"
+                                     SearchFunc="SearchTenantNames"
+                                     Label="Yönetim"
+                                     Variant="Variant.Outlined"
+                                     Margin="Margin.Dense"
+                                     Clearable="true"
+                                     ResetValueOnEmptyText="true"
+                                     Immediate="true"
+                                     CoerceText="true"
+                                     CoerceValue="false" />
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudAutocomplete T="string"
+                                     @bind-Value="_filterCompanyName"
+                                     SearchFunc="SearchCompanyNames"
+                                     Label="Site"
+                                     Variant="Variant.Outlined"
+                                     Margin="Margin.Dense"
+                                     Clearable="true"
+                                     ResetValueOnEmptyText="true"
+                                     Immediate="true"
+                                     CoerceText="true"
+                                     CoerceValue="false" />
                 </MudItem>
                 <MudItem xs="12" Class="d-flex gap-2 justify-end">
                     <MudButton Variant="Variant.Outlined" OnClick="ResetFilters">Temizle</MudButton>
@@ -125,10 +162,12 @@ else
                     <MudText Typo="Typo.body2">@(context.Item.TenantName ?? "—")</MudText>
                 </CellTemplate>
             </PropertyColumn>
-            <PropertyColumn T="AuditListItem" TProperty="Guid?" Property="@(e => e.CompanyId)" Title="Site ID" Hideable="true" Hidden="false">
+            <PropertyColumn T="AuditListItem" TProperty="Guid?" Property="@(e => e.CompanyId)" Title="Site" Hideable="true" Hidden="false">
                 <CellTemplate>
                     <MudText Typo="Typo.caption" Style="font-family:monospace">
-                        @(context.Item.CompanyId.HasValue ? context.Item.CompanyId.Value.ToString("D")[..8] + "…" : "—")
+                        @(context.Item.CompanyId.HasValue
+                            ? (_companyNameMap.TryGetValue(context.Item.CompanyId.Value, out var cname) ? cname : context.Item.CompanyId.Value.ToString("D")[..8] + "…")
+                            : "—")
                     </MudText>
                 </CellTemplate>
             </PropertyColumn>
@@ -159,34 +198,93 @@ else
                        OnClick="@(() => LoadPageAsync(_currentPage + 1))" />
     </div>
 
-    @* ── Detay Drawer ─────────────────────────────────────────────── *@
-    <MudDrawer @bind-Open="_drawerOpen" Anchor="Anchor.Right" Width="520px" Elevation="1">
+    @* ── Detay Drawer — Temporary: içeriği kaydırmaz, üstte açılır ── *@
+    <MudDrawer @bind-Open="_drawerOpen"
+               Anchor="Anchor.Right"
+               Variant="DrawerVariant.Temporary"
+               Width="540px"
+               Elevation="4">
         @if (_selected is not null)
         {
-            <MudDrawerHeader>
-                <MudText Typo="Typo.h6">Audit Detayı</MudText>
+            <MudDrawerHeader Style="border-bottom:1px solid rgba(0,0,0,0.12)">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Style="width:100%">
+                    <MudText Typo="Typo.h6">Audit Detayı</MudText>
+                    <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="@(() => _drawerOpen = false)" />
+                </MudStack>
             </MudDrawerHeader>
-            <MudContainer Class="pa-4">
+            <MudContainer Class="pa-4" Style="overflow-y:auto">
                 <MudGrid Spacing="2">
-                    <MudItem xs="6"><MudText Typo="Typo.caption">Tarih</MudText><MudText>@_selected.Timestamp.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss")</MudText></MudItem>
-                    <MudItem xs="6"><MudText Typo="Typo.caption">İşlem</MudText><MudText>@_selected.Action</MudText></MudItem>
-                    <MudItem xs="6"><MudText Typo="Typo.caption">Entity Tipi</MudText><MudText>@_selected.EntityType</MudText></MudItem>
-                    <MudItem xs="6"><MudText Typo="Typo.caption">Entity ID</MudText><MudText Style="font-family:monospace;font-size:0.75rem">@_selected.EntityId</MudText></MudItem>
+                    <MudItem xs="6">
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Tarih</MudText>
+                        <MudText>@_selected.Timestamp.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss")</MudText>
+                    </MudItem>
+                    <MudItem xs="6">
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">İşlem</MudText>
+                        <MudChip T="string" Size="Size.Small" Color="@ActionColor(_selected.Action)">@ActionLabel(_selected.Action)</MudChip>
+                    </MudItem>
+                    <MudItem xs="6">
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Entity Tipi</MudText>
+                        <MudText>@_selected.EntityType</MudText>
+                    </MudItem>
+                    <MudItem xs="6">
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Entity ID</MudText>
+                        <MudText Style="font-family:monospace;font-size:0.75rem">@_selected.EntityId</MudText>
+                    </MudItem>
                     <MudItem xs="12"><MudDivider /></MudItem>
-                    <MudItem xs="6"><MudText Typo="Typo.caption">Kullanıcı</MudText><MudText>@(_selected.UserFullName ?? "—")</MudText></MudItem>
-                    <MudItem xs="6"><MudText Typo="Typo.caption">E-posta</MudText><MudText>@(_selected.UserEmail ?? "—")</MudText></MudItem>
-                    <MudItem xs="6"><MudText Typo="Typo.caption">Yönetim</MudText><MudText>@(_selected.TenantName ?? "—")</MudText></MudItem>
-                    <MudItem xs="6"><MudText Typo="Typo.caption">Kapsam</MudText><MudText>@(_selected.ScopeLevel ?? "—")</MudText></MudItem>
-                    <MudItem xs="12"><MudText Typo="Typo.caption">Site ID</MudText><MudText Style="font-family:monospace;font-size:0.75rem">@(_selected.CompanyId?.ToString() ?? "—")</MudText></MudItem>
+                    <MudItem xs="6">
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Kullanıcı</MudText>
+                        <MudText>@(_selected.UserFullName ?? "—")</MudText>
+                    </MudItem>
+                    <MudItem xs="6">
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">E-posta</MudText>
+                        <MudText>@(_selected.UserEmail ?? "—")</MudText>
+                    </MudItem>
+                    <MudItem xs="6">
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Yönetim</MudText>
+                        <MudText>@(_selected.TenantName ?? "—")</MudText>
+                    </MudItem>
+                    <MudItem xs="6">
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Kapsam</MudText>
+                        <MudText>@(_selected.ScopeLevel ?? "—")</MudText>
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Site</MudText>
+                        <MudText Style="font-family:monospace;font-size:0.75rem">
+                            @if (_selected.CompanyId.HasValue)
+                            {
+                                if (_companyNameMap.TryGetValue(_selected.CompanyId.Value, out var cn))
+                                {
+                                    @($"{cn}  ({_selected.CompanyId.Value})")
+                                }
+                                else
+                                {
+                                    @(_selected.CompanyId.Value.ToString())
+                                }
+                            }
+                            else
+                            {
+                                @("—")
+                            }
+                        </MudText>
+                    </MudItem>
                     <MudItem xs="12"><MudDivider /></MudItem>
-                    <MudItem xs="6"><MudText Typo="Typo.caption">IP</MudText><MudText>@(_selected.IpAddress ?? "—")</MudText></MudItem>
-                    <MudItem xs="6"><MudText Typo="Typo.caption">Tarayıcı</MudText><MudText>@(_selected.BrowserName ?? "—")</MudText></MudItem>
-                    <MudItem xs="12"><MudText Typo="Typo.caption">Endpoint</MudText><MudText Style="font-family:monospace;font-size:0.75rem">@(_selected.RequestPath ?? "—")</MudText></MudItem>
+                    <MudItem xs="6">
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">IP</MudText>
+                        <MudText>@(_selected.IpAddress ?? "—")</MudText>
+                    </MudItem>
+                    <MudItem xs="6">
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Tarayıcı</MudText>
+                        <MudText>@(_selected.BrowserName ?? "—")</MudText>
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Endpoint</MudText>
+                        <MudText Style="font-family:monospace;font-size:0.75rem">@(_selected.RequestPath ?? "—")</MudText>
+                    </MudItem>
                     <MudItem xs="12"><MudDivider /></MudItem>
                     <MudItem xs="12">
-                        <MudText Typo="Typo.caption">Değişiklikler (JSON)</MudText>
-                        <MudPaper Elevation="0" Class="pa-2 mt-1" Style="background:#f5f5f5;border-radius:4px;overflow-x:auto">
-                            <pre style="font-size:0.75rem;margin:0;white-space:pre-wrap">@FormatJson(_selected.ChangesJson)</pre>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Değişiklikler (JSON)</MudText>
+                        <MudPaper Elevation="0" Class="pa-2 mt-1" Style="background:#f5f5f5;border-radius:4px;overflow-x:auto;max-height:400px;overflow-y:auto">
+                            <pre style="font-size:0.75rem;margin:0;white-space:pre-wrap;word-break:break-all">@FormatJson(_selected.ChangesJson)</pre>
                         </MudPaper>
                     </MudItem>
                 </MudGrid>
@@ -205,12 +303,22 @@ else
     private AuditListItem? _selected;
 
     // Filtre state
-    private DateTime? _filterDateFrom;
-    private DateTime? _filterDateTo;
-    private string? _filterUserEmail;
+    private string? _filterDateFromStr;
+    private string? _filterDateToStr;
+    private string? _filterUserFullName;
     private string? _filterEntityType;
     private AuditAction? _filterAction;
     private string? _filterTenantName;
+    private string? _filterCompanyName;
+
+    // AutoComplete kaynakları — her sayfa yüklendikçe birikir
+    private readonly HashSet<string> _knownUserNames = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _knownEntityTypes = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _knownTenantNames = new(StringComparer.OrdinalIgnoreCase);
+
+    // Katalog'dan yüklenen site listesi (Id → Name)
+    private IReadOnlyList<CompanyListItem> _allCompanies = [];
+    private Dictionary<Guid, string> _companyNameMap = [];
 
     private int PageSize => 50;
     private int TotalPages => (int)Math.Ceiling(_totalCount / (double)PageSize);
@@ -226,6 +334,9 @@ else
             return;
         }
 
+        _allCompanies = await CompanyReader.GetAllGlobalAsync();
+        _companyNameMap = _allCompanies.ToDictionary(c => c.Id, c => c.Name);
+
         await LoadPageAsync(0);
     }
 
@@ -236,24 +347,32 @@ else
 
         try
         {
-            // Tenant adına göre filtreleme: tenant_name ILIKE
-            Guid? tenantId = null;
+            var selectedCompanyId = !string.IsNullOrEmpty(_filterCompanyName)
+                ? _allCompanies.FirstOrDefault(c => c.Name == _filterCompanyName)?.Id
+                : (Guid?)null;
 
             var filter = new AuditFilter(
-                _filterDateFrom.HasValue ? new DateTimeOffset(_filterDateFrom.Value, TimeSpan.Zero) : null,
-                _filterDateTo.HasValue ? new DateTimeOffset(_filterDateTo.Value.AddDays(1), TimeSpan.Zero) : null,
-                UserId: null,
-                _filterUserEmail,
+                ParseDateFilter(_filterDateFromStr),
+                ParseDateFilter(_filterDateToStr, endOfDay: true),
+                _filterUserFullName,
                 _filterEntityType,
                 _filterAction,
-                tenantId,
-                CompanyId: null,
+                _filterTenantName,
+                selectedCompanyId,
                 page,
                 PageSize);
 
             var result = await Mediator.Send(new GetAuditEntriesQuery(filter));
             _items = result.Items;
             _totalCount = result.TotalCount;
+
+            // AutoComplete kaynakları biriktirilir
+            foreach (var item in _items)
+            {
+                if (!string.IsNullOrEmpty(item.UserFullName)) _knownUserNames.Add(item.UserFullName);
+                if (!string.IsNullOrEmpty(item.EntityType)) _knownEntityTypes.Add(item.EntityType);
+                if (!string.IsNullOrEmpty(item.TenantName)) _knownTenantNames.Add(item.TenantName);
+            }
         }
         catch (Exception ex)
         {
@@ -273,12 +392,66 @@ else
 
     private void ResetFilters()
     {
-        _filterDateFrom = null;
-        _filterDateTo = null;
-        _filterUserEmail = null;
+        _filterDateFromStr = null;
+        _filterDateToStr = null;
+        _filterUserFullName = null;
         _filterEntityType = null;
         _filterAction = null;
         _filterTenantName = null;
+        _filterCompanyName = null;
+    }
+
+    // ── AutoComplete arama fonksiyonları ───────────────────────────
+
+    private Task<IEnumerable<string>> SearchUserNames(string value, CancellationToken ct)
+    {
+        var list = _knownUserNames.AsEnumerable();
+        if (!string.IsNullOrEmpty(value))
+            list = list.Where(n => n.Contains(value, StringComparison.OrdinalIgnoreCase));
+        return Task.FromResult<IEnumerable<string>>(list.OrderBy(n => n).ToList());
+    }
+
+    private Task<IEnumerable<string>> SearchEntityTypes(string value, CancellationToken ct)
+    {
+        var list = _knownEntityTypes.AsEnumerable();
+        if (!string.IsNullOrEmpty(value))
+            list = list.Where(n => n.Contains(value, StringComparison.OrdinalIgnoreCase));
+        return Task.FromResult<IEnumerable<string>>(list.OrderBy(n => n).ToList());
+    }
+
+    private Task<IEnumerable<string>> SearchTenantNames(string value, CancellationToken ct)
+    {
+        var list = _knownTenantNames.AsEnumerable();
+        if (!string.IsNullOrEmpty(value))
+            list = list.Where(n => n.Contains(value, StringComparison.OrdinalIgnoreCase));
+        return Task.FromResult<IEnumerable<string>>(list.OrderBy(n => n).ToList());
+    }
+
+    private Task<IEnumerable<string>> SearchCompanyNames(string value, CancellationToken ct)
+    {
+        var list = _allCompanies.Select(c => c.Name);
+        if (!string.IsNullOrEmpty(value))
+            list = list.Where(n => n.Contains(value, StringComparison.OrdinalIgnoreCase));
+        return Task.FromResult<IEnumerable<string>>(list.OrderBy(n => n).ToList());
+    }
+
+    // ── Yardımcı metodlar ─────────────────────────────────────────
+
+    private static DateTimeOffset? ParseDateFilter(string? input, bool endOfDay = false)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return null;
+        var normalized = input.Trim().Replace('.', '/').Replace('-', '/');
+        string[] formats = ["d/M/yyyy", "dd/MM/yyyy", "d/M/yy", "dd/MM/yy", "M/d/yyyy"];
+        if (DateTime.TryParseExact(normalized, formats,
+            CultureInfo.InvariantCulture, DateTimeStyles.None, out var dt))
+        {
+            return new DateTimeOffset(endOfDay ? dt.AddDays(1) : dt, TimeSpan.Zero);
+        }
+        if (DateTime.TryParse(input, CultureInfo.CurrentCulture, DateTimeStyles.None, out var dt2))
+        {
+            return new DateTimeOffset(endOfDay ? dt2.AddDays(1) : dt2, TimeSpan.Zero);
+        }
+        return null;
     }
 
     private static Color ActionColor(AuditAction action) => action switch

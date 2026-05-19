@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CleanTenant.Application.Features.System.Audit;
 
-/// <summary>Audit girişlerini filtreli ve sayfalı döner.</summary>
+/// <summary>Audit girişlerini filtreye ve sayfa numarasına göre getirir.</summary>
 public sealed class GetAuditEntriesQueryHandler : IRequestHandler<GetAuditEntriesQuery, AuditPageResult>
 {
     private const int MaxPageSize = 200;
@@ -29,16 +29,14 @@ public sealed class GetAuditEntriesQueryHandler : IRequestHandler<GetAuditEntrie
             query = query.Where(e => e.Timestamp >= f.DateFrom.Value);
         if (f.DateTo.HasValue)
             query = query.Where(e => e.Timestamp <= f.DateTo.Value);
-        if (f.UserId.HasValue)
-            query = query.Where(e => e.UserId == f.UserId.Value);
-        if (!string.IsNullOrWhiteSpace(f.UserEmail))
-            query = query.Where(e => e.UserEmail != null && e.UserEmail.Contains(f.UserEmail));
+        if (!string.IsNullOrWhiteSpace(f.UserFullName))
+            query = query.Where(e => e.UserFullName != null && e.UserFullName.Contains(f.UserFullName));
         if (!string.IsNullOrWhiteSpace(f.EntityType))
             query = query.Where(e => e.EntityType == f.EntityType);
         if (f.Action.HasValue)
             query = query.Where(e => e.Action == f.Action.Value);
-        if (f.TenantId.HasValue)
-            query = query.Where(e => e.TenantId == f.TenantId.Value);
+        if (!string.IsNullOrWhiteSpace(f.TenantName))
+            query = query.Where(e => e.TenantName != null && e.TenantName.Contains(f.TenantName));
         if (f.CompanyId.HasValue)
             query = query.Where(e => e.CompanyId == f.CompanyId.Value);
 
