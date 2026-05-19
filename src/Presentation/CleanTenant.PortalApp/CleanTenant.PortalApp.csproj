@@ -9,11 +9,16 @@
     <ProjectReference Include="..\..\Infrastructure\CleanTenant.Infrastructure.BackgroundJobs\CleanTenant.Infrastructure.BackgroundJobs.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="MudBlazor" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
+    <NoWarn>$(NoWarn);MUD0002;CS1591</NoWarn>
   </PropertyGroup>
 
 </Project>

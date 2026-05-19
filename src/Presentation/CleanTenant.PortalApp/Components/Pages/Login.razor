@@ -1,0 +1,68 @@
+@page "/login"
+@layout EmptyLayout
+@attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
+
+<PageTitle>Giriş — Site Portalı</PageTitle>
+
+<MudPaper Elevation="3" Class="pa-8 mx-auto mt-16" Style="max-width: 460px;">
+    <div class="d-flex align-center mb-6">
+        <MudIcon Icon="@Icons.Material.Filled.HomeWork" Color="Color.Primary" Size="Size.Large" />
+        <MudText Typo="Typo.h4" Class="ml-2">Site Portalı</MudText>
+    </div>
+
+    @if (!string.IsNullOrEmpty(ErrorCode))
+    {
+        <MudAlert Severity="Severity.Error" Class="mb-4">@MessageFor(ErrorCode)</MudAlert>
+    }
+
+    <form method="post" action="/auth/sign-in">
+        <div class="mb-3">
+            <label for="identifier" class="d-block mb-1" style="font-weight: 500;">
+                E-posta / TCKN / Telefon
+            </label>
+            <input id="identifier"
+                   name="identifier"
+                   type="text"
+                   required
+                   autocomplete="username"
+                   autofocus
+                   style="width: 100%; padding: 10px; border: 1px solid rgba(0,0,0,0.23); border-radius: 4px; font-size: 1rem;" />
+        </div>
+
+        <div class="mb-4">
+            <label for="password" class="d-block mb-1" style="font-weight: 500;">Şifre</label>
+            <input id="password"
+                   name="password"
+                   type="password"
+                   required
+                   autocomplete="current-password"
+                   style="width: 100%; padding: 10px; border: 1px solid rgba(0,0,0,0.23); border-radius: 4px; font-size: 1rem;" />
+        </div>
+
+        <div class="mb-4 d-flex align-center">
+            <input id="rememberMe" name="rememberMe" type="checkbox" value="true" />
+            <label for="rememberMe" class="ml-2">Beni hatırla (7 gün)</label>
+        </div>
+
+        <button type="submit"
+                style="width: 100%; padding: 12px; background-color: var(--mud-palette-primary); color: white; border: none; border-radius: 4px; font-size: 1rem; font-weight: 500; cursor: pointer;">
+            Giriş Yap
+        </button>
+    </form>
+</MudPaper>
+
+@code {
+    [SupplyParameterFromQuery]
+    public string? ErrorCode { get; set; }
+
+    private static string MessageFor(string code) => code switch
+    {
+        "AUTH-001" => "Kullanıcı kimliği ve şifre zorunlu.",
+        "AUTH-002" => "Geçersiz kimlik veya şifre.",
+        "AUTH-003" => "Hesap geçici olarak kilitli.",
+        "AUTH-004" => "Portal erişimi için yetkiniz yok.",
+        "AUTH-009" => "Kimlik tipi tanınamadı.",
+        "AUTH-2FA-CHALLENGE-NOT-FOUND" => "2FA süresi doldu. Tekrar giriş yapın.",
+        _ => $"Hata: {code}",
+    };
+}

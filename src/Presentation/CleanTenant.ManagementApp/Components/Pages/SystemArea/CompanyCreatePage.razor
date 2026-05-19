@@ -1,11 +1,13 @@
 @page "/system/companies/new"
 
 @using CleanTenant.Application.Features.Main.Companies
+@using CleanTenant.Application.Common.Auth
 @using CleanTenant.ManagementApp.Components.Shared
 @using MediatR
 @using Microsoft.AspNetCore.Components
 
 @inject IMediator Mediator
+@inject ICurrentSessionAccessor SessionAccessor
 @inject NavigationManager Nav
 
 <PageTitle>Yeni Site — CleanTenant</PageTitle>
@@ -61,8 +63,16 @@
 
         try
         {
+            var session = SessionAccessor.Current;
+            if (session is null || session.TenantId is null || session.TenantId == Guid.Empty)
+            {
+                _errorMessage = "Aktif bir yönetim (tenant) bağlamı seçilmemiş.";
+                _isSubmitting = false;
+                return;
+            }
+
             var command = new CreateCompanyCommand(
-                TenantId: Guid.Empty, // System context — placeholder, WebApi Authorization behavior'ı set eder
+                TenantId: session.TenantId.Value,
                 Name: _model.Name,
                 LegalName: _model.LegalName,
                 Vkn: _model.Vkn,

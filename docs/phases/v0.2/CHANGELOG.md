@@ -7,6 +7,47 @@ Bu dosya, Faz 1 (UI başlangıç + ManagementApp) kapsamında yapılan tüm alt-
 
 ---
 
+## v0.2.7 — 2026-05-19 — PortalApp Shell (MVP)
+
+### Kapsam
+Site sakinleri için ayrı Blazor Server uygulaması — kimlik doğrulama + temel shell.
+
+### Eklenen / Güncellenen Dosyalar
+
+**CleanTenant.PortalApp.csproj:**
+- MudBlazor paket referansı eklendi; `NoWarn MUD0002;CS1591`
+
+**Auth:**
+- [Auth/JwtCookieAuthenticationStateProvider.cs](../../../src/Presentation/CleanTenant.PortalApp/Auth/JwtCookieAuthenticationStateProvider.cs) — ManagementApp ile aynı cookie→ClaimsPrincipal çözümleme
+- [Auth/AuthEndpoints.cs](../../../src/Presentation/CleanTenant.PortalApp/Auth/AuthEndpoints.cs) — `MapPortalAuthEndpoints()`: sign-in (PersonaSide.Portal), sign-out, 2FA verify/send; cookie adı `cleantenant.portal`
+
+**Components:**
+- [App.razor](../../../src/Presentation/CleanTenant.PortalApp/Components/App.razor) — MudBlazor CSS/JS eklendi, `lang="tr"`
+- [Routes.razor](../../../src/Presentation/CleanTenant.PortalApp/Components/Routes.razor) — `CascadingAuthenticationState` + `AuthorizeRouteView` + `RedirectToLogin`
+- [RedirectToLogin.razor](../../../src/Presentation/CleanTenant.PortalApp/Components/RedirectToLogin.razor) — Yetkisiz kullanıcıları `/login`'e yönlendirir
+- [_Imports.razor](../../../src/Presentation/CleanTenant.PortalApp/Components/_Imports.razor) — MudBlazor + Authorization using'leri eklendi
+
+**Layout:**
+- [Layout/EmptyLayout.razor](../../../src/Presentation/CleanTenant.PortalApp/Components/Layout/EmptyLayout.razor) — Login sayfası için minimal layout (MudBlazor provider'ları)
+- [Layout/MainLayout.razor](../../../src/Presentation/CleanTenant.PortalApp/Components/Layout/MainLayout.razor) — AppBar (branding + tenant/site chip + çıkış), mini drawer (Anasayfa, Profil)
+
+**Pages:**
+- [Pages/Login.razor](../../../src/Presentation/CleanTenant.PortalApp/Components/Pages/Login.razor) — Static SSR login formu (Portal persona)
+- [Pages/Home.razor](../../../src/Presentation/CleanTenant.PortalApp/Components/Pages/Home.razor) — Hoşgeldin dashboard (tenant + site adı kartları)
+- [Pages/Profile.razor](../../../src/Presentation/CleanTenant.PortalApp/Components/Pages/Profile.razor) — Profil stub (`/profile`)
+
+**Program.cs:**
+- ManagementApp ile aynı DI pipeline (Application, Persistence, Identity, Caching, Logging)
+- Cookie adı `cleantenant.portal`, persona = Portal
+
+### Doğrulama
+- ✓ `dotnet build CleanTenant.PortalApp.csproj` — 0 uyarı / 0 hata
+
+### Sonraki Adım
+Faz v0.3 — Unit/Resident modeli + sakin self-servis özellikleri.
+
+---
+
 ## v0.2.6 — 2026-05-19 — Audit Explorer
 
 ### Kapsam
