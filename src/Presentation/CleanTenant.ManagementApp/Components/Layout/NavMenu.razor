@@ -54,6 +54,13 @@
             </MudNavLink>
         }
 
+        @if (Matches("Roller"))
+        {
+            <MudNavLink Href="/system/roles" Icon="@Icons.Material.Filled.Shield">
+                Roller
+            </MudNavLink>
+        }
+
         var systemAdminChildren = new[]
         {
             ("LookUp Tablolar", "/system/lookup-tables", Icons.Material.Filled.DataObject, "", false),
