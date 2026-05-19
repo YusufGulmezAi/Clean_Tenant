@@ -1,15 +1,16 @@
 @page "/not-found"
 @layout EmptyLayout
 @attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
+@inject IStringLocalizer Loc
 
-<PageTitle>404 — Sayfa Bulunamadı</PageTitle>
+<PageTitle>@Loc["NotFound.PageTitle"]</PageTitle>
 
 <MudPaper Elevation="3" Class="pa-8 mx-auto mt-16 text-center" MaxWidth="MaxWidth.Small" Style="max-width: 460px;">
     <MudIcon Icon="@Icons.Material.Filled.SearchOff" Color="Color.Warning" Size="Size.Large" />
-    <MudText Typo="Typo.h4" Class="mt-4">404</MudText>
-    <MudText Typo="Typo.h6" Class="mb-3">Sayfa Bulunamadı</MudText>
+    <MudText Typo="Typo.h4" Class="mt-4">@Loc["NotFound.Code"]</MudText>
+    <MudText Typo="Typo.h6" Class="mb-3">@Loc["NotFound.Title"]</MudText>
     <MudText Typo="Typo.body2" Color="Color.Default" Class="mb-4">
-        Aradığınız sayfa mevcut değil veya silinmiş olabilir.
+        @Loc["NotFound.Message"]
     </MudText>
-    <MudButton Href="/" Variant="Variant.Filled" Color="Color.Primary">Anasayfaya Dön</MudButton>
+    <MudButton Href="/" Variant="Variant.Filled" Color="Color.Primary">@Loc["NotFound.BackHome"]</MudButton>
 </MudPaper>

@@ -5,6 +5,7 @@
 @inject AuthenticationStateProvider AuthProvider
 @inject ISnackbar Snackbar
 @inject IJSRuntime JS
+@inject IStringLocalizer Loc
 @using CleanTenant.Application.Features.Main.BuildingSchema.Blocks
 @using CleanTenant.Application.Features.Main.BuildingSchema.Parcels
 @using CleanTenant.Application.Features.Main.BuildingSchema.Buildings
@@ -15,11 +16,18 @@
 @using CleanTenant.Application.Features.Main.Readers
 @using CleanTenant.Domain.Tenant.BuildingSchema
 
-<PageTitle>Yapı Şeması — @_companyName</PageTitle>
+<PageTitle>@Loc["BuildingSchema.Title", _companyName]</PageTitle>
+
+@*
+    v0.2.10.e.5 — BuildingSchema.* + Common.* anahtarlarıyla lokalize edildi.
+    Label fonksiyonları (BuildingTypeLabel, UnitTypeLabel, OrientationLabel,
+    LayoutLabel) Loc erişimi için instance method'a dönüştürüldü.
+    "1+0/1+1/2+1/..." gibi numerik layout etiketleri raw bırakıldı.
+*@
 
 @if (_unauthorized)
 {
-    <MudAlert Severity="Severity.Warning" Class="my-3">Bu sayfaya erişim yetkiniz yok.</MudAlert>
+    <MudAlert Severity="Severity.Warning" Class="my-3">@Loc["BuildingSchema.Unauthorized"]</MudAlert>
 }
 else if (_isLoading)
 {
@@ -27,22 +35,22 @@ else if (_isLoading)
 }
 else if (_schema is null)
 {
-    <MudAlert Severity="Severity.Error" Class="my-3">Yapı şeması yüklenemedi.</MudAlert>
+    <MudAlert Severity="Severity.Error" Class="my-3">@Loc["BuildingSchema.LoadFailed"]</MudAlert>
 }
 else
 {
     <div class="d-flex justify-space-between align-center mb-4 flex-wrap gap-2">
-        <MudText Typo="Typo.h5">Yapı Şeması — @_companyName</MudText>
+        <MudText Typo="Typo.h5">@Loc["BuildingSchema.Title", _companyName]</MudText>
         <div class="d-flex gap-2">
             <MudButton Variant="Variant.Outlined" Size="Size.Small"
                        StartIcon="@Icons.Material.Filled.FileDownload"
                        OnClick="DownloadTemplateAsync" Disabled="@_isBusy">
-                Şablon İndir
+                @Loc["BuildingSchema.DownloadTemplate"]
             </MudButton>
             <MudButton Variant="Variant.Outlined" Size="Size.Small"
                        StartIcon="@Icons.Material.Filled.Upload"
                        OnClick="@(() => _showImport = !_showImport)">
-                Excel Yükle
+                @Loc["BuildingSchema.UploadExcel"]
             </MudButton>
         </div>
     </div>
@@ -50,12 +58,12 @@ else
     @if (_showImport)
     {
         <MudPaper Elevation="2" Class="pa-4 mb-4">
-            <MudText Typo="Typo.subtitle1" GutterBottom="true">Excel'den İçe Aktar</MudText>
+            <MudText Typo="Typo.subtitle1" GutterBottom="true">@Loc["BuildingSchema.Import.Title"]</MudText>
             <InputFile id="bs-import-file" OnChange="OnImportFileSelected" accept=".xlsx" style="display:none" />
             <div class="d-flex align-center gap-3 flex-wrap">
                 <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.AttachFile"
                            OnClick="@(async () => await JS.InvokeVoidAsync("cleantenant.clickElement", "bs-import-file"))">
-                    Dosya Seç
+                    @Loc["BuildingSchema.SelectFile"]
                 </MudButton>
                 @if (_importFile is not null)
                 {
@@ -66,7 +74,7 @@ else
                         {
                             <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" />
                         }
-                        Yükle
+                        @Loc["BuildingSchema.Upload"]
                     </MudButton>
                 }
             </div>
@@ -78,24 +86,24 @@ else
                    StartIcon="@Icons.Material.Filled.Add"
                    OnClick="@(() => { _showAddBlock = !_showAddBlock; _addBlockName = string.Empty; })"
                    Disabled="@_isBusy">
-            Ada Ekle
+            @Loc["BuildingSchema.Block.Add"]
         </MudButton>
     </div>
 
     @if (_showAddBlock)
     {
         <MudPaper Elevation="1" Class="pa-3 mb-3">
-            <MudTextField @bind-Value="_addBlockName" Label="Ada Adı / Numarası *"
+            <MudTextField @bind-Value="_addBlockName" Label="@Loc["BuildingSchema.Block.NameLabel"]"
                           MaxLength="100" Margin="Margin.Dense" Immediate="true" />
             <div class="d-flex gap-2 mt-2">
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
                            OnClick="AddBlockAsync"
                            Disabled="@(string.IsNullOrWhiteSpace(_addBlockName) || _isBusy)">
-                    Ekle
+                    @Loc["Banks.Add"]
                 </MudButton>
                 <MudButton Variant="Variant.Outlined" Size="Size.Small"
                            OnClick="@(() => { _showAddBlock = false; _addBlockName = string.Empty; })">
-                    Vazgeç
+                    @Loc["Common.Discard"]
                 </MudButton>
             </div>
         </MudPaper>
@@ -104,7 +112,7 @@ else
     @if (!_schema.Blocks.Any())
     {
         <MudAlert Severity="Severity.Info">
-            Henüz Ada tanımlanmamış. "Ada Ekle" butonuyla başlayın.
+            @Loc["BuildingSchema.NoBlocks"]
         </MudAlert>
     }
 
@@ -122,34 +130,34 @@ else
                             </div>
                             <div @onclick:stopPropagation="true">
                                 <MudIconButton Icon="@Icons.Material.Filled.Check" Size="Size.Small"
-                                               Color="Color.Success" Title="Kaydet"
+                                               Color="Color.Success" Title="@Loc["Common.Save"]"
                                                OnClick="SaveEditBlockAsync" />
                             </div>
                             <div @onclick:stopPropagation="true">
                                 <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small"
-                                               Title="İptal"
+                                               Title="@Loc["Common.Cancel"]"
                                                OnClick="@(() => { _editingBlockId = null; _editingBlockName = string.Empty; })" />
                             </div>
                         }
                         else
                         {
-                            <MudText><b>Ada:</b> @block.Name</MudText>
-                            <MudChip T="string" Size="Size.Small" Class="ml-2">@block.Parcels.Count parsel</MudChip>
+                            <MudText><b>@Loc["BuildingSchema.Block.Title"]</b> @block.Name</MudText>
+                            <MudChip T="string" Size="Size.Small" Class="ml-2">@Loc["BuildingSchema.Parcel.Count", block.Parcels.Count]</MudChip>
                         }
                         <div class="ml-auto d-flex gap-1" @onclick:stopPropagation="true">
-                            <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Title="Düzenle"
+                            <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Title="@Loc["Common.Edit"]"
                                            OnClick="@(() => StartEditBlock(block))"
                                            Disabled="@(_editingBlockId.HasValue || _isBusy)" />
                             <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small"
-                                           Color="Color.Error" Title="Sil"
+                                           Color="Color.Error" Title="@Loc["Common.Delete"]"
                                            OnClick="@(() => DeleteBlockAsync(block.Id, block.Name))"
                                            Disabled="@_isBusy" />
                             <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward" Size="Size.Small"
-                                           Title="Yukarı Taşı"
+                                           Title="@Loc["BuildingSchema.MoveUp"]"
                                            OnClick="@(() => MoveBlockAsync(block, -1))"
                                            Disabled="@_isBusy" />
                             <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward" Size="Size.Small"
-                                           Title="Aşağı Taşı"
+                                           Title="@Loc["BuildingSchema.MoveDown"]"
                                            OnClick="@(() => MoveBlockAsync(block, 1))"
                                            Disabled="@_isBusy" />
                         </div>
@@ -159,24 +167,24 @@ else
                     <div class="d-flex justify-end mb-2">
                         <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.Add"
                                    OnClick="@(() => ToggleAddParcel(block.Id))" Disabled="@_isBusy">
-                            Parsel Ekle
+                            @Loc["BuildingSchema.Parcel.Add"]
                         </MudButton>
                     </div>
 
                     @if (_addParcelForBlock == block.Id)
                     {
                         <MudPaper Elevation="1" Class="pa-3 mb-3">
-                            <MudTextField @bind-Value="_addParcelName" Label="Parsel Adı / Numarası *"
+                            <MudTextField @bind-Value="_addParcelName" Label="@Loc["BuildingSchema.Parcel.NameLabel"]"
                                           MaxLength="100" Margin="Margin.Dense" Immediate="true" />
                             <div class="d-flex gap-2 mt-2">
                                 <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
                                            OnClick="@(async () => await AddParcelAsync(block.Id))"
                                            Disabled="@(string.IsNullOrWhiteSpace(_addParcelName) || _isBusy)">
-                                    Ekle
+                                    @Loc["Banks.Add"]
                                 </MudButton>
                                 <MudButton Variant="Variant.Outlined" Size="Size.Small"
                                            OnClick="@(() => { _addParcelForBlock = null; _addParcelName = string.Empty; })">
-                                    Vazgeç
+                                    @Loc["Common.Discard"]
                                 </MudButton>
                             </div>
                         </MudPaper>
@@ -184,7 +192,7 @@ else
 
                     @if (!block.Parcels.Any())
                     {
-                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">Parsel tanımlanmamış.</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">@Loc["BuildingSchema.Parcel.None"]</MudText>
                     }
 
                     <MudExpansionPanels MultiExpansion="true">
@@ -201,35 +209,35 @@ else
                             </div>
                                             <div @onclick:stopPropagation="true">
                                                 <MudIconButton Icon="@Icons.Material.Filled.Check" Size="Size.Small"
-                                                               Color="Color.Success" Title="Kaydet"
+                                                               Color="Color.Success" Title="@Loc["Common.Save"]"
                                                                OnClick="SaveEditParcelAsync" />
                                             </div>
                                             <div @onclick:stopPropagation="true">
                                                 <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small"
-                                                               Title="İptal"
+                                                               Title="@Loc["Common.Cancel"]"
                                                                OnClick="@(() => { _editingParcelId = null; _editingParcelName = string.Empty; })" />
                                             </div>
                                         }
                                         else
                                         {
-                                            <MudText><b>Parsel:</b> @parcel.Name</MudText>
-                                            <MudChip T="string" Size="Size.Small" Class="ml-2">@parcel.Buildings.Count yapı</MudChip>
+                                            <MudText><b>@Loc["BuildingSchema.Parcel.Title"]</b> @parcel.Name</MudText>
+                                            <MudChip T="string" Size="Size.Small" Class="ml-2">@Loc["BuildingSchema.Building.Count", parcel.Buildings.Count]</MudChip>
                                         }
                                         <div class="ml-auto d-flex gap-1" @onclick:stopPropagation="true">
                                             <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
-                                                           Title="Düzenle"
+                                                           Title="@Loc["Common.Edit"]"
                                                            OnClick="@(() => StartEditParcel(parcel))"
                                                            Disabled="@(_editingParcelId.HasValue || _isBusy)" />
                                             <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small"
-                                                           Color="Color.Error" Title="Sil"
+                                                           Color="Color.Error" Title="@Loc["Common.Delete"]"
                                                            OnClick="@(() => DeleteParcelAsync(parcel.Id, parcel.Name))"
                                                            Disabled="@_isBusy" />
                                             <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward" Size="Size.Small"
-                                                           Title="Yukarı Taşı"
+                                                           Title="@Loc["BuildingSchema.MoveUp"]"
                                                            OnClick="@(() => MoveParcelAsync(parcel, block, -1))"
                                                            Disabled="@_isBusy" />
                                             <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward" Size="Size.Small"
-                                                           Title="Aşağı Taşı"
+                                                           Title="@Loc["BuildingSchema.MoveDown"]"
                                                            OnClick="@(() => MoveParcelAsync(parcel, block, 1))"
                                                            Disabled="@_isBusy" />
                                         </div>
@@ -240,7 +248,7 @@ else
                                         <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.Add"
                                                    OnClick="@(() => ToggleAddBuilding(parcel.Id))"
                                                    Disabled="@_isBusy">
-                                            Yapı Ekle
+                                            @Loc["BuildingSchema.Building.Add"]
                                         </MudButton>
                                     </div>
 
@@ -249,16 +257,16 @@ else
                                         <MudPaper Elevation="1" Class="pa-3 mb-3">
                                             <MudGrid Spacing="2">
                                                 <MudItem xs="12" sm="6">
-                                                    <MudTextField @bind-Value="_addBuilding.Name" Label="Yapı Adı *"
+                                                    <MudTextField @bind-Value="_addBuilding.Name" Label="@Loc["BuildingSchema.Building.NameLabel"]"
                                                                   MaxLength="200" Margin="Margin.Dense" Immediate="true" />
                                                 </MudItem>
                                                 <MudItem xs="12" sm="6">
                                                     <MudTextField @bind-Value="_addBuilding.MunicipalNo"
-                                                                  Label="Belediye No" MaxLength="50" Margin="Margin.Dense" />
+                                                                  Label="@Loc["BuildingSchema.Building.MunicipalityNo"]" MaxLength="50" Margin="Margin.Dense" />
                                                 </MudItem>
                                                 <MudItem xs="12" sm="6">
                                                     <MudSelect T="BuildingType" @bind-Value="_addBuilding.Type"
-                                                               Label="Yapı Tipi *" Margin="Margin.Dense">
+                                                               Label="@Loc["BuildingSchema.Building.TypeLabel"]" Margin="Margin.Dense">
                                                         @foreach (var t in Enum.GetValues<BuildingType>())
                                                         {
                                                             <MudSelectItem Value="@t">@BuildingTypeLabel(t)</MudSelectItem>
@@ -270,11 +278,11 @@ else
                                                 <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
                                                            OnClick="@(async () => await AddBuildingAsync(parcel.Id))"
                                                            Disabled="@(string.IsNullOrWhiteSpace(_addBuilding.Name) || _isBusy)">
-                                                    Ekle
+                                                    @Loc["Banks.Add"]
                                                 </MudButton>
                                                 <MudButton Variant="Variant.Outlined" Size="Size.Small"
                                                            OnClick="@(() => { _addBuildingForParcel = null; _addBuilding.Reset(); })">
-                                                    Vazgeç
+                                                    @Loc["Common.Discard"]
                                                 </MudButton>
                                             </div>
                                         </MudPaper>
@@ -282,7 +290,7 @@ else
 
                                     @if (!parcel.Buildings.Any())
                                     {
-                                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">Yapı tanımlanmamış.</MudText>
+                                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">@Loc["BuildingSchema.Building.None"]</MudText>
                                     }
 
                                     <MudExpansionPanels MultiExpansion="true">
@@ -293,22 +301,22 @@ else
                                                     <div class="d-flex align-center" style="width:100%">
                                                         <MudText><b>@building.Name</b></MudText>
                                                         <MudChip T="string" Size="Size.Small" Class="ml-1">@BuildingTypeLabel(building.Type)</MudChip>
-                                                        <MudChip T="string" Size="Size.Small" Class="ml-1">@building.Units.Count BB</MudChip>
+                                                        <MudChip T="string" Size="Size.Small" Class="ml-1">@Loc["BuildingSchema.Unit.Count", building.Units.Count]</MudChip>
                                                         <div class="ml-auto d-flex gap-1" @onclick:stopPropagation="true">
                                                             <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
-                                                                           Title="Düzenle"
+                                                                           Title="@Loc["Common.Edit"]"
                                                                            OnClick="@(() => StartEditBuilding(building))"
                                                                            Disabled="@(_editingBuildingId.HasValue || _isBusy)" />
                                                             <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small"
-                                                                           Color="Color.Error" Title="Sil"
+                                                                           Color="Color.Error" Title="@Loc["Common.Delete"]"
                                                                            OnClick="@(() => DeleteBuildingAsync(building.Id, building.Name))"
                                                                            Disabled="@_isBusy" />
                                                             <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward" Size="Size.Small"
-                                                                           Title="Yukarı Taşı"
+                                                                           Title="@Loc["BuildingSchema.MoveUp"]"
                                                                            OnClick="@(() => MoveBuildingAsync(building, parcel, -1))"
                                                                            Disabled="@_isBusy" />
                                                             <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward" Size="Size.Small"
-                                                                           Title="Aşağı Taşı"
+                                                                           Title="@Loc["BuildingSchema.MoveDown"]"
                                                                            OnClick="@(() => MoveBuildingAsync(building, parcel, 1))"
                                                                            Disabled="@_isBusy" />
                                                         </div>
@@ -318,19 +326,19 @@ else
                                                     @if (_editingBuildingId == building.Id)
                                                     {
                                                         <MudPaper Elevation="1" Class="pa-3 mb-3">
-                                                            <MudText Typo="Typo.subtitle2" Class="mb-2">Yapı Düzenle</MudText>
+                                                            <MudText Typo="Typo.subtitle2" Class="mb-2">@Loc["BuildingSchema.Building.Edit"]</MudText>
                                                             <MudGrid Spacing="2">
                                                                 <MudItem xs="12" sm="6">
-                                                                    <MudTextField @bind-Value="_editBuilding.Name" Label="Yapı Adı *"
+                                                                    <MudTextField @bind-Value="_editBuilding.Name" Label="@Loc["BuildingSchema.Building.NameLabel"]"
                                                                                   MaxLength="200" Margin="Margin.Dense" Immediate="true" />
                                                                 </MudItem>
                                                                 <MudItem xs="12" sm="6">
                                                                     <MudTextField @bind-Value="_editBuilding.MunicipalNo"
-                                                                                  Label="Belediye No" MaxLength="50" Margin="Margin.Dense" />
+                                                                                  Label="@Loc["BuildingSchema.Building.MunicipalityNo"]" MaxLength="50" Margin="Margin.Dense" />
                                                                 </MudItem>
                                                                 <MudItem xs="12" sm="6">
                                                                     <MudSelect T="BuildingType" @bind-Value="_editBuilding.Type"
-                                                                               Label="Yapı Tipi *" Margin="Margin.Dense">
+                                                                               Label="@Loc["BuildingSchema.Building.TypeLabel"]" Margin="Margin.Dense">
                                                                         @foreach (var t in Enum.GetValues<BuildingType>())
                                                                         {
                                                                             <MudSelectItem Value="@t">@BuildingTypeLabel(t)</MudSelectItem>
@@ -342,11 +350,11 @@ else
                                                                 <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small"
                                                                            OnClick="SaveEditBuildingAsync"
                                                                            Disabled="@(string.IsNullOrWhiteSpace(_editBuilding.Name) || _isBusy)">
-                                                                    Kaydet
+                                                                    @Loc["Common.Save"]
                                                                 </MudButton>
                                                                 <MudButton Variant="Variant.Outlined" Size="Size.Small"
                                                                            OnClick="@(() => { _editingBuildingId = null; _editBuilding.Reset(); })">
-                                                                    İptal
+                                                                    @Loc["Common.Cancel"]
                                                                 </MudButton>
                                                             </div>
                                                         </MudPaper>
@@ -356,20 +364,20 @@ else
                                                     {
                                                         <MudPaper Elevation="1" Class="pa-3 mb-3">
                                                             <MudText Typo="Typo.subtitle2" Class="mb-2">
-                                                                @(_isEditingUnit ? "Bağımsız Bölüm Düzenle" : "Bağımsız Bölüm Ekle")
+                                                                @(_isEditingUnit ? Loc["BuildingSchema.Unit.Edit"].Value : Loc["BuildingSchema.Unit.AddFull"].Value)
                                                             </MudText>
                                                             <MudGrid Spacing="2">
                                                                 <MudItem xs="6" sm="3">
-                                                                    <MudTextField @bind-Value="_unitForm.Number" Label="BB No *"
+                                                                    <MudTextField @bind-Value="_unitForm.Number" Label="@Loc["BuildingSchema.Unit.NoLabel"]"
                                                                                   MaxLength="20" Margin="Margin.Dense" Immediate="true" />
                                                                 </MudItem>
                                                                 <MudItem xs="6" sm="3">
                                                                     <MudTextField @bind-Value="_unitForm.NationalAddressCode"
-                                                                                  Label="Numarataj No" MaxLength="50" Margin="Margin.Dense" />
+                                                                                  Label="@Loc["BuildingSchema.Unit.NumberingNo"]" MaxLength="50" Margin="Margin.Dense" />
                                                                 </MudItem>
                                                                 <MudItem xs="6" sm="3">
                                                                     <MudSelect T="UnitType" @bind-Value="_unitForm.Type"
-                                                                               Label="BB Tipi *" Margin="Margin.Dense">
+                                                                               Label="@Loc["BuildingSchema.Unit.TypeLabel"]" Margin="Margin.Dense">
                                                                         @foreach (var t in Enum.GetValues<UnitType>())
                                                                         {
                                                                             <MudSelectItem Value="@t">@UnitTypeLabel(t)</MudSelectItem>
@@ -378,25 +386,25 @@ else
                                                                 </MudItem>
                                                                 <MudItem xs="6" sm="3">
                                                                     <MudNumericField T="decimal" @bind-Value="_unitForm.SquareMeters"
-                                                                                     Label="Metrekare (m²) *" Min="0"
+                                                                                     Label="@Loc["BuildingSchema.Unit.AreaLabel"]" Min="0"
                                                                                      Margin="Margin.Dense" Format="F2" />
                                                                 </MudItem>
                                                                 <MudItem xs="6" sm="3">
                                                                     <MudNumericField T="int" @bind-Value="_unitForm.LandShare"
-                                                                                     Label="Arsa Payı *" Min="0" Margin="Margin.Dense" />
+                                                                                     Label="@Loc["BuildingSchema.Unit.LandShare"]" Min="0" Margin="Margin.Dense" />
                                                                 </MudItem>
                                                                 <MudItem xs="6" sm="3">
                                                                     <MudNumericField T="decimal?" @bind-Value="_unitForm.AllocatedArea"
-                                                                                     Label="Tahsis Alanı (m²)" Min="0"
+                                                                                     Label="@Loc["BuildingSchema.Unit.AllocatedArea"]" Min="0"
                                                                                      Margin="Margin.Dense" Format="F2" />
                                                                 </MudItem>
                                                                 <MudItem xs="6" sm="3">
                                                                     <MudNumericField T="int" @bind-Value="_unitForm.Floor"
-                                                                                     Label="Kat" Margin="Margin.Dense" />
+                                                                                     Label="@Loc["BuildingSchema.Unit.Floor"]" Margin="Margin.Dense" />
                                                                 </MudItem>
                                                                 <MudItem xs="6" sm="3">
                                                                     <MudSelect T="CleanTenant.Domain.Tenant.BuildingSchema.Orientation" @bind-Value="_unitForm.Orientation"
-                                                                               Label="Yön" Margin="Margin.Dense">
+                                                                               Label="@Loc["BuildingSchema.Unit.Orientation"]" Margin="Margin.Dense">
                                                                         @foreach (var o in Enum.GetValues<CleanTenant.Domain.Tenant.BuildingSchema.Orientation>())
                                                                         {
                                                                             <MudSelectItem Value="@o">@OrientationLabel(o)</MudSelectItem>
@@ -405,7 +413,7 @@ else
                                                                 </MudItem>
                                                                 <MudItem xs="6" sm="3">
                                                                     <MudSelect T="ApartmentLayout" @bind-Value="_unitForm.Layout"
-                                                                               Label="Oda-Salon" Margin="Margin.Dense">
+                                                                               Label="@Loc["BuildingSchema.Unit.Layout"]" Margin="Margin.Dense">
                                                                         @foreach (var l in Enum.GetValues<ApartmentLayout>())
                                                                         {
                                                                             <MudSelectItem Value="@l">@LayoutLabel(l)</MudSelectItem>
@@ -418,11 +426,11 @@ else
                                                                            Color="@(_isEditingUnit ? Color.Success : Color.Primary)"
                                                                            OnClick="SaveUnitAsync"
                                                                            Disabled="@(string.IsNullOrWhiteSpace(_unitForm.Number) || _isBusy)">
-                                                                    @(_isEditingUnit ? "Kaydet" : "Ekle")
+                                                                    @(_isEditingUnit ? Loc["Common.Save"].Value : Loc["Banks.Add"].Value)
                                                                 </MudButton>
                                                                 <MudButton Variant="Variant.Outlined" Size="Size.Small"
                                                                            OnClick="@(() => { _unitFormBuildingId = null; _editingUnitId = null; _isEditingUnit = false; _unitForm.Reset(); })">
-                                                                    İptal
+                                                                    @Loc["Common.Cancel"]
                                                                 </MudButton>
                                                             </div>
                                                         </MudPaper>
@@ -434,7 +442,7 @@ else
                                                             <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.Add"
                                                                        OnClick="@(() => ToggleAddUnit(building.Id))"
                                                                        Disabled="@_isBusy">
-                                                                BB Ekle
+                                                                @Loc["BuildingSchema.Unit.Add"]
                                                             </MudButton>
                                                         </div>
                                                     }
@@ -444,39 +452,39 @@ else
                                                         <MudTable Items="@building.Units.OrderBy(u => u.SortOrder)"
                                                                   Dense="true" Hover="true" Striped="true" Class="mt-1">
                                                             <HeaderContent>
-                                                                <MudTh>No</MudTh>
-                                                                <MudTh>Tip</MudTh>
-                                                                <MudTh>m²</MudTh>
-                                                                <MudTh>Arsa Payı</MudTh>
-                                                                <MudTh>Kat</MudTh>
-                                                                <MudTh>Yön</MudTh>
-                                                                <MudTh>Oda-Salon</MudTh>
+                                                                <MudTh>@Loc["BuildingSchema.Unit.Col.No"]</MudTh>
+                                                                <MudTh>@Loc["BuildingSchema.Unit.Col.Type"]</MudTh>
+                                                                <MudTh>@Loc["BuildingSchema.Unit.Col.Area"]</MudTh>
+                                                                <MudTh>@Loc["BuildingSchema.Unit.LandShare"]</MudTh>
+                                                                <MudTh>@Loc["BuildingSchema.Unit.Floor"]</MudTh>
+                                                                <MudTh>@Loc["BuildingSchema.Unit.Orientation"]</MudTh>
+                                                                <MudTh>@Loc["BuildingSchema.Unit.Layout"]</MudTh>
                                                                 <MudTh></MudTh>
                                                             </HeaderContent>
                                                             <RowTemplate>
-                                                                <MudTd DataLabel="No">@context.Number</MudTd>
-                                                                <MudTd DataLabel="Tip">@UnitTypeLabel(context.Type)</MudTd>
-                                                                <MudTd DataLabel="m²">@context.SquareMeters.ToString("F1")</MudTd>
-                                                                <MudTd DataLabel="Arsa Payı">@context.LandShare</MudTd>
-                                                                <MudTd DataLabel="Kat">@context.Floor</MudTd>
-                                                                <MudTd DataLabel="Yön">@OrientationLabel(context.Orientation)</MudTd>
-                                                                <MudTd DataLabel="Oda-Salon">@LayoutLabel(context.Layout)</MudTd>
+                                                                <MudTd DataLabel="@Loc["BuildingSchema.Unit.Col.No"].Value">@context.Number</MudTd>
+                                                                <MudTd DataLabel="@Loc["BuildingSchema.Unit.Col.Type"].Value">@UnitTypeLabel(context.Type)</MudTd>
+                                                                <MudTd DataLabel="@Loc["BuildingSchema.Unit.Col.Area"].Value">@context.SquareMeters.ToString("F1")</MudTd>
+                                                                <MudTd DataLabel="@Loc["BuildingSchema.Unit.LandShare"].Value">@context.LandShare</MudTd>
+                                                                <MudTd DataLabel="@Loc["BuildingSchema.Unit.Floor"].Value">@context.Floor</MudTd>
+                                                                <MudTd DataLabel="@Loc["BuildingSchema.Unit.Orientation"].Value">@OrientationLabel(context.Orientation)</MudTd>
+                                                                <MudTd DataLabel="@Loc["BuildingSchema.Unit.Layout"].Value">@LayoutLabel(context.Layout)</MudTd>
                                                                 <MudTd>
                                                                     <div class="d-flex gap-1">
                                                                         <MudIconButton Icon="@Icons.Material.Filled.Edit"
-                                                                                       Size="Size.Small" Title="Düzenle"
+                                                                                       Size="Size.Small" Title="@Loc["Common.Edit"]"
                                                                                        OnClick="@(() => StartEditUnit(building.Id, context))"
                                                                                        Disabled="@_isBusy" />
                                                                         <MudIconButton Icon="@Icons.Material.Filled.Delete"
-                                                                                       Size="Size.Small" Color="Color.Error" Title="Sil"
+                                                                                       Size="Size.Small" Color="Color.Error" Title="@Loc["Common.Delete"]"
                                                                                        OnClick="@(() => DeleteUnitAsync(context.Id, context.Number))"
                                                                                        Disabled="@_isBusy" />
                                                                         <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward"
-                                                                                       Size="Size.Small" Title="Yukarı"
+                                                                                       Size="Size.Small" Title="@Loc["BuildingSchema.MoveUp"]"
                                                                                        OnClick="@(() => MoveUnitAsync(context, building, -1))"
                                                                                        Disabled="@_isBusy" />
                                                                         <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward"
-                                                                                       Size="Size.Small" Title="Aşağı"
+                                                                                       Size="Size.Small" Title="@Loc["BuildingSchema.MoveDown"]"
                                                                                        OnClick="@(() => MoveUnitAsync(context, building, 1))"
                                                                                        Disabled="@_isBusy" />
                                                                     </div>
@@ -487,7 +495,7 @@ else
                                                     else if (_unitFormBuildingId != building.Id)
                                                     {
                                                         <MudText Typo="Typo.body2" Color="Color.Secondary">
-                                                            Bağımsız bölüm tanımlanmamış.
+                                                            @Loc["BuildingSchema.Unit.None"]
                                                         </MudText>
                                                     }
                                                 </ChildContent>
@@ -507,7 +515,7 @@ else
 @code {
     [Parameter] public Guid CompanyId { get; set; }
 
-    private string _companyName = "Yükleniyor...";
+    private string _companyName = string.Empty;
     private BuildingSchemaDto? _schema;
     private bool _isLoading = true;
     private bool _unauthorized;
@@ -613,7 +621,7 @@ else
     private async Task DeleteBlockAsync(Guid blockId, string name)
     {
         if (_isBusy) return;
-        var ok = await JS.InvokeAsync<bool>("confirm", $"Ada '{name}' silinecek. Devam edilsin mi?");
+        var ok = await JS.InvokeAsync<bool>("confirm", Loc["BuildingSchema.Confirm.Block", name].Value);
         if (!ok) return;
         _isBusy = true;
         try
@@ -693,7 +701,7 @@ else
     private async Task DeleteParcelAsync(Guid parcelId, string name)
     {
         if (_isBusy) return;
-        var ok = await JS.InvokeAsync<bool>("confirm", $"Parsel '{name}' silinecek. Devam?");
+        var ok = await JS.InvokeAsync<bool>("confirm", Loc["BuildingSchema.Confirm.Parcel", name].Value);
         if (!ok) return;
         _isBusy = true;
         try
@@ -777,7 +785,7 @@ else
     private async Task DeleteBuildingAsync(Guid buildingId, string name)
     {
         if (_isBusy) return;
-        var ok = await JS.InvokeAsync<bool>("confirm", $"Yapı '{name}' silinecek. Devam?");
+        var ok = await JS.InvokeAsync<bool>("confirm", Loc["BuildingSchema.Confirm.Building", name].Value);
         if (!ok) return;
         _isBusy = true;
         try
@@ -880,7 +888,7 @@ else
                 if (result.IsSuccess)
                 {
                     _unitForm.Reset();
-                    Snackbar.Add("BB eklendi.", Severity.Success);
+                    Snackbar.Add(Loc["BuildingSchema.UnitAdded"].Value, Severity.Success);
                     await LoadSchemaAsync();
                 }
                 else Snackbar.Add(result.FirstError.Message, Severity.Error);
@@ -892,7 +900,7 @@ else
     private async Task DeleteUnitAsync(Guid unitId, string number)
     {
         if (_isBusy) return;
-        var ok = await JS.InvokeAsync<bool>("confirm", $"BB '{number}' silinecek. Devam?");
+        var ok = await JS.InvokeAsync<bool>("confirm", Loc["BuildingSchema.Confirm.Unit", number].Value);
         if (!ok) return;
         _isBusy = true;
         try
@@ -965,11 +973,11 @@ else
                 await JS.InvokeVoidAsync("cleantenant.downloadBlobBase64",
                     "yapi-semasi-hatalar.xlsx", base64,
                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-                Snackbar.Add("Excel'de hatalar var. Hata raporu indirildi.", Severity.Warning);
+                Snackbar.Add(Loc["BuildingSchema.Import.HasErrors"].Value, Severity.Warning);
             }
             else
             {
-                Snackbar.Add($"{importResult.ImportedUnitCount} bağımsız bölüm aktarıldı.", Severity.Success);
+                Snackbar.Add(Loc["BuildingSchema.Import.Success", importResult.ImportedUnitCount].Value, Severity.Success);
                 _showImport = false;
                 _importFile = null;
                 await LoadSchemaAsync();
@@ -980,51 +988,51 @@ else
 
     // ── Label helpers ────────────────────────────────────────────────────────
 
-    private static string BuildingTypeLabel(BuildingType t) => t switch
+    private string BuildingTypeLabel(BuildingType t) => t switch
     {
-        BuildingType.Residential => "Konut",
-        BuildingType.ResidentialCommercial => "Konut+İşyeri",
-        BuildingType.ShoppingMall => "AVM",
-        BuildingType.Office => "Ofis",
-        BuildingType.Warehouse => "Depo",
-        _ => "Diğer",
+        BuildingType.Residential => Loc["BuildingSchema.Type.Konut"].Value,
+        BuildingType.ResidentialCommercial => Loc["BuildingSchema.Type.KonutIsyeri"].Value,
+        BuildingType.ShoppingMall => Loc["BuildingSchema.Type.Avm"].Value,
+        BuildingType.Office => Loc["BuildingSchema.Type.Ofis"].Value,
+        BuildingType.Warehouse => Loc["BuildingSchema.Type.Depo"].Value,
+        _ => Loc["BuildingSchema.Type.Diger"].Value,
     };
 
-    private static string UnitTypeLabel(UnitType t) => t switch
+    private string UnitTypeLabel(UnitType t) => t switch
     {
-        UnitType.Apartment => "Daire",
-        UnitType.Office => "Ofis",
-        UnitType.Shop => "Dükkan",
-        UnitType.Store => "Mağaza",
-        UnitType.Storage => "Depo",
-        UnitType.Parking => "Otopark",
-        UnitType.Shelter => "Sığınak",
-        _ => "Diğer",
+        UnitType.Apartment => Loc["BuildingSchema.Unit.Type.Daire"].Value,
+        UnitType.Office => Loc["BuildingSchema.Unit.Type.Ofis"].Value,
+        UnitType.Shop => Loc["BuildingSchema.Unit.Type.Dukkan"].Value,
+        UnitType.Store => Loc["BuildingSchema.Unit.Type.Magaza"].Value,
+        UnitType.Storage => Loc["BuildingSchema.Unit.Type.Depo"].Value,
+        UnitType.Parking => Loc["BuildingSchema.Unit.Type.Otopark"].Value,
+        UnitType.Shelter => Loc["BuildingSchema.Unit.Type.Siginak"].Value,
+        _ => Loc["BuildingSchema.Type.Diger"].Value,
     };
 
-    private static string OrientationLabel(CleanTenant.Domain.Tenant.BuildingSchema.Orientation o) => o switch
+    private string OrientationLabel(CleanTenant.Domain.Tenant.BuildingSchema.Orientation o) => o switch
     {
-        CleanTenant.Domain.Tenant.BuildingSchema.Orientation.North => "Kuzey",
-        CleanTenant.Domain.Tenant.BuildingSchema.Orientation.South => "Güney",
-        CleanTenant.Domain.Tenant.BuildingSchema.Orientation.East => "Doğu",
-        CleanTenant.Domain.Tenant.BuildingSchema.Orientation.West => "Batı",
-        CleanTenant.Domain.Tenant.BuildingSchema.Orientation.NorthEast => "Kuzeydoğu",
-        CleanTenant.Domain.Tenant.BuildingSchema.Orientation.NorthWest => "Kuzeybatı",
-        CleanTenant.Domain.Tenant.BuildingSchema.Orientation.SouthEast => "Güneydoğu",
-        CleanTenant.Domain.Tenant.BuildingSchema.Orientation.SouthWest => "Güneybatı",
-        _ => "Belirsiz",
+        CleanTenant.Domain.Tenant.BuildingSchema.Orientation.North => Loc["BuildingSchema.Orient.North"].Value,
+        CleanTenant.Domain.Tenant.BuildingSchema.Orientation.South => Loc["BuildingSchema.Orient.South"].Value,
+        CleanTenant.Domain.Tenant.BuildingSchema.Orientation.East => Loc["BuildingSchema.Orient.East"].Value,
+        CleanTenant.Domain.Tenant.BuildingSchema.Orientation.West => Loc["BuildingSchema.Orient.West"].Value,
+        CleanTenant.Domain.Tenant.BuildingSchema.Orientation.NorthEast => Loc["BuildingSchema.Orient.NE"].Value,
+        CleanTenant.Domain.Tenant.BuildingSchema.Orientation.NorthWest => Loc["BuildingSchema.Orient.NW"].Value,
+        CleanTenant.Domain.Tenant.BuildingSchema.Orientation.SouthEast => Loc["BuildingSchema.Orient.SE"].Value,
+        CleanTenant.Domain.Tenant.BuildingSchema.Orientation.SouthWest => Loc["BuildingSchema.Orient.SW"].Value,
+        _ => Loc["BuildingSchema.Orient.Unknown"].Value,
     };
 
-    private static string LayoutLabel(ApartmentLayout l) => l switch
+    private string LayoutLabel(ApartmentLayout l) => l switch
     {
-        ApartmentLayout.Studio => "Stüdyo",
+        ApartmentLayout.Studio => Loc["BuildingSchema.Layout.Studio"].Value,
         ApartmentLayout.OneRoom => "1+0",
         ApartmentLayout.OneBedroom => "1+1",
         ApartmentLayout.TwoBedroom => "2+1",
         ApartmentLayout.ThreeBedroom => "3+1",
         ApartmentLayout.FourBedroom => "4+1",
         ApartmentLayout.FiveBedroom => "5+1",
-        _ => "Diğer",
+        _ => Loc["BuildingSchema.Type.Diger"].Value,
     };
 
     // ── Inner models ─────────────────────────────────────────────────────────

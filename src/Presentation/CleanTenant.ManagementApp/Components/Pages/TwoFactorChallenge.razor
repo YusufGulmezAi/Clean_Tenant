@@ -2,6 +2,7 @@
 @layout EmptyLayout
 @implements IDisposable
 @inject PersistentComponentState ApplicationState
+@inject IStringLocalizer Loc
 @attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
 @*
     2FA Challenge sayfası — Login akışında "TwoFactorRequired" sonucu sonrası
@@ -13,21 +14,24 @@
     render edilir (prerender + interactive). HttpContext sadece prerender'da
     mevcut; cookie'nin VARLIK BİLGİSİ (token değeri değil) PersistentComponentState
     ile interactive faza taşınır. Form post'larında cookie endpoint'e otomatik gider.
+
+    v0.2.10.e.6 — TwoFactor.* + Common.* anahtarlarıyla lokalize edildi.
+    MessageFor static → instance method.
 *@
 
-<PageTitle>2FA Doğrulama — CleanTenant</PageTitle>
+<PageTitle>@Loc["TwoFactor.Challenge.PageTitle"]</PageTitle>
 
 <MudPaper Elevation="3" Class="pa-8 mx-auto mt-16" MaxWidth="MaxWidth.Small" Style="max-width: 460px;">
     <div class="d-flex align-center mb-6">
         <MudIcon Icon="@Icons.Material.Filled.Security" Color="Color.Primary" Size="Size.Large" />
-        <MudText Typo="Typo.h4" Class="ml-2">İki Faktörlü Doğrulama</MudText>
+        <MudText Typo="Typo.h4" Class="ml-2">@Loc["TwoFactor.Challenge.Title"]</MudText>
     </div>
 
     @if (!_hasChallenge)
     {
         <MudAlert Severity="Severity.Error" Class="mb-4">
-            Aktif bir doğrulama oturumu bulunamadı (süresi dolmuş ya da iptal edilmiş olabilir).
-            <MudLink Href="/login">Giriş sayfasına dön</MudLink>.
+            @Loc["TwoFactor.Challenge.NoSession"]
+            <MudLink Href="/login">@Loc["TwoFactor.Challenge.BackToLogin"]</MudLink>.
         </MudAlert>
     }
     else
@@ -44,25 +48,25 @@
         }
 
         <MudText Typo="Typo.body2" Color="Color.Default" Class="mb-4">
-            Doğrulama yönteminizi seçin ve kodu girin.
+            @Loc["TwoFactor.Challenge.Prompt"]
         </MudText>
 
         <form method="post" action="/auth/2fa/verify">
             <div class="mb-3">
-                <label for="method" class="d-block mb-1" style="font-weight: 500;">Yöntem</label>
+                <label for="method" class="d-block mb-1" style="font-weight: 500;">@Loc["TwoFactor.Method.Label"]</label>
                 <select id="method" name="method"
                         onchange="window.cleantenant.challengeMethodSwitch && window.cleantenant.challengeMethodSwitch(this.value)"
                         style="width: 100%; padding: 10px; border: 1px solid rgba(0,0,0,0.23); border-radius: 4px; font-size: 1rem;">
-                    <option value="Authenticator">Authenticator (TOTP)</option>
-                    <option value="Email">E-posta kodu</option>
-                    <option value="Phone">SMS kodu</option>
-                    <option value="RecoveryCode">Recovery kodu</option>
+                    <option value="Authenticator">@Loc["TwoFactor.Method.Authenticator"]</option>
+                    <option value="Email">@Loc["TwoFactor.Method.Email"]</option>
+                    <option value="Phone">@Loc["TwoFactor.Method.Sms"]</option>
+                    <option value="RecoveryCode">@Loc["TwoFactor.Method.Recovery"]</option>
                 </select>
             </div>
 
             @* 6 haneli OTP modu (Authenticator/Email/Phone için) *@
             <div id="challenge-otp" class="mb-4" style="display: block;">
-                <label class="d-block mb-2" style="font-weight: 500;">6 haneli kod</label>
+                <label class="d-block mb-2" style="font-weight: 500;">@Loc["TwoFactor.Code.SixDigit"]</label>
                 <div id="challenge-otp-inputs" class="d-flex justify-center" style="gap: 0.5rem;">
                     @for (int i = 0; i < 6; i++)
                     {
@@ -77,7 +81,7 @@
             @* Recovery kodu modu (XXXXX-XXXXX serbest metin) — JS toggle eder *@
             <div id="challenge-recovery" class="mb-4" style="display: none;">
                 <label for="recovery-code" class="d-block mb-1" style="font-weight: 500;">
-                    Recovery kodu (XXXXX-XXXXX)
+                    @Loc["TwoFactor.Code.Recovery"]
                 </label>
                 <input id="recovery-code" name="recovery-code-display" type="text" autocomplete="one-time-code"
                        placeholder="ABCDE-FGHIJ"
@@ -92,7 +96,7 @@
                     id="challenge-submit"
                     disabled
                     style="width: 100%; padding: 12px; background-color: var(--mud-palette-primary); color: white; border: none; border-radius: 4px; font-size: 1rem; font-weight: 500; cursor: pointer; opacity: 0.5;">
-                Doğrula
+                @Loc["TwoFactor.Verify"]
             </button>
         </form>
 
@@ -158,12 +162,12 @@
             <input type="hidden" name="method" value="Email" />
             <button type="submit"
                     style="width: 100%; padding: 8px; background: transparent; color: var(--mud-palette-primary); border: 1px solid var(--mud-palette-primary); border-radius: 4px; cursor: pointer;">
-                E-posta yöntemi için kod gönder
+                @Loc["TwoFactor.SendEmail"]
             </button>
         </form>
 
         <MudText Typo="Typo.caption" Color="Color.Default" Class="d-block mt-4">
-            Token 5 dakika geçerli. <MudLink Href="/login">Baştan giriş</MudLink>.
+            @Loc["TwoFactor.TokenValidity"] <MudLink Href="/login">@Loc["TwoFactor.RestartLogin"]</MudLink>.
         </MudText>
     }
 </MudPaper>
@@ -211,12 +215,12 @@
 
     public void Dispose() => _persistingSubscription.Dispose();
 
-    private static string MessageFor(string code) => code switch
+    private string MessageFor(string code) => code switch
     {
-        "AUTH-2FA-001" => "Yöntem ve kod zorunlu.",
-        "AUTH-2FA-INVALID-CODE" => "Doğrulama kodu hatalı veya süresi dolmuş.",
-        "AUTH-2FA-CHALLENGE-NOT-FOUND" => "Challenge süresi doldu. Lütfen tekrar giriş yapın.",
-        "AUTH-2FA-METHOD-NOT-AVAILABLE" => "Bu yöntem hesabınızda aktif değil.",
-        _ => $"Doğrulama hatası: {code}",
+        "AUTH-2FA-001" => Loc["TwoFactor.Error.MethodCodeRequired"].Value,
+        "AUTH-2FA-INVALID-CODE" => Loc["TwoFactor.Error.InvalidOrExpired"].Value,
+        "AUTH-2FA-CHALLENGE-NOT-FOUND" => Loc["TwoFactor.Error.ChallengeNotFound"].Value,
+        "AUTH-2FA-METHOD-NOT-AVAILABLE" => Loc["TwoFactor.Error.MethodNotAvailable"].Value,
+        _ => Loc["TwoFactor.Error.Unknown", code].Value,
     };
 }

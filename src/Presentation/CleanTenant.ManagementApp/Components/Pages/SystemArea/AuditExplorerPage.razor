@@ -4,6 +4,7 @@
 @inject AuthenticationStateProvider AuthProvider
 @inject ISnackbar Snackbar
 @inject IMainCatalogReader CompanyReader
+@inject IStringLocalizer Loc
 @using CleanTenant.Application.Features.System.Audit
 @using CleanTenant.Application.Features.Main.Readers
 @using CleanTenant.Domain.Auditing
@@ -11,43 +12,48 @@
 @using System.Text.Json
 @using System.Globalization
 
-<PageTitle>Audit Explorer — Sistem</PageTitle>
+<PageTitle>@Loc["Audit.PageTitle"]</PageTitle>
+
+@*
+    v0.2.10.e.4 — Audit.* anahtarlarıyla lokalize edildi. ActionLabel switch
+    metodu Loc kullanır; bu yüzden artık static değil — instance method.
+*@
 
 @if (_unauthorized)
 {
     <MudAlert Severity="Severity.Warning" Class="my-3">
-        Bu sayfa yalnız Sistem kullanıcıları için.
+        @Loc["Audit.UnauthorizedSystem"]
     </MudAlert>
 }
 else
 {
-    <MudText Typo="Typo.h5" Class="mb-3">Audit Explorer</MudText>
+    <MudText Typo="Typo.h5" Class="mb-3">@Loc["Audit.Title"]</MudText>
 
     @* ── Filtre Paneli ────────────────────────────────────────────── *@
     <MudExpansionPanels Class="mb-3">
-        <MudExpansionPanel Text="Filtreler" Icon="@Icons.Material.Filled.FilterList">
+        <MudExpansionPanel Text="@Loc["Audit.Filter.Title"].Value" Icon="@Icons.Material.Filled.FilterList">
             <MudGrid>
                 <MudItem xs="12" sm="6" md="3">
                     <MudTextField @bind-Value="_filterDateFromStr"
-                                  Label="Başlangıç Tarihi"
+                                  Label="@Loc["Audit.Filter.DateFrom"]"
                                   Variant="Variant.Outlined"
                                   Margin="Margin.Dense"
-                                  Placeholder="GG.AA.YYYY"
-                                  HelperText="GG.AA.YYYY veya GG/AA/YYYY" />
+                                  Placeholder="@Loc["Audit.Filter.DateFormat"].Value"
+                                  HelperText="@Loc["Audit.Filter.DateFormatHelp"].Value" />
                 </MudItem>
                 <MudItem xs="12" sm="6" md="3">
                     <MudTextField @bind-Value="_filterDateToStr"
-                                  Label="Bitiş Tarihi"
+                                  Label="@Loc["Audit.Filter.DateTo"]"
                                   Variant="Variant.Outlined"
                                   Margin="Margin.Dense"
-                                  Placeholder="GG.AA.YYYY"
-                                  HelperText="GG.AA.YYYY veya GG/AA/YYYY" />
+                                  Placeholder="@Loc["Audit.Filter.DateFormat"].Value"
+                                  HelperText="@Loc["Audit.Filter.DateFormatHelp"].Value" />
                 </MudItem>
                 <MudItem xs="12" sm="6" md="3">
                     <MudAutocomplete T="string"
                                      @bind-Value="_filterUserFullName"
                                      SearchFunc="SearchUserNames"
-                                     Label="Kullanıcı"
+                                     Label="@Loc["Audit.Filter.User"]"
                                      Variant="Variant.Outlined"
                                      Margin="Margin.Dense"
                                      Clearable="true"
@@ -60,7 +66,7 @@ else
                     <MudAutocomplete T="string"
                                      @bind-Value="_filterEntityType"
                                      SearchFunc="SearchEntityTypes"
-                                     Label="Entity Tipi"
+                                     Label="@Loc["Audit.Filter.EntityType"]"
                                      Variant="Variant.Outlined"
                                      Margin="Margin.Dense"
                                      Clearable="true"
@@ -71,21 +77,21 @@ else
                 </MudItem>
                 <MudItem xs="12" sm="6" md="3">
                     <MudSelect T="AuditAction?" @bind-Value="_filterAction"
-                               Label="İşlem Tipi"
+                               Label="@Loc["Audit.Filter.Action"]"
                                Variant="Variant.Outlined"
                                Margin="Margin.Dense"
                                Clearable="true">
-                        <MudSelectItem T="AuditAction?" Value="null">Tümü</MudSelectItem>
-                        <MudSelectItem T="AuditAction?" Value="AuditAction.Create">Ekleme</MudSelectItem>
-                        <MudSelectItem T="AuditAction?" Value="AuditAction.Update">Güncelleme</MudSelectItem>
-                        <MudSelectItem T="AuditAction?" Value="AuditAction.Delete">Silme</MudSelectItem>
+                        <MudSelectItem T="AuditAction?" Value="null">@Loc["Audit.Action.All"]</MudSelectItem>
+                        <MudSelectItem T="AuditAction?" Value="AuditAction.Create">@Loc["Audit.Action.Insert"]</MudSelectItem>
+                        <MudSelectItem T="AuditAction?" Value="AuditAction.Update">@Loc["Audit.Action.Update"]</MudSelectItem>
+                        <MudSelectItem T="AuditAction?" Value="AuditAction.Delete">@Loc["Audit.Action.Delete"]</MudSelectItem>
                     </MudSelect>
                 </MudItem>
                 <MudItem xs="12" sm="6" md="3">
                     <MudAutocomplete T="string"
                                      @bind-Value="_filterTenantName"
                                      SearchFunc="SearchTenantNames"
-                                     Label="Yönetim"
+                                     Label="@Loc["Audit.Filter.Tenant"]"
                                      Variant="Variant.Outlined"
                                      Margin="Margin.Dense"
                                      Clearable="true"
@@ -98,7 +104,7 @@ else
                     <MudAutocomplete T="string"
                                      @bind-Value="_filterCompanyName"
                                      SearchFunc="SearchCompanyNames"
-                                     Label="Site"
+                                     Label="@Loc["Audit.Filter.Company"]"
                                      Variant="Variant.Outlined"
                                      Margin="Margin.Dense"
                                      Clearable="true"
@@ -108,11 +114,11 @@ else
                                      CoerceValue="false" />
                 </MudItem>
                 <MudItem xs="12" Class="d-flex gap-2 justify-end">
-                    <MudButton Variant="Variant.Outlined" OnClick="ResetFilters">Temizle</MudButton>
+                    <MudButton Variant="Variant.Outlined" OnClick="ResetFilters">@Loc["Audit.Filter.Clear"]</MudButton>
                     <MudButton Variant="Variant.Filled" Color="Color.Primary"
                                StartIcon="@Icons.Material.Filled.Search"
                                OnClick="@(() => LoadPageAsync(0))">
-                        Ara
+                        @Loc["Audit.Filter.Search"]
                     </MudButton>
                 </MudItem>
             </MudGrid>
@@ -134,35 +140,35 @@ else
                  ShowColumnOptions="true"
                  RowClick="@OnRowClick">
         <Columns>
-            <PropertyColumn T="AuditListItem" TProperty="DateTimeOffset" Property="@(e => e.Timestamp)" Title="Tarih/Saat">
+            <PropertyColumn T="AuditListItem" TProperty="DateTimeOffset" Property="@(e => e.Timestamp)" Title="@Loc["Audit.Col.DateTime"].Value">
                 <CellTemplate>
                     <MudText Typo="Typo.body2">@context.Item.Timestamp.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss")</MudText>
                 </CellTemplate>
             </PropertyColumn>
-            <PropertyColumn T="AuditListItem" TProperty="string" Property="@(e => e.EntityType)" Title="Entity Tipi" Hideable="true" />
-            <PropertyColumn T="AuditListItem" TProperty="Guid" Property="@(e => e.EntityId)" Title="Entity ID" Hideable="true">
+            <PropertyColumn T="AuditListItem" TProperty="string" Property="@(e => e.EntityType)" Title="@Loc["Audit.Col.EntityType"].Value" Hideable="true" />
+            <PropertyColumn T="AuditListItem" TProperty="Guid" Property="@(e => e.EntityId)" Title="@Loc["Audit.Col.EntityId"].Value" Hideable="true">
                 <CellTemplate>
                     <MudText Typo="Typo.caption" Style="font-family:monospace">@context.Item.EntityId.ToString("D")[..8]…</MudText>
                 </CellTemplate>
             </PropertyColumn>
-            <PropertyColumn T="AuditListItem" TProperty="AuditAction" Property="@(e => e.Action)" Title="İşlem" Hideable="true">
+            <PropertyColumn T="AuditListItem" TProperty="AuditAction" Property="@(e => e.Action)" Title="@Loc["Audit.Col.Action"].Value" Hideable="true">
                 <CellTemplate>
                     <MudChip T="string" Size="Size.Small" Color="@ActionColor(context.Item.Action)">
                         @ActionLabel(context.Item.Action)
                     </MudChip>
                 </CellTemplate>
             </PropertyColumn>
-            <PropertyColumn T="AuditListItem" TProperty="string" Property="@(e => e.UserFullName ?? "")" Title="Kullanıcı" Hideable="true">
+            <PropertyColumn T="AuditListItem" TProperty="string" Property="@(e => e.UserFullName ?? "")" Title="@Loc["Audit.Col.User"].Value" Hideable="true">
                 <CellTemplate>
                     <MudText Typo="Typo.body2">@(context.Item.UserFullName ?? context.Item.UserEmail ?? "—")</MudText>
                 </CellTemplate>
             </PropertyColumn>
-            <PropertyColumn T="AuditListItem" TProperty="string" Property="@(e => e.TenantName ?? "")" Title="Yönetim" Hideable="true">
+            <PropertyColumn T="AuditListItem" TProperty="string" Property="@(e => e.TenantName ?? "")" Title="@Loc["Audit.Col.Tenant"].Value" Hideable="true">
                 <CellTemplate>
                     <MudText Typo="Typo.body2">@(context.Item.TenantName ?? "—")</MudText>
                 </CellTemplate>
             </PropertyColumn>
-            <PropertyColumn T="AuditListItem" TProperty="Guid?" Property="@(e => e.CompanyId)" Title="Site" Hideable="true" Hidden="false">
+            <PropertyColumn T="AuditListItem" TProperty="Guid?" Property="@(e => e.CompanyId)" Title="@Loc["Audit.Filter.Company"].Value" Hideable="true" Hidden="false">
                 <CellTemplate>
                     <MudText Typo="Typo.caption" Style="font-family:monospace">
                         @(context.Item.CompanyId.HasValue
@@ -171,17 +177,17 @@ else
                     </MudText>
                 </CellTemplate>
             </PropertyColumn>
-            <PropertyColumn T="AuditListItem" TProperty="string" Property="@(e => e.ChangesJson)" Title="Değişiklikler" Hideable="true" Hidden="false">
+            <PropertyColumn T="AuditListItem" TProperty="string" Property="@(e => e.ChangesJson)" Title="@Loc["Audit.Col.Changes"].Value" Hideable="true" Hidden="false">
                 <CellTemplate>
                     <MudText Typo="Typo.caption" Style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
                         @context.Item.ChangesJson
                     </MudText>
                 </CellTemplate>
             </PropertyColumn>
-            <PropertyColumn T="AuditListItem" TProperty="string" Property="@(e => e.IpAddress ?? "")" Title="IP Adresi" Hideable="true" Hidden="true" />
-            <PropertyColumn T="AuditListItem" TProperty="string" Property="@(e => e.BrowserName ?? "")" Title="Tarayıcı" Hideable="true" Hidden="true" />
-            <PropertyColumn T="AuditListItem" TProperty="string" Property="@(e => e.OperatingSystem ?? "")" Title="İşletim Sistemi" Hideable="true" Hidden="true" />
-            <PropertyColumn T="AuditListItem" TProperty="string" Property="@(e => e.RequestPath ?? "")" Title="Endpoint" Hideable="true" Hidden="true" />
+            <PropertyColumn T="AuditListItem" TProperty="string" Property="@(e => e.IpAddress ?? "")" Title="@Loc["Audit.Col.IpAddress"].Value" Hideable="true" Hidden="true" />
+            <PropertyColumn T="AuditListItem" TProperty="string" Property="@(e => e.BrowserName ?? "")" Title="@Loc["Audit.Col.Browser"].Value" Hideable="true" Hidden="true" />
+            <PropertyColumn T="AuditListItem" TProperty="string" Property="@(e => e.OperatingSystem ?? "")" Title="@Loc["Audit.Col.Os"].Value" Hideable="true" Hidden="true" />
+            <PropertyColumn T="AuditListItem" TProperty="string" Property="@(e => e.RequestPath ?? "")" Title="@Loc["Audit.Col.Endpoint"].Value" Hideable="true" Hidden="true" />
         </Columns>
     </MudDataGrid>
 
@@ -191,7 +197,7 @@ else
                        Disabled="@(_currentPage == 0 || _loading)"
                        OnClick="@(() => LoadPageAsync(_currentPage - 1))" />
         <MudText Typo="Typo.body2">
-            Sayfa @(_currentPage + 1) / @TotalPages — Toplam @_totalCount kayıt
+            @Loc["Audit.Pagination", _currentPage + 1, TotalPages, _totalCount]
         </MudText>
         <MudIconButton Icon="@Icons.Material.Filled.ChevronRight"
                        Disabled="@(_currentPage >= TotalPages - 1 || _loading)"
@@ -208,47 +214,47 @@ else
         {
             <MudDrawerHeader Style="border-bottom:1px solid rgba(0,0,0,0.12)">
                 <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Style="width:100%">
-                    <MudText Typo="Typo.h6">Audit Detayı</MudText>
+                    <MudText Typo="Typo.h6">@Loc["Audit.Detail.Title"]</MudText>
                     <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="@(() => _drawerOpen = false)" />
                 </MudStack>
             </MudDrawerHeader>
             <MudContainer Class="pa-4" Style="overflow-y:auto">
                 <MudGrid Spacing="2">
                     <MudItem xs="6">
-                        <MudText Typo="Typo.caption" Color="Color.Secondary">Tarih</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">@Loc["Audit.Detail.Date"]</MudText>
                         <MudText>@_selected.Timestamp.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss")</MudText>
                     </MudItem>
                     <MudItem xs="6">
-                        <MudText Typo="Typo.caption" Color="Color.Secondary">İşlem</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">@Loc["Audit.Col.Action"]</MudText>
                         <MudChip T="string" Size="Size.Small" Color="@ActionColor(_selected.Action)">@ActionLabel(_selected.Action)</MudChip>
                     </MudItem>
                     <MudItem xs="6">
-                        <MudText Typo="Typo.caption" Color="Color.Secondary">Entity Tipi</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">@Loc["Audit.Col.EntityType"]</MudText>
                         <MudText>@_selected.EntityType</MudText>
                     </MudItem>
                     <MudItem xs="6">
-                        <MudText Typo="Typo.caption" Color="Color.Secondary">Entity ID</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">@Loc["Audit.Col.EntityId"]</MudText>
                         <MudText Style="font-family:monospace;font-size:0.75rem">@_selected.EntityId</MudText>
                     </MudItem>
                     <MudItem xs="12"><MudDivider /></MudItem>
                     <MudItem xs="6">
-                        <MudText Typo="Typo.caption" Color="Color.Secondary">Kullanıcı</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">@Loc["Audit.Col.User"]</MudText>
                         <MudText>@(_selected.UserFullName ?? "—")</MudText>
                     </MudItem>
                     <MudItem xs="6">
-                        <MudText Typo="Typo.caption" Color="Color.Secondary">E-posta</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">@Loc["Audit.Detail.Email"]</MudText>
                         <MudText>@(_selected.UserEmail ?? "—")</MudText>
                     </MudItem>
                     <MudItem xs="6">
-                        <MudText Typo="Typo.caption" Color="Color.Secondary">Yönetim</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">@Loc["Audit.Col.Tenant"]</MudText>
                         <MudText>@(_selected.TenantName ?? "—")</MudText>
                     </MudItem>
                     <MudItem xs="6">
-                        <MudText Typo="Typo.caption" Color="Color.Secondary">Kapsam</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">@Loc["Audit.Detail.Scope"]</MudText>
                         <MudText>@(_selected.ScopeLevel ?? "—")</MudText>
                     </MudItem>
                     <MudItem xs="12">
-                        <MudText Typo="Typo.caption" Color="Color.Secondary">Site</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">@Loc["Audit.Filter.Company"]</MudText>
                         <MudText Style="font-family:monospace;font-size:0.75rem">
                             @if (_selected.CompanyId.HasValue)
                             {
@@ -269,20 +275,20 @@ else
                     </MudItem>
                     <MudItem xs="12"><MudDivider /></MudItem>
                     <MudItem xs="6">
-                        <MudText Typo="Typo.caption" Color="Color.Secondary">IP</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">@Loc["Audit.Detail.Ip"]</MudText>
                         <MudText>@(_selected.IpAddress ?? "—")</MudText>
                     </MudItem>
                     <MudItem xs="6">
-                        <MudText Typo="Typo.caption" Color="Color.Secondary">Tarayıcı</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">@Loc["Audit.Col.Browser"]</MudText>
                         <MudText>@(_selected.BrowserName ?? "—")</MudText>
                     </MudItem>
                     <MudItem xs="12">
-                        <MudText Typo="Typo.caption" Color="Color.Secondary">Endpoint</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">@Loc["Audit.Col.Endpoint"]</MudText>
                         <MudText Style="font-family:monospace;font-size:0.75rem">@(_selected.RequestPath ?? "—")</MudText>
                     </MudItem>
                     <MudItem xs="12"><MudDivider /></MudItem>
                     <MudItem xs="12">
-                        <MudText Typo="Typo.caption" Color="Color.Secondary">Değişiklikler (JSON)</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">@Loc["Audit.Detail.Changes"]</MudText>
                         <MudPaper Elevation="0" Class="pa-2 mt-1" Style="background:#f5f5f5;border-radius:4px;overflow-x:auto;max-height:400px;overflow-y:auto">
                             <pre style="font-size:0.75rem;margin:0;white-space:pre-wrap;word-break:break-all">@FormatJson(_selected.ChangesJson)</pre>
                         </MudPaper>
@@ -376,7 +382,7 @@ else
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Yükleme hatası: {ex.Message}", Severity.Error);
+            Snackbar.Add(Loc["Audit.LoadError", ex.Message].Value, Severity.Error);
         }
         finally
         {
@@ -461,11 +467,11 @@ else
         _ => Color.Warning
     };
 
-    private static string ActionLabel(AuditAction action) => action switch
+    private string ActionLabel(AuditAction action) => action switch
     {
-        AuditAction.Create => "Ekleme",
-        AuditAction.Update => "Güncelleme",
-        AuditAction.Delete => "Silme",
+        AuditAction.Create => Loc["Audit.Action.Insert"].Value,
+        AuditAction.Update => Loc["Audit.Action.Update"].Value,
+        AuditAction.Delete => Loc["Audit.Action.Delete"].Value,
         _ => action.ToString()
     };
 

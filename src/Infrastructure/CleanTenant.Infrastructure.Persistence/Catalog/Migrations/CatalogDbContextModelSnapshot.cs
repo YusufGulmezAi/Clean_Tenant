@@ -61,6 +61,10 @@ namespace CleanTenant.Infrastructure.Persistence.Catalog.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("is_deleted");
 
+                    b.Property<int>("MinimumRoleScope")
+                        .HasColumnType("integer")
+                        .HasColumnName("minimum_role_scope");
+
                     b.Property<string>("Module")
                         .IsRequired()
                         .HasMaxLength(64)
@@ -100,6 +104,10 @@ namespace CleanTenant.Infrastructure.Persistence.Catalog.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasColumnName("id");
+
+                    b.Property<Guid?>("CompanyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("company_id");
 
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
@@ -155,6 +163,10 @@ namespace CleanTenant.Infrastructure.Persistence.Catalog.Migrations
                         .HasColumnType("smallint")
                         .HasColumnName("scope");
 
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
                     b.Property<DateTimeOffset?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
@@ -173,17 +185,23 @@ namespace CleanTenant.Infrastructure.Persistence.Catalog.Migrations
                     b.HasKey("Id")
                         .HasName("pk_asp_net_roles");
 
+                    b.HasIndex("CompanyId")
+                        .HasDatabaseName("ix_role_company_id");
+
                     b.HasIndex("NormalizedName")
                         .IsUnique()
                         .HasDatabaseName("RoleNameIndex");
+
+                    b.HasIndex("TenantId")
+                        .HasDatabaseName("ix_role_tenant_id");
 
                     b.HasIndex("UrlCode")
                         .IsUnique()
                         .HasDatabaseName("ix_asp_net_roles_url_code");
 
-                    b.HasIndex("NormalizedName", "Scope")
+                    b.HasIndex("NormalizedName", "Scope", "TenantId", "CompanyId")
                         .IsUnique()
-                        .HasDatabaseName("ix_role_normalized_name_scope");
+                        .HasDatabaseName("ix_role_normalized_name_scope_tenant_company");
 
                     b.ToTable("AspNetRoles", (string)null);
                 });
@@ -816,6 +834,10 @@ namespace CleanTenant.Infrastructure.Persistence.Catalog.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("phone_number_confirmed");
 
+                    b.Property<string>("PreferredCulture")
+                        .HasColumnType("text")
+                        .HasColumnName("preferred_culture");
+
                     b.Property<uint>("RowVersion")
                         .IsConcurrencyToken()
                         .ValueGeneratedOnAddOrUpdate()
@@ -900,6 +922,79 @@ namespace CleanTenant.Infrastructure.Persistence.Catalog.Migrations
 
                             t.HasCheckConstraint("ck_user_vkn_format", "vkn IS NULL OR vkn ~ '^[1-9][0-9]{9}$'");
                         });
+                });
+
+            modelBuilder.Entity("CleanTenant.Domain.Localization.LocalizedResource", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Culture")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("culture");
+
+                    b.Property<DateTimeOffset?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("deleted_by");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_deleted");
+
+                    b.Property<bool>("IsMachineTranslated")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_machine_translated");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("key");
+
+                    b.Property<long>("RowVersion")
+                        .HasColumnType("bigint")
+                        .HasColumnName("row_version");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)")
+                        .HasColumnName("value");
+
+                    b.HasKey("Id")
+                        .HasName("pk_localized_resources");
+
+                    b.HasIndex("Culture")
+                        .HasDatabaseName("ix_localized_resource_culture");
+
+                    b.HasIndex("Key", "Culture")
+                        .IsUnique()
+                        .HasDatabaseName("ix_localized_resource_key_culture");
+
+                    b.ToTable("localized_resources", (string)null);
                 });
 
             modelBuilder.Entity("CleanTenant.Domain.LookUp.Banks.Bank", b =>

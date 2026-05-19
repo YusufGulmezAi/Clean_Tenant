@@ -7,6 +7,10 @@
     Excel + PDF export butonları + multi-keyword AND quick filter + custom action
     slot ekler. Tüm MudDataGrid kolon türleri (PropertyColumn, TemplateColumn)
     Columns RenderFragment ile geçirilir.
+
+    v0.2.10.e.2 — Toolbar yazıları + SearchPlaceholder + NoRecords lokalize
+    edildi (DataTable.* anahtarları). SearchPlaceholder parameter null/boş ise
+    Loc["DataTable.SearchPlaceholder"] kullanılır.
 *@
 
 <MudPaper Elevation="0" Class="pa-0">
@@ -33,7 +37,7 @@
                 {
                     <MudText Typo="Typo.h6">@Title</MudText>
                     <MudText Typo="Typo.caption" Color="Color.Default" Class="ml-3 mt-1">
-                        @($"Toplam: {Items?.Count() ?? 0}")
+                        @Loc["DataTable.Total", Items?.Count() ?? 0]
                     </MudText>
                 }
                 <MudSpacer />
@@ -42,7 +46,7 @@
                 @if (ShowQuickFilter)
                 {
                     <MudTextField @bind-Value="_searchText"
-                                  Placeholder="@SearchPlaceholder"
+                                  Placeholder="@ResolvedSearchPlaceholder"
                                   Adornment="Adornment.Start"
                                   AdornmentIcon="@Icons.Material.Filled.Search"
                                   IconSize="Size.Medium"
@@ -59,7 +63,7 @@
                 {
                     <MudIconButton Icon="@Icons.Material.Filled.TableChart"
                                    Color="Color.Success"
-                                   title="Excel olarak indir"
+                                   title="@Loc["DataTable.ExcelDownload"]"
                                    OnClick="@ExportExcelAsync"
                                    Class="ml-2" />
                 }
@@ -67,7 +71,7 @@
                 {
                     <MudIconButton Icon="@Icons.Material.Filled.PictureAsPdf"
                                    Color="Color.Error"
-                                   title="PDF olarak indir"
+                                   title="@Loc["DataTable.PdfDownload"]"
                                    OnClick="@ExportPdfAsync"
                                    Class="ml-1" />
                 }
@@ -83,7 +87,7 @@
                 else
                 {
                     <MudText Typo="Typo.body2" Color="Color.Default" Class="pa-4">
-                        Kayıt bulunamadı
+                        @Loc["DataTable.NoRecords"]
                     </MudText>
                 }
             </NoRecordsContent>

@@ -1,11 +1,19 @@
 @page "/settings/language"
 @rendermode InteractiveServer
+@inject IStringLocalizer Loc
 
-<PageTitle>Dil Ayarları — CleanTenant</PageTitle>
+<PageTitle>@Loc["Settings.Language.PageTitle"]</PageTitle>
+
+@*
+    v0.2.10.e.6 — Settings.Language.* + NavMenu.* anahtarları + breadcrumb
+    lokalize edildi. Radio item etiketleri Faz 1.7 placeholder olduğu için
+    raw bırakıldı (gerçek dil seçici aktive edildiğinde Culture.* anahtarları
+    kullanılacak).
+*@
 
 <MudBreadcrumbs Items="@_breadcrumbs" Class="px-0 pb-2" />
 
-<MudText Typo="Typo.h4" Class="mb-1">Dil Ayarları</MudText>
+<MudText Typo="Typo.h4" Class="mb-1">@Loc["Settings.Language.Title"]</MudText>
 <MudText Typo="Typo.body1" Color="Color.Default" Class="mb-4">
     v0.2.1'de Türkçe sabit. Çoklu dil (EN/AR/RU/DE) Faz 1.7'de devreye girecek;
     aşağıda placeholder seçici görünür.
@@ -26,14 +34,18 @@
 </MudPaper>
 
 @code {
-    private readonly List<BreadcrumbItem> _breadcrumbs =
-    [
-        new("Anasayfa", href: "/", icon: Icons.Material.Filled.Home),
-        new("Ayarlar", href: null, disabled: true),
-        new("Dil", href: null, disabled: true),
-    ];
-
+    private List<BreadcrumbItem> _breadcrumbs = [];
     private string _selectedLang = "tr";
+
+    protected override void OnInitialized()
+    {
+        _breadcrumbs =
+        [
+            new(Loc["Breadcrumb.Home"].Value, href: "/", icon: Icons.Material.Filled.Home),
+            new(Loc["NavMenu.Settings"].Value, href: null, disabled: true),
+            new(Loc["NavMenu.Language"].Value, href: null, disabled: true),
+        ];
+    }
 
     private void OnLangChanged(string value)
     {

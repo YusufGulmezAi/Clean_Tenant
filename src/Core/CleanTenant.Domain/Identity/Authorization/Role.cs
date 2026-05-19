@@ -33,6 +33,27 @@ public sealed class Role : IdentityRole<Guid>, IAuditable, ISoftDeletable, IHasU
     /// <summary>Rolün uygulanabileceği yetki kapsamı seviyesi.</summary>
     public ScopeLevel Scope { get; set; }
 
+    /// <summary>
+    /// <para>
+    /// Rolü "sahiplenen" tenant. <c>null</c> ise <b>global</b> roldür
+    /// (built-in roller + System tarafından oluşturulan ortak roller); tüm
+    /// tenant'lar görür ve kullanabilir.
+    /// </para>
+    /// <para>
+    /// Dolu ise rol yalnız bu tenant'a aittir (yalnız o tenant'ın admin'i
+    /// görür, düzenler ve atayabilir). TenantAdmin'in kendi tenant'ı için
+    /// oluşturduğu custom roller bu kategoriye girer. Bkz: v0.2.8.b.
+    /// </para>
+    /// </summary>
+    public Guid? TenantId { get; set; }
+
+    /// <summary>
+    /// Rolü "sahiplenen" şirket (Site). <c>TenantId</c> dolu olmadan dolu
+    /// olamaz. CompanyAdmin'in kendi sitesi için oluşturduğu rollerde
+    /// kullanılır; <c>null</c> ise rol tenant geneli (veya global) etkilidir.
+    /// </summary>
+    public Guid? CompanyId { get; set; }
+
     /// <summary>Rol açıklaması (UI'da kullanıcıya gösterilir; lokalize edilebilir).</summary>
     public string? Description { get; set; }
 

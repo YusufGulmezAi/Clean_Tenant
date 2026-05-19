@@ -9,8 +9,13 @@
 @inject IMediator Mediator
 @inject ICurrentSessionAccessor SessionAccessor
 @inject NavigationManager Nav
+@inject IStringLocalizer Loc
 
-<PageTitle>Yeni Site — CleanTenant</PageTitle>
+<PageTitle>@Loc["Companies.New.PageTitle"]</PageTitle>
+
+@*
+    v0.2.10.e.5 — Companies.New.* + Common.* anahtarlarıyla lokalize edildi.
+*@
 
 <MudContainer MaxWidth="MaxWidth.Small" Class="py-8">
     <MudBreadcrumbs Items="@_breadcrumbs" Class="px-0 mb-4"></MudBreadcrumbs>
@@ -21,7 +26,7 @@
                      Mode="@CompanyFormMode.Create"
                      OnValidSubmit="@CreateAsync"
                      IsSubmitting="@_isSubmitting"
-                     SubmitButtonText="Oluştur"
+                     SubmitButtonText="@Loc["Companies.New.SubmitButton"]"
                      CancelHref="/tenant/companies" />
 
         @if (!string.IsNullOrEmpty(_errorMessage))
@@ -47,8 +52,8 @@
     {
         _breadcrumbs =
         [
-            new BreadcrumbItem("Siteler", href: "/tenant/companies"),
-            new BreadcrumbItem("Yeni Site", href: null, disabled: true),
+            new BreadcrumbItem(Loc["Companies.List.Title"].Value, href: "/tenant/companies"),
+            new BreadcrumbItem(Loc["Companies.New.Title"].Value, href: null, disabled: true),
         ];
 
         _model = new CompanyFormModel();
@@ -65,7 +70,7 @@
             var session = SessionAccessor.Current;
             if (session is null || session.TenantId is null || session.TenantId == Guid.Empty)
             {
-                _errorMessage = "Tenant bağlamı bulunamadı.";
+                _errorMessage = Loc["Companies.TenantNew.NoSession"].Value;
                 _isSubmitting = false;
                 return;
             }
@@ -82,7 +87,7 @@
 
             if (result.IsSuccess && result.Value is not null)
             {
-                Nav.NavigateTo($"/tenant/companies/{result.Value.Id}/edit");
+                Nav.NavigateTo($"/tenant/companies/{result.Value.UrlCode}/edit");
             }
             else
             {
@@ -91,7 +96,7 @@
         }
         catch (Exception ex)
         {
-            _errorMessage = $"Hata: {ex.Message}";
+            _errorMessage = Loc["Common.UnexpectedError", ex.Message].Value;
         }
         finally
         {

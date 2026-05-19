@@ -5,20 +5,25 @@
 @inject AuthenticationStateProvider AuthProvider
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
+@inject IStringLocalizer Loc
 @using CleanTenant.Application.Features.Catalog.Readers
 @using CleanTenant.Application.Features.Catalog.LookUp.Banks
 
-<PageTitle>Bankalar — Sistem</PageTitle>
+<PageTitle>@Loc["Banks.PageTitle"]</PageTitle>
+
+@*
+    v0.2.10.e.4 — Banks.* anahtarlarıyla lokalize edildi.
+*@
 
 @if (_unauthorized)
 {
     <MudAlert Severity="Severity.Warning" Class="my-3">
-        Bu sayfa yalnız Sistem kullanıcıları için. Aktif bağlamınız Sistem değil.
+        @Loc["Banks.UnauthorizedSystem"]
     </MudAlert>
 }
 else if (!_initialized)
 {
-    <MudText Typo="Typo.h6" Class="my-3">Yükleniyor...</MudText>
+    <MudText Typo="Typo.h6" Class="my-3">@Loc["Banks.Loading"]</MudText>
 }
 else
 {
@@ -26,7 +31,7 @@ else
         <MudButton StartIcon="@(_showForm ? Icons.Material.Filled.Close : Icons.Material.Filled.Add)"
                    Color="Color.Primary" Variant="Variant.Filled"
                    OnClick="@(() => ToggleFormAsync())">
-            @(_showForm ? "İptal" : "Yeni Banka")
+            @(_showForm ? Loc["Common.Cancel"].Value : Loc["Banks.NewButton"].Value)
         </MudButton>
     </div>
 
@@ -37,41 +42,41 @@ else
                 <MudGrid>
                     <MudItem xs="12" sm="6">
                         <MudTextField @bind-Value="_formModel.FullName"
-                                      Label="Tam Adı"
+                                      Label="@Loc["Banks.FullName"]"
                                       For="@(() => _formModel.FullName)"
                                       MaxLength="200"
                                       Required="true" />
                     </MudItem>
                     <MudItem xs="12" sm="6">
                         <MudTextField @bind-Value="_formModel.ShortName"
-                                      Label="Kısa Adı"
+                                      Label="@Loc["Banks.ShortName"]"
                                       For="@(() => _formModel.ShortName)"
                                       MaxLength="30"
                                       Required="true" />
                     </MudItem>
                     <MudItem xs="12" sm="6">
                         <MudTextField @bind-Value="_formModel.EftCode"
-                                      Label="EFT Kodu"
+                                      Label="@Loc["Banks.EftCode"]"
                                       For="@(() => _formModel.EftCode)"
                                       MaxLength="10" />
                     </MudItem>
                     <MudItem xs="12" sm="3">
                         <MudSwitch T="bool" @bind-Checked="_formModel.HasVirtualPosIntegration"
-                                   Label="Sanal POS"
+                                   Label="@Loc["Banks.VirtualPos"]"
                                    Color="Color.Primary" />
                     </MudItem>
                     <MudItem xs="12" sm="3">
                         <MudSwitch T="bool" @bind-Checked="_formModel.HasCorporateCollectionIntegration"
-                                   Label="Kurumsal Tahsilat"
+                                   Label="@Loc["Banks.CorporateCollection"]"
                                    Color="Color.Primary" />
                     </MudItem>
                 </MudGrid>
                 <div class="d-flex gap-2 mt-4">
                     <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@SubmitBankAsync">
-                        @(_editingId.HasValue ? "Güncelle" : "Ekle")
+                        @(_editingId.HasValue ? Loc["Banks.Update"].Value : Loc["Banks.Add"].Value)
                     </MudButton>
                     <MudButton Variant="Variant.Text" OnClick="@(() => ToggleFormAsync())">
-                        İptal
+                        @Loc["Common.Cancel"]
                     </MudButton>
                 </div>
             </MudForm>
@@ -80,8 +85,8 @@ else
 
     <MudDataGrid Items="@_banks" Hover="true" Striped="true" Bordered="true">
         <Columns>
-            <PropertyColumn Property="@(x => x.FullName)" Title="Tam Adı" />
-            <PropertyColumn Property="@(x => x.ShortName)" Title="Kısa Adı" />
+            <PropertyColumn Property="@(x => x.FullName)" Title="@Loc["Banks.FullName"].Value" />
+            <PropertyColumn Property="@(x => x.ShortName)" Title="@Loc["Banks.ShortName"].Value" />
             <TemplateColumn CellClass="d-flex justify-end" Filterable="false" Sortable="false">
                 <CellTemplate>
                     <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Color="Color.Default"
@@ -153,7 +158,7 @@ else
         var bank = await LookUpReader.GetBankDetailAsync(bankId);
         if (bank is null)
         {
-            Snackbar.Add("Banka bulunamadı", Severity.Error);
+            Snackbar.Add(Loc["Banks.NotFound"].Value, Severity.Error);
             return;
         }
 
@@ -189,11 +194,11 @@ else
 
             if (result.IsFailure)
             {
-                Snackbar.Add($"Güncelleme başarısız: {result.FirstError.Message}", Severity.Error);
+                Snackbar.Add(Loc["Banks.Update.Failed", result.FirstError.Message].Value, Severity.Error);
                 return;
             }
 
-            Snackbar.Add("Banka güncellendi", Severity.Success);
+            Snackbar.Add(Loc["Banks.UpdateSuccess"].Value, Severity.Success);
         }
         else
         {
@@ -207,11 +212,11 @@ else
 
             if (result.IsFailure)
             {
-                Snackbar.Add($"Ekleme başarısız: {result.FirstError.Message}", Severity.Error);
+                Snackbar.Add(Loc["Banks.Add.Failed", result.FirstError.Message].Value, Severity.Error);
                 return;
             }
 
-            Snackbar.Add("Banka eklendi", Severity.Success);
+            Snackbar.Add(Loc["Banks.AddSuccess"].Value, Severity.Success);
         }
 
         ResetForm();
@@ -221,19 +226,21 @@ else
 
     private async Task DeleteBankAsync(BankListItem bank)
     {
-        var confirm = await DialogService.ShowMessageBox("Banka Sil",
-            $"<b>{bank.FullName}</b> silinecek. Devam edilsin mi?",
-            yesText: "Sil", cancelText: "Vazgeç");
+        var confirm = await DialogService.ShowMessageBox(
+            Loc["Banks.Delete.Title"].Value,
+            Loc["Banks.Delete.Confirm", $"<b>{bank.FullName}</b>"].Value,
+            yesText: Loc["Common.Delete"].Value,
+            cancelText: Loc["Common.Discard"].Value);
         if (confirm != true) return;
 
         var result = await Mediator.Send(new DeleteBankCommand(bank.Id));
         if (result.IsFailure)
         {
-            Snackbar.Add($"Silme başarısız: {result.FirstError.Message}", Severity.Error);
+            Snackbar.Add(Loc["Banks.Delete.Failed", result.FirstError.Message].Value, Severity.Error);
             return;
         }
 
-        Snackbar.Add("Banka silindi", Severity.Success);
+        Snackbar.Add(Loc["Banks.DeleteSuccess"].Value, Severity.Success);
         await LoadBanksAsync();
     }
 }

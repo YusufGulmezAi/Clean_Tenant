@@ -4,6 +4,7 @@
 @inject AuthenticationStateProvider AuthProvider
 @inject IJSRuntime JS
 @inject NavigationManager Nav
+@inject IStringLocalizer Loc
 @using CleanTenant.ManagementApp.Services
 @using System.Globalization
 
@@ -16,10 +17,12 @@
     - MudMainContent ortada
 *@
 
-<MudThemeProvider Theme="@_currentTheme" IsDarkMode="@_isDark" />
-<MudPopoverProvider />
-<MudDialogProvider />
-<MudSnackbarProvider />
+<MudRTLProvider RightToLeft="@_isRtl">
+    <MudThemeProvider Theme="@_currentTheme" IsDarkMode="@_isDark" />
+    <MudPopoverProvider />
+    <MudDialogProvider />
+    <MudSnackbarProvider />
+</MudRTLProvider>
 
 <MudLayout>
     <MudAppBar Elevation="1">
@@ -27,10 +30,10 @@
                        Color="Color.Inherit"
                        Edge="Edge.Start"
                        OnClick="@DrawerToggle"
-                       title="Menüyü aç/kapa" />
+                       title="@Loc["Layout.AppBar.MenuToggle"]" />
 
         <MudIcon Icon="@Icons.Material.Filled.Domain" Class="mr-2" />
-        <MudText Typo="Typo.h6">Toplu Yapı Yönetimi</MudText>
+        <MudText Typo="Typo.h6">@Loc["Layout.AppBar.Brand"]</MudText>
 
         <TenantSwitcher ActiveTenantId="@_activeTenantId"
                         ActiveTenantName="@_activeTenantName"
@@ -42,16 +45,16 @@
         <MudIconButton Icon="@(_isDark ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)"
                        Color="Color.Inherit"
                        OnClick="@OnDarkToggle"
-                       title="@(_isDark ? "Açık mod" : "Koyu mod")" />
+                       title="@(_isDark ? Loc["Layout.AppBar.LightMode"].Value : Loc["Layout.AppBar.DarkMode"].Value)" />
 
         <MudIconButton Icon="@Icons.Material.Filled.Palette"
                        Color="Color.Inherit"
                        Href="/settings/theme"
-                       title="Tema ayarları" />
+                       title="@Loc["Layout.AppBar.ThemeSettings"]" />
 
         <MudIconButton Icon="@Icons.Material.Filled.Notifications"
                        Color="Color.Inherit"
-                       title="Bildirimler (Faz 1+)" />
+                       title="@Loc["Layout.AppBar.Notifications"]" />
 
         @* ── Dil seçici ────────────────────────────────────────────── *@
         <MudMenu Dense="true"
@@ -61,7 +64,7 @@
                 <MudButton Color="Color.Inherit" Variant="Variant.Text"
                            Class="px-2 min-width-0"
                            Style="font-size: 1.35rem; min-width: auto; line-height: 1;"
-                           title="Dil / Language">
+                           title="@Loc["Layout.AppBar.Language"]">
                     @_currentLang.Flag
                 </MudButton>
             </ActivatorContent>
@@ -87,11 +90,11 @@
                  Color="Color.Inherit"
                  AnchorOrigin="Origin.BottomRight"
                  TransformOrigin="Origin.TopRight">
-            <MudMenuItem Icon="@Icons.Material.Filled.Person" Href="/profile">Profilim (Faz 1.2)</MudMenuItem>
-            <MudMenuItem Icon="@Icons.Material.Filled.Security" Href="/settings/2fa/enroll">2FA Yönetimi</MudMenuItem>
-            <MudMenuItem Icon="@Icons.Material.Filled.Settings" Href="/settings/theme">Ayarlar</MudMenuItem>
+            <MudMenuItem Icon="@Icons.Material.Filled.Person" Href="/profile">@Loc["Layout.AppBar.Profile"]</MudMenuItem>
+            <MudMenuItem Icon="@Icons.Material.Filled.Security" Href="/settings/2fa/enroll">@Loc["Layout.AppBar.TwoFactor"]</MudMenuItem>
+            <MudMenuItem Icon="@Icons.Material.Filled.Settings" Href="/settings/theme">@Loc["Layout.AppBar.Settings"]</MudMenuItem>
             <MudDivider />
-            <MudMenuItem Icon="@Icons.Material.Filled.Logout" Href="/auth/sign-out" ForceLoad="true">Çıkış</MudMenuItem>
+            <MudMenuItem Icon="@Icons.Material.Filled.Logout" Href="/auth/sign-out" ForceLoad="true">@Loc["Layout.AppBar.SignOut"]</MudMenuItem>
         </MudMenu>
     </MudAppBar>
 
@@ -106,21 +109,22 @@
 
         <MudPaper Elevation="0" Class="mt-8 pa-3 d-flex justify-center" Square="true">
             <MudText Typo="Typo.caption" Color="Color.Default">
-                © 2026 CleanTenant · v0.2.2.c · Yönetim
+                @Loc["Layout.Footer.Copyright"] · v0.2.2.c · @Loc["NavMenu.Tenant"]
             </MudText>
         </MudPaper>
     </MudMainContent>
 </MudLayout>
 
 <div id="blazor-error-ui" data-nosnippet>
-    Beklenmedik bir hata oluştu.
-    <a href="." class="reload">Yeniden yükle</a>
+    @Loc["Layout.Error.Unexpected"]
+    <a href="." class="reload">@Loc["Layout.Error.Reload"]</a>
     <span class="dismiss">×</span>
 </div>
 
 @code {
     private bool _drawerOpen = true;
     private bool _isDark;
+    private bool _isRtl;
     private MudTheme _currentTheme = CleanTenantThemes.KurumsalMavi;
     private Guid? _activeTenantId;
     private string? _activeTenantName;
@@ -133,6 +137,7 @@
         ThemeService.ThemeChanged += OnThemeChanged;
         ApplyTheme();
         _currentLang = LanguageService.Resolve(CultureInfo.CurrentUICulture.Name);
+        _isRtl = _currentLang.IsRtl;
     }
 
     protected override async Task OnInitializedAsync()
@@ -168,6 +173,11 @@
         // tetikler, paletler anında değişir).
         if (firstRender)
         {
+            // v0.2.10.f — <html dir="..."> + <body dir="..."> RTL attribute'larını
+            // set et. Aktif kültür AR ise rtl, değilse ltr. Cookie-driven culture
+            // değişimi tam reload tetiklediği için her load'da idempotent çalışır.
+            await JS.InvokeVoidAsync("cleantenant.setBodyDirection", _isRtl ? "rtl" : "ltr");
+
             await ThemeService.InitializeAsync();
         }
     }
@@ -186,8 +196,10 @@
 
     private async Task ChangeLanguageAsync(string code)
     {
-        await JS.InvokeVoidAsync("cleantenant.setLanguageCookie", code);
-        Nav.NavigateTo(Nav.Uri, forceLoad: true);
+        // v0.2.10.d — Form-post via /auth/change-culture: cookie set + (giriş
+        // yapmışsa) User.PreferredCulture DB persist + returnUrl'e redirect.
+        var returnUrl = "/" + Nav.ToBaseRelativePath(Nav.Uri);
+        await JS.InvokeVoidAsync("cleantenant.submitCultureChange", code, returnUrl);
     }
 
     private void DrawerToggle() => _drawerOpen = !_drawerOpen;

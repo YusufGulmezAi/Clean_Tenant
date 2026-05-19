@@ -7,6 +7,139 @@ Bu dosya, Faz 1 (UI başlangıç + ManagementApp) kapsamında yapılan tüm alt-
 
 ---
 
+## v0.2.10 — 🚧 IN PROGRESS (commit edilmemiş) — Lokalizasyon (Tam Tarama + RTL + Admin)
+
+### Kapsam
+DB-tabanlı çoklu dil altyapısı (TR/EN/AR/RU/DE), tüm UI yüzeyinin lokalizasyonu, RTL (Arapça) desteği ve dil kaynakları yönetim sayfası. Faz 0/1 backend lokalize edilmemiştir — yalnız Presentation katmanı kapsamdadır.
+
+**Son commit'lenen tag**: v0.2.7. Tüm v0.2.10 işi şu an **uncommitted**; alt-fazlar bittikçe tek `v0.2.10` tag'iyle commit'lenecek.
+
+### Mimari Karar: DB-Backed Localization (DbStringLocalizer + LocalizationStore)
+
+- ASP.NET Core `IStringLocalizer` arayüzünün **DB-backed** implementasyonu — `.resx` yerine `LocalizedResource` entity (Catalog DB)
+- **Singleton `LocalizationStore`** uygulama başlangıcında tüm çevirileri belleğe yükler — runtime'da Loc çağrısı O(1) sözlük araması
+- **Fallback zinciri:** current culture → en-US → tr-TR → `[Key]` raw (eksik çeviri için dev uyarısı)
+- **Key naming:** Dot-notation düz hiyerarşi (`Roles.New.SubmitButton`, `NavMenu.LookUpTables`)
+- **EN bootstrap:** Catalog'da explicit EN yoksa `"[EN] {tr}"` machine-stub + `IsMachineTranslated=true`
+
+### Mimari Karar: Cookie-Driven Culture Change
+
+- Dil değişimi `/auth/change-culture` form-post endpoint'i üzerinden cookie set + (giriş yapılmışsa) `User.PreferredCulture` DB persist
+- Endpoint sonrası tam reload — `CultureInfo.CurrentUICulture` request kapsamına yeniden uygulanır
+
+### Mimari Karar: RTL via MudRTLProvider + JS Interop
+
+- AR culture aktif olduğunda `MudRTLProvider RightToLeft=true` MudBlazor bileşenlerini mirror'lar
+- `<body dir="rtl">` ve `<html dir="rtl">` JS interop (`cleantenant.setBodyDirection`) ile DOM-level RTL custom CSS sayfalarda da çalışır
+- ManagementApp + PortalApp kapsamda; MobilApp (MAUI native FlowDirection) kapsam dışı
+
+### Alt-faz Durum Tablosu
+
+| Alt-faz | Kapsam | Durum |
+|---------|--------|-------|
+| a | `LocalizedResource` entity + `User.PreferredCulture` + migration | ✅ |
+| b | `LocalizationStore` (singleton) + `DbStringLocalizer` + fallback | ✅ |
+| c | `LocalizationSeeder` + `LocalizationCatalog` (~390 anahtar) | ✅ |
+| d | AppBar dropdown + `/auth/change-culture` + login User.PreferredCulture | ✅ |
+| e.1 | Catalog 391 anahtar (Permission/Module/Common/Nav/Layout/Form/Audit/...) | ✅ |
+| e.2 | Layout: NavMenu, MainLayout, DataTable (+ DataTable code-behind) | ✅ |
+| e.3 | Form bileşenleri: TenantForm, CompanyForm, RoleForm, PermissionPicker | ✅ |
+| e.4 | SystemArea sayfaları (Tenants, Companies, Roles, Banks, Audit, LookUp — 12 sayfa) | ✅ |
+| e.5 | TenantArea sayfaları (Companies, Roles, BuildingSchema, Settings — 8 sayfa) | ✅ |
+| e.6 | Auth (Login, 2FA Challenge, 2FA PreAuth Enroll, authenticated Enroll) + Home/About/Settings + NotFound — 10 sayfa | ✅ |
+| f | RTL (Arabic) — `MudRTLProvider` + `<body dir="rtl">` JS interop (ManagementApp + PortalApp) | ✅ |
+| **g** | **`/system/localization` admin sayfası (`System.Localization.Manage` izniyle) — anahtar düzenleme UI** | **⏸ Sıradaki** |
+
+### Eklenen Anahtar İstatistiği
+
+- LocalizationCatalog.cs: ~480 anahtar
+  - Permission Module/Description (60)
+  - Common UI (24)
+  - Navigation Menu (28)
+  - Layout AppBar/Footer/Error (14)
+  - DataTable (8)
+  - Login + 2FA (40+)
+  - Tenants/Companies/Roles list+CRUD+form (90+)
+  - BuildingSchema (60+)
+  - Audit/Banks/LookUp (50+)
+  - Settings + Home + About + NotFound (20+)
+  - Page titles (12)
+  - Error format strings + tooltips (15)
+
+### Yeni / Güncellenen Dosyalar (özet)
+
+**Domain:**
+- `Domain/Localization/LocalizedResource.cs` (yeni entity)
+- `Domain/Identity/Users/User.cs` — `PreferredCulture` property
+
+**Infrastructure.Persistence:**
+- `Catalog/Configurations/LocalizedResourceConfiguration.cs` (yeni)
+- `Catalog/Migrations/20260519140924_AddLocalizationSchema.cs` (yeni)
+- `Localization/LocalizationStore.cs` (yeni — singleton in-memory)
+- `Localization/DbStringLocalizer.cs` (yeni — `IStringLocalizer` impl)
+- `Seeding/LocalizationSeeder.cs` (yeni)
+- `Seeding/LocalizationCatalog.cs` (yeni — ~480 anahtar)
+- `DependencyInjection.cs` — `AddSingleton<LocalizationStore>` + `AddScoped<IStringLocalizer, DbStringLocalizer>`
+
+**ManagementApp Auth:**
+- `Auth/AuthEndpoints.cs` — `POST /auth/change-culture` (+86 satır)
+
+**ManagementApp Services:**
+- `Services/LanguageService.cs` — `LanguageOption.IsRtl` bayrağı (f), `IsCurrentCultureRtl()` helper
+
+**ManagementApp Components (Layout + Shared + Pages):**
+- _Imports.razor — `Microsoft.Extensions.Localization` using
+- Layout/MainLayout.razor — `MudRTLProvider` + AppBar language dropdown + JS interop
+- Layout/NavMenu.razor — `Matches()` filter localize değerle çalışır
+- Shared/DataTable.razor + .razor.cs — IStringLocalizer inject, ResolvedSearchPlaceholder
+- Shared/TenantForm.razor + .razor.cs — Loc + SubmitButtonText nullable + ResolvedSubmitButtonText
+- Shared/CompanyForm.razor + .razor.cs — aynı pattern
+- Shared/RoleForm.razor + .razor.cs — aynı pattern
+- Shared/PermissionPicker.razor — Legend + tooltips
+- Pages/SystemArea/* (12 sayfa) — full lokalize, ExportColumns instance field
+- Pages/TenantArea/* (8 sayfa) — full lokalize, BuildingSchema label functions instance method
+- Pages/Login.razor + TwoFactorChallenge.razor + TwoFactorEnrollmentPreAuth.razor — MessageFor static → instance
+- Pages/Home.razor + About.razor + NotFound.razor — lokalize
+- Pages/Settings/ThemeSettings.razor + LanguageSettings.razor + TwoFactorEnrollment.razor — lokalize
+
+**ManagementApp wwwroot:**
+- `wwwroot/js/cleantenant.js` — `submitCultureChange` (d) + `setBodyDirection` (f)
+
+**PortalApp:**
+- `Components/App.razor` — inline `setBodyDirection` helper
+- `Components/Layout/MainLayout.razor` — `MudRTLProvider` + JS interop
+
+### Kararlar (Lokalize Edilmemiş Bilinçli)
+
+- Faz chip'leri ("Faz 1.4" vb.) raw — dev marker
+- App version string'leri raw — dinamik
+- Phone format mask `"0(5XX) XXX-XX-XX"` raw — locale-bağımsız
+- Apartment layout numerik (`"1+0"/"1+1"`) raw — format
+- Enum `enum.ToString()` raw (Status/BillingTier/CompanyStatus) — ayrı enum-resource stratejisi (ileride)
+- Home roadmap items + About Faz 0 listesi raw — dev notes
+- `Pages/Error.razor` (ASP.NET default) lokalize edilmedi
+
+### Kalan İş (g)
+
+`/system/localization` admin sayfası:
+- `GetLocalizationEntriesQuery` + `UpdateLocalizationEntryCommand` (Application)
+- `Permission.System.Localization.Manage` PermissionCatalog'a ekle + SystemAdmin built-in role bağla
+- Razor sayfa: culture seçici + filtre + DataTable + drawer/inline edit
+- NavMenu `Sistem Yönetimi` grubunda link aktive edilir (link tanımı zaten hazır, `Disabled=true` → `false`)
+
+### Doğrulama (Tamamlanan Alt-fazlar)
+
+- ✓ Her alt-faz sonrası `dotnet build -t:Compile` — CSC/RZ hatası yok
+- ⏸ Manuel UI testi (TR/EN/AR culture spot-check) g sonrası
+- ⏸ `dotnet test` (mevcut testler etkilenmemeli) g sonrası
+- ⏸ Faz mimari haritası `v0.2.10-FINAL-ARCHITECTURE-MAP.md` g sonrası
+
+### Sonraki Adım
+
+**g — Localization Admin Sayfası**, sonrasında v0.2.10 tag'i ve v0.3 Unit/Resident modeline geçiş.
+
+---
+
 ## v0.2.7 — 2026-05-19 — PortalApp Shell (MVP)
 
 ### Kapsam

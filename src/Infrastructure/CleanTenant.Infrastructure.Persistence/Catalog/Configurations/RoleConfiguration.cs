@@ -31,14 +31,26 @@ public sealed class RoleConfiguration : IEntityTypeConfiguration<Role>
             .IsRequired()
             .HasConversion<short>();
 
+        // v0.2.8.b — Tenant-spesifik roller için sahiplik kolonları.
+        // null = global rol; dolu = sadece bu tenant/company'nin admin'i yönetir.
+        builder.Property(r => r.TenantId);
+        builder.Property(r => r.CompanyId);
+        builder.HasIndex(r => r.TenantId).HasDatabaseName("ix_role_tenant_id");
+        builder.HasIndex(r => r.CompanyId).HasDatabaseName("ix_role_company_id");
+
         builder.Property(r => r.IsBuiltIn).IsRequired();
 
-        // Identity'nin default unique index'i sadece NormalizedName üzerine.
-        // Bizim ihtiyacımız (NormalizedName, Scope) bileşik unique.
-        // Default index'i yeniden tanımlayamıyoruz; ek bileşik index ekliyoruz.
-        builder.HasIndex(r => new { r.NormalizedName, r.Scope })
+        // Eski index'i ((NormalizedName, Scope) unique) drop ediliyor; yerine
+        // (NormalizedName, Scope, TenantId, CompanyId) gelir. Böylece aynı
+        // rol adı farklı tenant'larda bağımsız oluşturulabilir (örn. Tenant A
+        // "MuhasebeYöneticisi" + Tenant B "MuhasebeYöneticisi" çakışmaz).
+        // NULL == NULL davranışı PostgreSQL'de NULLS NOT DISTINCT klozu olmadan
+        // farklı sayılır; bu yüzden globaller arasında (NormalizedName, Scope,
+        // NULL, NULL) için EF migration NULLS NOT DISTINCT eklenmeli — manuel
+        // migration ile yapacağız.
+        builder.HasIndex(r => new { r.NormalizedName, r.Scope, r.TenantId, r.CompanyId })
             .IsUnique()
-            .HasDatabaseName("ix_role_normalized_name_scope");
+            .HasDatabaseName("ix_role_normalized_name_scope_tenant_company");
 
         builder.UseXminAsConcurrencyToken();
 

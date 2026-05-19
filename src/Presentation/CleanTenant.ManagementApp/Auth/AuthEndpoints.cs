@@ -11,6 +11,7 @@ using MediatR;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace CleanTenant.ManagementApp.Auth;
 
@@ -127,6 +128,13 @@ public static class AuthEndpoints
               .DisableAntiforgery()
               .RequireAuthorization();
 
+        // v0.2.10.d — Dil tercih değiştirme. Cookie set + (giriş yapmışsa)
+        // User.PreferredCulture DB'ye yazılır. Anonim kullanıcılar için yalnız
+        // cookie set'lenir (login sonrası PreferredCulture'dan üzerine yazılır).
+        routes.MapPost("/auth/change-culture", ChangeCultureFormAsync)
+              .DisableAntiforgery()
+              .AllowAnonymous();
+
         return routes;
     }
 
@@ -208,6 +216,7 @@ public static class AuthEndpoints
         [FromForm] string? persona,
         [FromForm] bool? rememberMe,
         [FromServices] IMediator mediator,
+        [FromServices] CleanTenant.Infrastructure.Persistence.Catalog.CatalogDbContext db,
         CancellationToken cancellationToken)
     {
         // HTML checkbox işaretsizse form'a hiç eklenmez — null gelir.
@@ -246,7 +255,46 @@ public static class AuthEndpoints
         // Success → cookie set
         var tokens = login.Tokens!;
         await SignInWithSessionAsync(httpContext, tokens, remember);
+
+        // v0.2.10.d — Kullanıcının tercih ettiği dili yükle ve cookie'ye yaz;
+        // her login'de seçtiği dil otomatik gelir. UserId JWT'nin "sub" claim'inden.
+        var jwt = new JwtSecurityTokenHandler().ReadJwtToken(tokens.AccessToken);
+        if (Guid.TryParse(jwt.Subject, out var userId))
+        {
+            await ApplyUserPreferredCultureAsync(httpContext, db, userId, cancellationToken);
+        }
+
         return Results.Redirect("/");
+    }
+
+    /// <summary>
+    /// v0.2.10.d — Login sonrası kullanıcının <c>PreferredCulture</c> alanını
+    /// DB'den okur ve <c>.AspNetCore.Culture</c> cookie'sini ona göre set eder.
+    /// Null ise sistem varsayılanı (TR) zaten kullanılır (cookie set'lenmez).
+    /// </summary>
+    private static async Task ApplyUserPreferredCultureAsync(
+        HttpContext httpContext,
+        CleanTenant.Infrastructure.Persistence.Catalog.CatalogDbContext db,
+        Guid userId,
+        CancellationToken cancellationToken)
+    {
+        var preferred = await db.Users
+            .AsNoTracking()
+            .Where(u => u.Id == userId)
+            .Select(u => u.PreferredCulture)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (string.IsNullOrEmpty(preferred)) return;
+
+        httpContext.Response.Cookies.Append(".AspNetCore.Culture",
+            $"c={preferred}|uic={preferred}",
+            new CookieOptions
+            {
+                Path = "/",
+                SameSite = SameSiteMode.Lax,
+                MaxAge = TimeSpan.FromDays(365),
+                IsEssential = true,
+            });
     }
 
     private static async Task<IResult> SwitchTenantFormAsync(
@@ -298,6 +346,44 @@ public static class AuthEndpoints
 
         await httpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
         await SignInWithSessionAsync(httpContext, result.Value!, rememberMe: false);
+
+        return Results.Redirect(string.IsNullOrEmpty(returnUrl) ? "/" : returnUrl);
+    }
+
+    /// <summary>
+    /// v0.2.10.d — Dil tercihi değiştirme. <c>.AspNetCore.Culture</c> cookie'sini
+    /// server-side set eder ve giriş yapmış kullanıcının
+    /// <c>User.PreferredCulture</c> alanını günceller. Anonim kullanıcılar için
+    /// yalnız cookie set'lenir (login sonrası DB değeriyle senkronlanır).
+    /// </summary>
+    private static async Task<IResult> ChangeCultureFormAsync(
+        HttpContext httpContext,
+        [FromForm] string culture,
+        [FromForm] string? returnUrl,
+        [FromServices] CleanTenant.Infrastructure.Persistence.Catalog.CatalogDbContext db,
+        CancellationToken cancellationToken)
+    {
+        // Cookie set — RequestLocalizationMiddleware sonraki istekte okur.
+        var cookieValue = $"c={culture}|uic={culture}";
+        httpContext.Response.Cookies.Append(".AspNetCore.Culture", cookieValue, new CookieOptions
+        {
+            Path = "/",
+            SameSite = SameSiteMode.Lax,
+            MaxAge = TimeSpan.FromDays(365),
+            IsEssential = true,
+        });
+
+        // Login yapmışsa DB'de User.PreferredCulture'a yaz (sonraki oturumlarda hatırlanır).
+        var userIdClaim = httpContext.User.FindFirst(UserIdClaim)?.Value;
+        if (!string.IsNullOrEmpty(userIdClaim) && Guid.TryParse(userIdClaim, out var userId))
+        {
+            var user = await db.Users.FirstOrDefaultAsync(u => u.Id == userId, cancellationToken);
+            if (user is not null && user.PreferredCulture != culture)
+            {
+                user.PreferredCulture = culture;
+                await db.SaveChangesAsync(cancellationToken);
+            }
+        }
 
         return Results.Redirect(string.IsNullOrEmpty(returnUrl) ? "/" : returnUrl);
     }

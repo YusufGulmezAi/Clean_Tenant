@@ -1,0 +1,245 @@
+@page "/tenant/roles/{urlCode}/edit"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject MediatR.IMediator Mediator
+@inject IAuthorizationCatalogReader RoleReader
+@inject AuthenticationStateProvider AuthProvider
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+@inject IStringLocalizer Loc
+@using CleanTenant.Application.Features.Catalog.Permissions
+@using CleanTenant.Application.Features.Catalog.Readers
+@using CleanTenant.Application.Features.Catalog.Roles
+@using CleanTenant.ManagementApp.Components.Shared
+@using CleanTenant.SharedKernel.Context
+@using MudBlazor
+
+<PageTitle>@Loc["Roles.TenantEdit.PageTitle"]</PageTitle>
+
+@*
+    v0.2.10.e.5 — Roles.* + Common.* anahtarlarıyla lokalize edildi.
+*@
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    <MudBreadcrumbs Items="_breadcrumbs" Class="mb-4" />
+
+    @if (_unauthorized)
+    {
+        <MudAlert Severity="Severity.Warning">
+            @Loc["Roles.TenantList.Unauthorized"]
+        </MudAlert>
+    }
+    else if (_notFound)
+    {
+        <MudAlert Severity="Severity.Error">@Loc["Roles.Edit.NotFound"]</MudAlert>
+    }
+    else if (_loading)
+    {
+        <MudProgressLinear Indeterminate="true" />
+    }
+    else
+    {
+        <div class="d-flex align-center gap-2 mb-4">
+            <MudText Typo="Typo.h5">@(_readOnly ? Loc["Roles.Edit.TitleReadOnly"].Value : Loc["Roles.Edit.Title"].Value)</MudText>
+            @if (_isBuiltIn)
+            {
+                <MudChip T="string" Color="Color.Info" Variant="Variant.Outlined" Size="Size.Small">
+                    <MudIcon Icon="@Icons.Material.Filled.Lock" Size="Size.Small" Class="mr-1" /> @Loc["Roles.List.Col.BuiltIn"]
+                </MudChip>
+            }
+            else if (_isGlobal)
+            {
+                <MudChip T="string" Color="Color.Secondary" Variant="Variant.Outlined" Size="Size.Small">@Loc["Roles.List.Tag.Global"]</MudChip>
+            }
+        </div>
+
+        @if (_readOnly)
+        {
+            <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-3">
+                @Loc["Roles.Edit.ReadOnlyBanner"]
+            </MudAlert>
+        }
+
+        <RoleForm Model="_model"
+                  OnSubmit="@SubmitAsync"
+                  IsSubmitting="@_busy"
+                  SubmitButtonText="@Loc["Roles.Edit.SaveButton"]"
+                  CancelHref="/tenant/roles"
+                  ScopeReadOnly="true"
+                  HideSystemScope="true" />
+
+        <MudCard Class="mt-4" Elevation="0" Outlined="true">
+            <MudCardHeader>
+                <MudText Typo="Typo.h6">@Loc["Roles.Edit.PermissionsTitle"]</MudText>
+            </MudCardHeader>
+            <MudCardContent>
+                @if (_permissions is null)
+                {
+                    <MudProgressLinear Indeterminate="true" />
+                }
+                else
+                {
+                    <PermissionPicker Permissions="@_permissions"
+                                      Selection="@_selection"
+                                      RoleScope="@_roleScope"
+                                      ReadOnly="@_readOnly" />
+                }
+            </MudCardContent>
+            <MudCardActions Class="d-flex justify-end pa-4">
+                <MudButton OnClick="@SavePermissionsAsync"
+                           Color="Color.Primary"
+                           Variant="Variant.Filled"
+                           Disabled="@(_busy || _saving || _readOnly)"
+                           StartIcon="@((_busy || _saving) ? null : Icons.Material.Filled.Save)">
+                    @if (_saving)
+                    {
+                        <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                        <MudText Class="ms-2">@Loc["Common.Saving"]</MudText>
+                    }
+                    else
+                    {
+                        @Loc["Roles.Edit.SavePermsButton"]
+                    }
+                </MudButton>
+            </MudCardActions>
+        </MudCard>
+    }
+</MudContainer>
+
+@code {
+    [Parameter] public string UrlCode { get; set; } = string.Empty;
+
+    private Guid _roleId;
+    private readonly RoleFormModel _model = new();
+    private bool _busy;
+    private bool _saving;
+    private bool _loading = true;
+    private bool _unauthorized;
+    private bool _notFound;
+    private bool _readOnly;
+    private bool _isBuiltIn;
+    private bool _isGlobal;
+    private Guid _tenantId;
+    private ScopeLevel _roleScope;
+
+    private IReadOnlyList<PermissionDto>? _permissions;
+    private HashSet<Guid> _selection = new();
+
+    private readonly List<BreadcrumbItem> _breadcrumbs = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        var tenantClaim = user.FindFirst("tenant_id")?.Value;
+
+        if (user?.Identity?.IsAuthenticated != true
+            || string.IsNullOrEmpty(tenantClaim)
+            || !Guid.TryParseExact(tenantClaim, "N", out _tenantId))
+        {
+            _unauthorized = true;
+            _loading = false;
+            return;
+        }
+
+        _breadcrumbs.Add(new(Loc["Roles.List.Title"].Value, "/tenant/roles"));
+        _breadcrumbs.Add(new(Loc["Roles.Edit.Title"].Value, null, disabled: true));
+
+        await LoadRoleAsync();
+        await LoadPermissionsAsync();
+    }
+
+    private async Task LoadRoleAsync()
+    {
+        try
+        {
+            var role = await RoleReader.GetRoleByUrlCodeAsync(UrlCode);
+
+            if (role is null)
+            {
+                _notFound = true;
+                _loading = false;
+                return;
+            }
+
+            _roleId = role.Id;
+            _isBuiltIn = role.IsBuiltIn;
+            _isGlobal = role.TenantId is null;
+            _readOnly = _isBuiltIn || _isGlobal || role.TenantId != _tenantId;
+
+            _model.Name = role.Name;
+            _model.Scope = (int)role.Scope;
+            _model.Description = role.Description;
+            _roleScope = role.Scope;
+
+            _selection = new HashSet<Guid>(role.PermissionIds);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(Loc["Roles.Edit.LoadError", ex.Message].Value, Severity.Error);
+            _notFound = true;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task LoadPermissionsAsync()
+    {
+        try
+        {
+            var query = new GetPermissionsQuery();
+            _permissions = await Mediator.Send(query);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(Loc["Roles.Edit.PermsLoadError", ex.Message].Value, Severity.Error);
+        }
+    }
+
+    private async Task SubmitAsync(RoleFormModel model)
+    {
+        if (_readOnly) return;
+
+        _busy = true;
+
+        try
+        {
+            var command = new UpdateRoleCommand(_roleId, model.Name, model.Description);
+            await Mediator.Send(command);
+
+            Snackbar.Add(Loc["Roles.Edit.UpdateSuccess"].Value, Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(Loc["Lookup.ErrorPrefix", ex.Message].Value, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task SavePermissionsAsync()
+    {
+        if (_readOnly) return;
+
+        _saving = true;
+
+        try
+        {
+            var command = new AssignPermissionsToRoleCommand(_roleId, _selection.ToList());
+            await Mediator.Send(command);
+
+            Snackbar.Add(Loc["Roles.Edit.SavePerms.Success"].Value, Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(Loc["Lookup.ErrorPrefix", ex.Message].Value, Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

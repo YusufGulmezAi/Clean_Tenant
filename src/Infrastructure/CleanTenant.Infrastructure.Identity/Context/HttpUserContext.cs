@@ -6,13 +6,16 @@ namespace CleanTenant.Infrastructure.Identity.Context;
 /// <summary>
 /// <para>
 /// HTTP isteğindeki aktif auth session'ı <see cref="IUserContext"/> arabirimine
-/// köprüleyen scoped implementasyon. SessionLookupMiddleware tarafından
-/// Redis'ten yüklenen session burada okunur.
+/// köprüleyen scoped implementasyon. Normal HTTP request'lerinde
+/// <c>SessionLookupMiddleware</c> tarafından Redis'ten yüklenip
+/// <see cref="Current"/> setter'ı ile doldurulur.
 /// </para>
 /// <para>
-/// SystemUserContext'in (Persistence katmanındaki default) HTTP scope'undaki
-/// override'ı. MigrationRunner gibi HTTP dışı bağlamlarda SystemUserContext
-/// devrede kalır.
+/// <b>Blazor Server SignalR akışı:</b> MediatR pipeline yeni bir scope'ta
+/// çalıştığında middleware tetiklenmez; bu durumda <c>SessionLoaderBehavior</c>
+/// (Infrastructure.Identity'de pipeline başı) HttpContext claim'inden async
+/// olarak yükler ve setter ile doldurur. Bu yaklaşım sync-over-async'ten
+/// kaçınır (Blazor Server SynchronizationContext'inde deadlock yapar).
 /// </para>
 /// </summary>
 public sealed class HttpUserContext : IUserContext, ICurrentSessionAccessor

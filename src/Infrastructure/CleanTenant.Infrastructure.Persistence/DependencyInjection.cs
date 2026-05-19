@@ -9,6 +9,7 @@ using CleanTenant.Infrastructure.Persistence.Catalog;
 using CleanTenant.Infrastructure.Persistence.Catalog.Readers;
 using CleanTenant.Infrastructure.Persistence.Context;
 using CleanTenant.Infrastructure.Persistence.Interceptors;
+using CleanTenant.Infrastructure.Persistence.Localization;
 using CleanTenant.Infrastructure.Persistence.Log;
 using CleanTenant.Infrastructure.Persistence.Main;
 using CleanTenant.Infrastructure.Persistence.MultiTenancy;
@@ -70,8 +71,13 @@ public static class DependencyInjection
                 auditConn));
         }
 
-        // ---- DbContext ----
-        services.AddDbContext<CatalogDbContext>((sp, options) =>
+        // ---- DbContext + DbContextFactory ----
+        // v0.2.9 — IDbContextFactory eklendi: Blazor Server UI component'lerinin
+        // (TenantSwitcher, RoleEditPage gibi) aynı circuit scope'unda paralel
+        // DbContext kullanımı "second operation started" hatası veriyordu.
+        // Reader'lar artık factory'den taze DbContext alıyor; command handler'lar
+        // hâlâ scoped ICatalogDbContext kullanır (tek istek içinde sıralı).
+        services.AddDbContextFactory<CatalogDbContext>((sp, options) =>
         {
             var interceptors = new List<Microsoft.EntityFrameworkCore.Diagnostics.IInterceptor>
             {
@@ -88,8 +94,11 @@ public static class DependencyInjection
                 .UseSnakeCaseNamingConvention()
                 .ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning))
                 .AddInterceptors(interceptors);
-        });
+        }, ServiceLifetime.Scoped);
 
+        // Scoped CatalogDbContext — factory üzerinden (command handler'lar için).
+        services.AddScoped<CatalogDbContext>(sp =>
+            sp.GetRequiredService<IDbContextFactory<CatalogDbContext>>().CreateDbContext());
         services.AddScoped<ICatalogDbContext>(sp => sp.GetRequiredService<CatalogDbContext>());
 
         // ---- LookUp Catalog Reader (EF Core based) ----
@@ -132,6 +141,13 @@ public static class DependencyInjection
         services.AddScoped<CatalogSeeder>();
         services.AddScoped<DevSeedData>();
         services.AddScoped<DemoSeedData>();
+        services.AddScoped<LocalizationSeeder>();
+
+        // ---- v0.2.10 Lokalizasyon ----
+        // LocalizationStore singleton — startup'ta DB'den preload edilir
+        // (Program.cs'de). DbStringLocalizer scoped — IStringLocalizer'a bağlanır.
+        services.AddSingleton<LocalizationStore>();
+        services.AddScoped<Microsoft.Extensions.Localization.IStringLocalizer, DbStringLocalizer>();
 
         return services;
     }
@@ -191,7 +207,7 @@ public static class DependencyInjection
         string connectionString,
         string? auditConnectionString = null)
     {
-        services.AddDbContext<MainDbContext>((sp, options) =>
+        services.AddDbContextFactory<MainDbContext>((sp, options) =>
         {
             var interceptors = new List<IInterceptor>
             {
@@ -208,8 +224,11 @@ public static class DependencyInjection
                 .UseSnakeCaseNamingConvention()
                 .ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning))
                 .AddInterceptors(interceptors);
-        });
+        }, ServiceLifetime.Scoped);
 
+        // Scoped MainDbContext — factory üzerinden (command handler'lar için).
+        services.AddScoped<MainDbContext>(sp =>
+            sp.GetRequiredService<IDbContextFactory<MainDbContext>>().CreateDbContext());
         services.AddScoped<IMainDbContext>(sp => sp.GetRequiredService<MainDbContext>());
 
         return services;

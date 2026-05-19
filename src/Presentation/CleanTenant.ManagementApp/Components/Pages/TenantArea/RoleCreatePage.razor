@@ -1,0 +1,87 @@
+@page "/tenant/roles/new"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject MediatR.IMediator Mediator
+@inject AuthenticationStateProvider AuthProvider
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+@inject IStringLocalizer Loc
+@using CleanTenant.Application.Features.Catalog.Roles
+@using CleanTenant.ManagementApp.Components.Shared
+
+<PageTitle>@Loc["Roles.TenantNew.PageTitle"]</PageTitle>
+
+@*
+    v0.2.10.e.5 — Roles.* anahtarlarıyla lokalize edildi.
+*@
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    <MudBreadcrumbs Items="_breadcrumbs" Class="mb-4" />
+
+    @if (_unauthorized)
+    {
+        <MudAlert Severity="Severity.Warning">
+            @Loc["Roles.TenantList.Unauthorized"]
+        </MudAlert>
+    }
+    else
+    {
+        <MudText Typo="Typo.h5" Class="mb-4">@Loc["Roles.New.Title"]</MudText>
+        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-3">
+            @Loc["Roles.TenantNew.Info"]
+        </MudAlert>
+
+        <RoleForm Model="_model"
+                  OnSubmit="@SubmitAsync"
+                  IsSubmitting="@_busy"
+                  SubmitButtonText="@Loc["Roles.New.SubmitButton"]"
+                  CancelHref="/tenant/roles"
+                  HideSystemScope="true" />
+    }
+</MudContainer>
+
+@code {
+    // Tenant context'inde varsayılan scope Yönetim (Tenant=2).
+    private readonly RoleFormModel _model = new() { Scope = 2 };
+    private bool _busy;
+    private bool _unauthorized;
+
+    private List<BreadcrumbItem> _breadcrumbs = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _breadcrumbs =
+        [
+            new(Loc["Roles.List.Title"].Value, "/tenant/roles"),
+            new(Loc["Roles.New.Title"].Value, null, disabled: true),
+        ];
+
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        var tenantClaim = authState.User.FindFirst("tenant_id")?.Value;
+        _unauthorized = authState.User?.Identity?.IsAuthenticated != true
+            || string.IsNullOrEmpty(tenantClaim);
+    }
+
+    private async Task SubmitAsync(RoleFormModel model)
+    {
+        _busy = true;
+
+        try
+        {
+            // TenantId/CompanyId backend tarafında session'dan otomatik dolar
+            // (CreateRoleCommandHandler v0.2.8.c — TenantAdmin için kendi tenant'ına bağlanır).
+            var command = new CreateRoleCommand(model.Name, model.Scope, model.Description);
+            var roleId = await Mediator.Send(command);
+
+            Snackbar.Add(Loc["Roles.New.Success"].Value, Severity.Success);
+            Nav.NavigateTo("/tenant/roles");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(Loc["Lookup.ErrorPrefix", ex.Message].Value, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

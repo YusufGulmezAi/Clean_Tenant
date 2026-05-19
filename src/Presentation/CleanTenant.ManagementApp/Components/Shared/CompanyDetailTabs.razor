@@ -1,0 +1,224 @@
+@using CleanTenant.Application.Common.Auth
+@using CleanTenant.Application.Common.Authorization
+@using CleanTenant.Application.Features.Main.Companies
+@using CleanTenant.Application.Features.Main.Readers
+@using CleanTenant.SharedKernel.Context
+@using MediatR
+@using MudBlazor
+
+@inject ICurrentSessionAccessor SessionAccessor
+@inject IMediator Mediator
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+@*
+    Site detay/düzenleme tab konteyneri. Hem SystemArea/CompanyEditPage hem
+    TenantArea/CompanyEditPage tarafından kullanılır.
+
+    8 tab var; her tab kendi Kaydet butonunu (içeriğin sağ üstünde) içerir.
+    Tab görünürlüğü ve Kaydet aktifliği permission'a göre filtrelenir
+    (System scope tüm yetkileri bypass eder).
+
+    Tab içerikleri:
+    - Bilgiler:  CompanyForm reuse (HideActions=true) + dış Kaydet butonu
+    - Diğerleri: iskelet — site'ye özel parametreler ileride eklenecek
+*@
+
+<MudTabs Outlined="true"
+         Position="Position.Top"
+         Rounded="false"
+         Border="true"
+         KeepPanelsAlive="true"
+         PanelClass="pa-0">
+
+    @* ============================== Bilgiler ============================== *@
+    @if (HasPermission(CompanyTabPermissions.InfoRead))
+    {
+        <MudTabPanel Text="Bilgiler" Icon="@Icons.Material.Filled.Info">
+            <div class="d-flex justify-end pa-3" style="border-bottom: 1px solid var(--mud-palette-lines-default);">
+                <MudButton OnClick="@SaveInfoAsync"
+                           Color="Color.Primary"
+                           Variant="Variant.Filled"
+                           Disabled="@(_isSubmitting || !HasPermission(CompanyTabPermissions.InfoWrite))"
+                           StartIcon="@Icons.Material.Filled.Save">
+                    @(_isSubmitting ? "Kaydediliyor…" : "Kaydet")
+                </MudButton>
+            </div>
+            <div class="pa-3">
+                <CompanyForm @ref="_infoForm"
+                             Model="@_infoModel"
+                             Mode="@CompanyFormMode.Edit"
+                             OnValidSubmit="@SubmitInfoAsync"
+                             IsSubmitting="@_isSubmitting"
+                             HideActions="true" />
+
+                @if (!string.IsNullOrEmpty(_errorMessage))
+                {
+                    <MudAlert Severity="Severity.Error" Class="mt-4">@_errorMessage</MudAlert>
+                }
+            </div>
+        </MudTabPanel>
+    }
+
+    @* ============================== İletişim ============================== *@
+    @if (HasPermission(CompanyTabPermissions.ContactRead))
+    {
+        <MudTabPanel Text="İletişim" Icon="@Icons.Material.Filled.ContactMail">
+            @PlaceholderTab("İletişim", CompanyTabPermissions.ContactWrite)
+        </MudTabPanel>
+    }
+
+    @* ============================== Muhasebe ============================== *@
+    @if (HasPermission(CompanyTabPermissions.AccountingRead))
+    {
+        <MudTabPanel Text="Muhasebe" Icon="@Icons.Material.Filled.AccountBalance">
+            @PlaceholderTab("Muhasebe", CompanyTabPermissions.AccountingWrite)
+        </MudTabPanel>
+    }
+
+    @* ============================== Finans ============================== *@
+    @if (HasPermission(CompanyTabPermissions.FinanceRead))
+    {
+        <MudTabPanel Text="Finans" Icon="@Icons.Material.Filled.AttachMoney">
+            @PlaceholderTab("Finans", CompanyTabPermissions.FinanceWrite)
+        </MudTabPanel>
+    }
+
+    @* ============================== İK ============================== *@
+    @if (HasPermission(CompanyTabPermissions.HrRead))
+    {
+        <MudTabPanel Text="İK" Icon="@Icons.Material.Filled.People">
+            @PlaceholderTab("İK", CompanyTabPermissions.HrWrite)
+        </MudTabPanel>
+    }
+
+    @* ============================== Puantaj ============================== *@
+    @if (HasPermission(CompanyTabPermissions.TimesheetRead))
+    {
+        <MudTabPanel Text="Puantaj" Icon="@Icons.Material.Filled.Schedule">
+            @PlaceholderTab("Puantaj", CompanyTabPermissions.TimesheetWrite)
+        </MudTabPanel>
+    }
+
+    @* ============================== Bordro ============================== *@
+    @if (HasPermission(CompanyTabPermissions.PayrollRead))
+    {
+        <MudTabPanel Text="Bordro" Icon="@Icons.Material.Filled.Receipt">
+            @PlaceholderTab("Bordro", CompanyTabPermissions.PayrollWrite)
+        </MudTabPanel>
+    }
+
+    @* ============================== Satınalma ============================== *@
+    @if (HasPermission(CompanyTabPermissions.PurchasingRead))
+    {
+        <MudTabPanel Text="Satınalma" Icon="@Icons.Material.Filled.ShoppingCart">
+            @PlaceholderTab("Satınalma", CompanyTabPermissions.PurchasingWrite)
+        </MudTabPanel>
+    }
+</MudTabs>
+
+@code {
+    /// <summary>Düzenlenecek site detayı (parent sayfa tarafından yüklenir).</summary>
+    [Parameter, EditorRequired] public CompanyDetail Detail { get; set; } = default!;
+
+    /// <summary>Başarılı kayıt sonrası yönlendirilecek liste URL'i (System veya Tenant area).</summary>
+    [Parameter] public string ListHref { get; set; } = "/";
+
+    private CompanyForm _infoForm = default!;
+    private CompanyFormModel _infoModel = new();
+    private bool _isSubmitting;
+    private string _errorMessage = string.Empty;
+
+    /// <inheritdoc />
+    protected override void OnParametersSet()
+    {
+        _infoModel = new CompanyFormModel
+        {
+            Id = Detail.Id,
+            Name = Detail.Name,
+            LegalName = Detail.LegalName,
+            Vkn = Detail.Vkn,
+            Email = Detail.Email,
+            Phone = Detail.Phone,
+        };
+    }
+
+    private bool HasPermission(string code)
+    {
+        var session = SessionAccessor.Current;
+        if (session is null) return false;
+
+        // System scope tüm tab'ları görür ve düzenleyebilir.
+        if (session.ScopeLevel == ScopeLevel.System) return true;
+
+        return session.Permissions.Contains(code);
+    }
+
+    private async Task SaveInfoAsync()
+    {
+        // Dış buton — CompanyForm'un içindeki validation pipeline'ını tetikler.
+        await _infoForm.SubmitAsync();
+    }
+
+    private async Task SubmitInfoAsync()
+    {
+        _isSubmitting = true;
+        _errorMessage = string.Empty;
+
+        try
+        {
+            var command = new UpdateCompanyCommand(
+                CompanyId: _infoModel.Id,
+                Name: _infoModel.Name,
+                LegalName: _infoModel.LegalName,
+                Vkn: _infoModel.Vkn,
+                Email: _infoModel.Email,
+                Phone: _infoModel.Phone);
+
+            var result = await Mediator.Send(command);
+
+            if (result.IsSuccess)
+            {
+                Snackbar.Add("Site bilgileri kaydedildi.", Severity.Success);
+            }
+            else
+            {
+                _errorMessage = result.FirstError.Message;
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Hata: {ex.Message}";
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+
+    /// <summary>
+    /// Henüz parametre alanı tanımlanmamış tab'lar için ortak iskelet render'ı.
+    /// Sağ üstte Kaydet butonu (yetkiye göre), altında "Yakında" notu.
+    /// </summary>
+    private RenderFragment PlaceholderTab(string label, string writePermission) => @<text>
+        <div class="d-flex justify-end pa-3" style="border-bottom: 1px solid var(--mud-palette-lines-default);">
+            <MudButton Color="Color.Primary"
+                       Variant="Variant.Filled"
+                       Disabled="true"
+                       StartIcon="@Icons.Material.Filled.Save">
+                Kaydet
+            </MudButton>
+        </div>
+        <div class="pa-6">
+            <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
+                <MudText Typo="Typo.body1">
+                    <b>@label</b> parametreleri henüz tanımlanmadı.
+                </MudText>
+                <MudText Typo="Typo.body2" Class="mt-1">
+                    Bu site için <b>@label</b> modülüne özel parametre alanları
+                    ileriki fazlarda eklenecek. Yetki kodu: <code>@writePermission</code>
+                </MudText>
+            </MudAlert>
+        </div>
+    </text>;
+}

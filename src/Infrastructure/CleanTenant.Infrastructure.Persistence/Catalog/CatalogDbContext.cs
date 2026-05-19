@@ -3,6 +3,7 @@ using CleanTenant.Domain.Identity.Authorization;
 using CleanTenant.Domain.Identity.Support;
 using CleanTenant.Domain.Identity.Tenants;
 using CleanTenant.Domain.Identity.Users;
+using CleanTenant.Domain.Localization;
 using CleanTenant.Domain.LookUp.Banks;
 using CleanTenant.Domain.LookUp.BuildingTypes;
 using CleanTenant.Domain.LookUp.Districts;
@@ -80,6 +81,9 @@ public sealed class CatalogDbContext : IdentityDbContext<User, Role, Guid>, ICat
 
     /// <inheritdoc />
     public DbSet<Bank> Banks => Set<Bank>();
+
+    /// <summary>v0.2.10 — Çok dilli string kaynakları.</summary>
+    public DbSet<LocalizedResource> LocalizedResources => Set<LocalizedResource>();
 
     /// <summary>
     /// URL kod havuzu (Infrastructure-only; <see cref="ICatalogDbContext"/>

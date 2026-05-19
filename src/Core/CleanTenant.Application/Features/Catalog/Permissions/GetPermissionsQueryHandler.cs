@@ -16,7 +16,7 @@ public sealed class GetPermissionsQueryHandler : IRequestHandler<GetPermissionsQ
     {
         var permissions = await _reader.GetAllPermissionsAsync(cancellationToken);
         return permissions
-            .Select(p => new PermissionDto(p.Id, p.Code, p.Description, p.Module))
+            .Select(p => new PermissionDto(p.Id, p.Code, p.Description, p.Module, p.MinimumRoleScope))
             .ToList()
             .AsReadOnly();
     }

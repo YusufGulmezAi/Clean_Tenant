@@ -3,6 +3,8 @@
 @*
     Site CRUD paylaşımlı form bileşeni. Create/Edit modlarında aynı markup;
     alanların görünür/gizli durumları code-behind property'leri üzerinden kontrol edilir.
+
+    v0.2.10.e.3 — CompanyForm.* anahtarları ile lokalize edildi.
 *@
 
 <MudForm @ref="_form" Model="@Model" Validation="@ValidateValue" ValidationDelay="0">
@@ -10,13 +12,13 @@
         <MudCardContent>
             <MudGrid>
                 <MudItem xs="12">
-                    <MudText Typo="Typo.h6">Site Bilgileri</MudText>
+                    <MudText Typo="Typo.h6">@Loc["CompanyForm.Section.Info"]</MudText>
                 </MudItem>
 
                 <MudItem xs="12" sm="6">
                     <MudTextField @bind-Value="Model.Name"
                                   For="@(() => Model.Name)"
-                                  Label="Site Adı *"
+                                  Label="@Loc["CompanyForm.Name"]"
                                   Variant="Variant.Outlined"
                                   Margin="Margin.Dense"
                                   MaxLength="256"
@@ -25,7 +27,7 @@
                 <MudItem xs="12" sm="6">
                     <MudTextField @bind-Value="Model.LegalName"
                                   For="@(() => Model.LegalName)"
-                                  Label="Yasal Ad"
+                                  Label="@Loc["CompanyForm.LegalName"]"
                                   Variant="Variant.Outlined"
                                   Margin="Margin.Dense"
                                   MaxLength="512"
@@ -35,17 +37,17 @@
                 <MudItem xs="12" sm="6">
                     <MudTextField @bind-Value="Model.Vkn"
                                   For="@(() => Model.Vkn)"
-                                  Label="VKN"
+                                  Label="@Loc["CompanyForm.Vkn"]"
                                   Variant="Variant.Outlined"
                                   Margin="Margin.Dense"
                                   MaxLength="10"
-                                  HelperText="10 haneli, ilk hane 1-9 arasında"
+                                  HelperText="@Loc["CompanyForm.Vkn.Help"]"
                                   Immediate="true" />
                 </MudItem>
                 <MudItem xs="12" sm="6">
                     <MudTextField @bind-Value="Model.Email"
                                   For="@(() => Model.Email)"
-                                  Label="E-posta"
+                                  Label="@Loc["CompanyForm.Email"]"
                                   InputType="InputType.Email"
                                   Variant="Variant.Outlined"
                                   Margin="Margin.Dense"
@@ -56,7 +58,7 @@
                 <MudItem xs="12" sm="6">
                     <MudTextField @bind-Value="Model.Phone"
                                   For="@(() => Model.Phone)"
-                                  Label="Telefon"
+                                  Label="@Loc["CompanyForm.Phone"]"
                                   Variant="Variant.Outlined"
                                   Margin="Margin.Dense"
                                   MaxLength="20"
@@ -65,31 +67,34 @@
             </MudGrid>
         </MudCardContent>
 
-        <MudCardActions Class="d-flex justify-end pa-4">
-            @if (!string.IsNullOrEmpty(CancelHref))
-            {
-                <MudButton Href="@CancelHref"
-                           Variant="Variant.Text"
-                           Class="mr-2"
-                           Disabled="@IsSubmitting">
-                    İptal
+        @if (!HideActions)
+        {
+            <MudCardActions Class="d-flex justify-end pa-4">
+                @if (!string.IsNullOrEmpty(CancelHref))
+                {
+                    <MudButton Href="@CancelHref"
+                               Variant="Variant.Text"
+                               Class="mr-2"
+                               Disabled="@IsSubmitting">
+                        @Loc["Common.Cancel"]
+                    </MudButton>
+                }
+                <MudButton OnClick="@SubmitAsync"
+                           Color="Color.Primary"
+                           Variant="Variant.Filled"
+                           Disabled="@IsSubmitting"
+                           StartIcon="@(IsSubmitting ? null : Icons.Material.Filled.Save)">
+                    @if (IsSubmitting)
+                    {
+                        <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                        <MudText Class="ms-2">@Loc["Common.Saving"]</MudText>
+                    }
+                    else
+                    {
+                        @ResolvedSubmitButtonText
+                    }
                 </MudButton>
-            }
-            <MudButton OnClick="@SubmitAsync"
-                       Color="Color.Primary"
-                       Variant="Variant.Filled"
-                       Disabled="@IsSubmitting"
-                       StartIcon="@(IsSubmitting ? null : Icons.Material.Filled.Save)">
-                @if (IsSubmitting)
-                {
-                    <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
-                    <MudText Class="ms-2">Kaydediliyor…</MudText>
-                }
-                else
-                {
-                    @SubmitButtonText
-                }
-            </MudButton>
-        </MudCardActions>
+            </MudCardActions>
+        }
     </MudCard>
 </MudForm>

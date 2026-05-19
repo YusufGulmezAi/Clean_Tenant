@@ -1,0 +1,124 @@
+/*
+    PermissionPicker — chip tabanlı izin seçici (v0.2.8.e).
+    Kenar rengi action'a göre; arkaplan seçimle değişir.
+    Renk paleti: Read=mavi / Create=yeşil / Update/Write/Manage=turuncu /
+                 Delete=kırmızı / Approve=mor / Diğer=gri.
+*/
+
+.module-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--mud-palette-lines-default);
+}
+
+.module-title {
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+.chip-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding: 0.75rem;
+}
+
+.perm-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    height: 32px;
+    padding: 0 14px;
+    border-radius: 16px;
+    border: 2px solid;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 500;
+    transition: all 0.15s ease-in-out;
+    user-select: none;
+    white-space: nowrap;
+    background-color: var(--mud-palette-action-disabled-background);
+    color: var(--mud-palette-text-secondary);
+}
+
+.perm-chip:hover:not(.disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.perm-chip.disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+}
+
+/* --- Action: Read (mavi) --- */
+.perm-chip.action-read { border-color: #3b82f6; }
+.perm-chip.action-read.selected {
+    background-color: #3b82f6;
+    color: #ffffff;
+}
+
+/* --- Action: Create (yeşil) --- */
+.perm-chip.action-create { border-color: #10b981; }
+.perm-chip.action-create.selected {
+    background-color: #10b981;
+    color: #ffffff;
+}
+
+/* --- Action: Update/Write/Manage (turuncu) --- */
+.perm-chip.action-write { border-color: #f59e0b; }
+.perm-chip.action-write.selected {
+    background-color: #f59e0b;
+    color: #ffffff;
+}
+
+/* --- Action: Delete (kırmızı) --- */
+.perm-chip.action-delete { border-color: #ef4444; }
+.perm-chip.action-delete.selected {
+    background-color: #ef4444;
+    color: #ffffff;
+}
+
+/* --- Action: Approve (mor) --- */
+.perm-chip.action-approve { border-color: #8b5cf6; }
+.perm-chip.action-approve.selected {
+    background-color: #8b5cf6;
+    color: #ffffff;
+}
+
+/* --- Action: Default (gri) --- */
+.perm-chip.action-default { border-color: #9ca3af; }
+.perm-chip.action-default.selected {
+    background-color: #6b7280;
+    color: #ffffff;
+}
+
+.perm-icon {
+    font-size: 1rem;
+}
+
+.legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    background-color: var(--mud-palette-background-grey);
+    border-radius: 6px;
+    margin-bottom: 0.75rem;
+    font-size: 0.8rem;
+}
+
+.legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.legend-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid;
+}

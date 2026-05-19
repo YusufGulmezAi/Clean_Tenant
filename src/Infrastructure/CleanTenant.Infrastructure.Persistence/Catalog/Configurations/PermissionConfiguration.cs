@@ -30,6 +30,12 @@ public sealed class PermissionConfiguration : IEntityTypeConfiguration<Permissio
             .HasMaxLength(64);
         builder.HasIndex(p => p.Module);
 
+        // Permission'ı tutabilen en geniş rol scope'u (privilege ceiling için).
+        // Default Unit = en gevşek (her scope tutabilir); seed'de gerçek değerle güncellenir.
+        builder.Property(p => p.MinimumRoleScope)
+            .IsRequired()
+            .HasConversion<int>();
+
         builder.UseXminAsConcurrencyToken();
 
         builder.HasQueryFilter(p => !p.IsDeleted);

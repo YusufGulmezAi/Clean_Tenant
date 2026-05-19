@@ -116,6 +116,25 @@ builder.Services.AddHttpContextAccessor();
 
 var app = builder.Build();
 
+// v0.2.9 — Catalog seeder her startup'ta idempotent çalışır.
+using (var scope = app.Services.CreateScope())
+{
+    var seeder = scope.ServiceProvider.GetRequiredService<CleanTenant.Infrastructure.Persistence.Seeding.CatalogSeeder>();
+    await seeder.SeedCoreCatalogAsync();
+}
+
+// v0.2.10 — Lokalizasyon: önce DB'ye varsayılan çeviri kayıtlarını ekle,
+// sonra in-memory store'a yükle. Singleton store sync indexer'lı IStringLocalizer
+// için DB-roundtrip'siz lookup sağlar.
+using (var scope = app.Services.CreateScope())
+{
+    var locSeeder = scope.ServiceProvider.GetRequiredService<CleanTenant.Infrastructure.Persistence.Seeding.LocalizationSeeder>();
+    await locSeeder.SeedAsync();
+
+    var locStore = app.Services.GetRequiredService<CleanTenant.Infrastructure.Persistence.Localization.LocalizationStore>();
+    await locStore.ReloadAsync();
+}
+
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);

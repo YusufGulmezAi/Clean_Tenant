@@ -38,6 +38,9 @@ public static class CacheKeys
 
         /// <summary>Detail (Edit formu için tam alan seti) projection.</summary>
         public static string DetailById(Guid id) => $"{Prefix}:detail:{id:N}";
+
+        /// <summary>UrlCode ile tam detay (v0.2.9).</summary>
+        public static string DetailByUrlCode(string urlCode) => $"{Prefix}:detail:by-url-code:{urlCode}";
     }
 
     /// <summary>Company (Site) ile ilgili cache anahtarları (Main DB).</summary>
@@ -60,6 +63,9 @@ public static class CacheKeys
 
         /// <summary>Detail (Edit formu için tam alan seti) projection.</summary>
         public static string DetailById(Guid id) => $"{Prefix}:detail:{id:N}";
+
+        /// <summary>UrlCode ile tam detay (v0.2.9.d).</summary>
+        public static string DetailByUrlCode(string urlCode) => $"{Prefix}:detail:by-url-code:{urlCode}";
     }
 
     /// <summary>Kullanıcı (user) bazlı projection cache anahtarları.</summary>
@@ -85,11 +91,21 @@ public static class CacheKeys
         /// <summary>Id ile tek rol.</summary>
         public static string ById(Guid id) => $"{Prefix}:by-id:{id:N}";
 
-        /// <summary>Scope seviyesine göre rol listesi.</summary>
+        /// <summary>Scope seviyesine göre rol listesi (System görüntülemesi — tüm tenant'lar).</summary>
         public static string AllByScope(int scopeLevel) => $"{Prefix}:by-scope:{scopeLevel}";
+
+        /// <summary>
+        /// Scope + tenant filtreli rol listesi: global roller (TenantId=null) +
+        /// bu tenant'a ait roller. TenantAdmin görüntülemesi için.
+        /// </summary>
+        public static string AllByScopeForTenant(int scopeLevel, Guid tenantId)
+            => $"{Prefix}:by-scope:{scopeLevel}:tenant:{tenantId:N}";
 
         /// <summary>Detail (Permission listesi dahil) projection.</summary>
         public static string DetailById(Guid id) => $"{Prefix}:detail:{id:N}";
+
+        /// <summary>UrlCode ile tek rol projection (v0.2.9.a).</summary>
+        public static string DetailByUrlCode(string urlCode) => $"{Prefix}:detail:by-url-code:{urlCode}";
     }
 
     /// <summary>Permission ile ilgili cache anahtarları (Catalog DB).</summary>

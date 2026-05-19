@@ -1,7 +1,7 @@
 using CleanTenant.Application.Common.Caching;
-using CleanTenant.Application.Common.Persistence;
 using CleanTenant.Application.Features.Catalog.Readers;
 using CleanTenant.Domain.Identity.Tenants;
+using CleanTenant.Infrastructure.Persistence.Catalog;
 using Microsoft.EntityFrameworkCore;
 
 namespace CleanTenant.Infrastructure.Caching.Readers;
@@ -9,20 +9,24 @@ namespace CleanTenant.Infrastructure.Caching.Readers;
 /// <summary>
 /// <para>
 /// <see cref="ITenantCatalogReader"/>'ın hybrid cache + EF Core fallback
-/// implementasyonu. Cache miss'te <see cref="ICatalogDbContext"/>'ten okur,
+/// implementasyonu. Cache miss'te factory'den taze DbContext üretip okur,
 /// projection DTO'ya dönüştürür, cache'e yazar.
+/// </para>
+/// <para>
+/// <b>v0.2.9 — IDbContextFactory'ye geçiş:</b> Blazor Server circuit'inde
+/// paralel reader çağrılarında scoped DbContext concurrency hatası veriyordu.
 /// </para>
 /// </summary>
 public sealed class TenantCatalogReader : ITenantCatalogReader
 {
     private readonly ICacheStore _cache;
-    private readonly ICatalogDbContext _db;
+    private readonly IDbContextFactory<CatalogDbContext> _dbFactory;
 
     /// <summary>DI bağımlılıklarını alır.</summary>
-    public TenantCatalogReader(ICacheStore cache, ICatalogDbContext db)
+    public TenantCatalogReader(ICacheStore cache, IDbContextFactory<CatalogDbContext> dbFactory)
     {
         _cache = cache;
-        _db = db;
+        _dbFactory = dbFactory;
     }
 
     /// <inheritdoc />
@@ -31,7 +35,8 @@ public sealed class TenantCatalogReader : ITenantCatalogReader
             CacheKeys.Tenant.AllActive,
             async ct =>
             {
-                var list = await _db.Tenants
+                await using var db = await _dbFactory.CreateDbContextAsync(ct);
+                var list = await db.Tenants
                     .AsNoTracking()
                     .Where(t => t.Status == TenantStatus.Active)
                     .OrderBy(t => t.Name)
@@ -53,13 +58,17 @@ public sealed class TenantCatalogReader : ITenantCatalogReader
     public Task<TenantListItem?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
         => _cache.GetOrCreateAsync<TenantListItem?>(
             CacheKeys.Tenant.ById(id),
-            async ct => await _db.Tenants
-                .AsNoTracking()
-                .Where(t => t.Id == id)
-                .Select(t => new TenantListItem(
-                    t.Id, t.UrlCode, t.Name, t.LegalName,
-                    t.Status, t.BillingTier, t.AllowSystemWriteAccess))
-                .FirstOrDefaultAsync(ct),
+            async ct =>
+            {
+                await using var db = await _dbFactory.CreateDbContextAsync(ct);
+                return await db.Tenants
+                    .AsNoTracking()
+                    .Where(t => t.Id == id)
+                    .Select(t => new TenantListItem(
+                        t.Id, t.UrlCode, t.Name, t.LegalName,
+                        t.Status, t.BillingTier, t.AllowSystemWriteAccess))
+                    .FirstOrDefaultAsync(ct);
+            },
             CacheOptions.DetailMediumLived,
             cancellationToken);
 
@@ -67,13 +76,17 @@ public sealed class TenantCatalogReader : ITenantCatalogReader
     public Task<TenantListItem?> GetByUrlCodeAsync(string urlCode, CancellationToken cancellationToken = default)
         => _cache.GetOrCreateAsync<TenantListItem?>(
             CacheKeys.Tenant.ByUrlCode(urlCode),
-            async ct => await _db.Tenants
-                .AsNoTracking()
-                .Where(t => t.UrlCode == urlCode)
-                .Select(t => new TenantListItem(
-                    t.Id, t.UrlCode, t.Name, t.LegalName,
-                    t.Status, t.BillingTier, t.AllowSystemWriteAccess))
-                .FirstOrDefaultAsync(ct),
+            async ct =>
+            {
+                await using var db = await _dbFactory.CreateDbContextAsync(ct);
+                return await db.Tenants
+                    .AsNoTracking()
+                    .Where(t => t.UrlCode == urlCode)
+                    .Select(t => new TenantListItem(
+                        t.Id, t.UrlCode, t.Name, t.LegalName,
+                        t.Status, t.BillingTier, t.AllowSystemWriteAccess))
+                    .FirstOrDefaultAsync(ct);
+            },
             CacheOptions.DetailMediumLived,
             cancellationToken);
 
@@ -81,23 +94,55 @@ public sealed class TenantCatalogReader : ITenantCatalogReader
     public Task<TenantDetail?> GetDetailByIdAsync(Guid id, CancellationToken cancellationToken = default)
         => _cache.GetOrCreateAsync<TenantDetail?>(
             CacheKeys.Tenant.DetailById(id),
-            async ct => await _db.Tenants
-                .AsNoTracking()
-                .Where(t => t.Id == id)
-                .Select(t => new TenantDetail(
-                    t.Id,
-                    t.UrlCode,
-                    t.Name,
-                    t.LegalName,
-                    t.LegalIdentityType,
-                    t.LegalIdentityNumber,
-                    t.Address,
-                    t.Status,
-                    t.BillingTier,
-                    t.HasDedicatedDatabase,
-                    t.DatabaseSchemaName,
-                    t.AllowSystemWriteAccess))
-                .FirstOrDefaultAsync(ct),
+            async ct =>
+            {
+                await using var db = await _dbFactory.CreateDbContextAsync(ct);
+                return await db.Tenants
+                    .AsNoTracking()
+                    .Where(t => t.Id == id)
+                    .Select(t => new TenantDetail(
+                        t.Id,
+                        t.UrlCode,
+                        t.Name,
+                        t.LegalName,
+                        t.LegalIdentityType,
+                        t.LegalIdentityNumber,
+                        t.Address,
+                        t.Status,
+                        t.BillingTier,
+                        t.HasDedicatedDatabase,
+                        t.DatabaseSchemaName,
+                        t.AllowSystemWriteAccess))
+                    .FirstOrDefaultAsync(ct);
+            },
+            CacheOptions.DetailMediumLived,
+            cancellationToken);
+
+    /// <inheritdoc />
+    public Task<TenantDetail?> GetDetailByUrlCodeAsync(string urlCode, CancellationToken cancellationToken = default)
+        => _cache.GetOrCreateAsync<TenantDetail?>(
+            CacheKeys.Tenant.DetailByUrlCode(urlCode),
+            async ct =>
+            {
+                await using var db = await _dbFactory.CreateDbContextAsync(ct);
+                return await db.Tenants
+                    .AsNoTracking()
+                    .Where(t => t.UrlCode == urlCode)
+                    .Select(t => new TenantDetail(
+                        t.Id,
+                        t.UrlCode,
+                        t.Name,
+                        t.LegalName,
+                        t.LegalIdentityType,
+                        t.LegalIdentityNumber,
+                        t.Address,
+                        t.Status,
+                        t.BillingTier,
+                        t.HasDedicatedDatabase,
+                        t.DatabaseSchemaName,
+                        t.AllowSystemWriteAccess))
+                    .FirstOrDefaultAsync(ct);
+            },
             CacheOptions.DetailMediumLived,
             cancellationToken);
 }

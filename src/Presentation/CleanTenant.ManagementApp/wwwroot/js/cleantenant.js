@@ -232,6 +232,27 @@ window.cleantenant.setLanguageCookie = function (code) {
     document.cookie = '.AspNetCore.Culture=' + val + ';path=/;samesite=lax';
 };
 
+// ---------------------------------------------------------------------------
+// v0.2.10.d — Dil değiştirme + User.PreferredCulture persist. Form-post ile
+// /auth/change-culture'a gider: server cookie set'ler ve giriş yapmışsa
+// User.PreferredCulture'ı DB'ya yazar. Sonra returnUrl'e yönlendirir.
+// ---------------------------------------------------------------------------
+window.cleantenant.submitCultureChange = function (culture, returnUrl) {
+    submitFormWithReturn('/auth/change-culture', returnUrl, { culture: culture });
+};
+
+// ---------------------------------------------------------------------------
+// v0.2.10.f — RTL desteği. AR culture aktif olduğunda MainLayout
+// OnAfterRenderAsync firstRender'da çağırır. <body> ve <html> üzerine
+// `dir="rtl"` (veya "ltr") attribute'ı yerleştirir. Idempotent — her sayfa
+// load'da yeniden çağrılabilir (culture değişimi tam reload tetikler).
+// ---------------------------------------------------------------------------
+window.cleantenant.setBodyDirection = function (dir) {
+    var d = (dir === 'rtl') ? 'rtl' : 'ltr';
+    document.body.setAttribute('dir', d);
+    document.documentElement.setAttribute('dir', d);
+};
+
 function submitFormWithReturn(action, returnUrl, extraFields) {
     const form = document.createElement('form');
     form.method = 'POST';

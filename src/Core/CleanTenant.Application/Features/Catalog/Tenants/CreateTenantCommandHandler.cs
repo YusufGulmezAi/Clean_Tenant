@@ -23,12 +23,24 @@ namespace CleanTenant.Application.Features.Catalog.Tenants;
 /// </para>
 /// <list type="number">
 ///   <item>Çakışma kontrolü: Yönetim adı ve kimlik numarası tekil mi.</item>
-///   <item>Catalog DB transaction başlat.</item>
-///   <item><see cref="Tenant"/> entity yarat ve persist et.</item>
-///   <item><see cref="User"/> entity (Sorumlu Yönetici) yarat — UserManager ile.</item>
+///   <item><see cref="Tenant"/> entity yarat ve <c>_db.Tenants</c>'a ekle.</item>
+///   <item>
+///     <para>Sorumlu Yönetici user lookup/create:</para>
+///     <list type="bullet">
+///       <item>E-posta zaten kayıtlı ise → <b>mevcut User'ı kullan</b> (multi-context).
+///       Bir kullanıcı birden çok Yönetim'de TenantAdmin olabilir.</item>
+///       <item>Yoksa → UserManager ile yeni User oluştur + temp password.</item>
+///     </list>
+///   </item>
 ///   <item><c>TenantAdmin</c> rolünü bul → <see cref="UserRoleAssignment"/> yarat (Tenant scope).</item>
-///   <item>Transaction commit.</item>
-///   <item>Password reset token üret → <see cref="IEmailSender"/> ile Welcome email gönder.</item>
+///   <item>SaveChanges.</item>
+///   <item>
+///     <para>E-posta bildirimi:</para>
+///     <list type="bullet">
+///       <item>Yeni user için → password reset token + welcome email (24 saat).</item>
+///       <item>Mevcut user için → "yeni Yönetim'e atandınız" bildirim e-postası.</item>
+///     </list>
+///   </item>
 ///   <item>Cache invalidate: tüm tenant listesi yenilenir.</item>
 /// </list>
 /// </summary>
@@ -79,13 +91,11 @@ public sealed class CreateTenantCommandHandler : IRequestHandler<CreateTenantCom
                     $"Bu kimlik numarasıyla ({command.LegalIdentityNumber}) kayıtlı bir Yönetim mevcut."));
         }
 
+        // Bir kullanıcı birden çok Yönetim'de TenantAdmin olabilir. Email mevcut
+        // ise reuse et; yoksa yeni User oluştur. UserRoleAssignment'ın bileşik
+        // unique key'i (UserId, RoleId, ScopeLevel, TenantId, ...) çakışma riskine
+        // karşı yeterli güvencedir.
         var existingEmailUser = await _userManager.FindByEmailAsync(command.AdminEmail);
-        if (existingEmailUser is not null)
-        {
-            return Result<CreateTenantResult>.Failure(
-                Error.Conflict("ADMIN-EMAIL-EXISTS",
-                    $"'{command.AdminEmail}' e-postasıyla kayıtlı bir kullanıcı zaten var."));
-        }
 
         // 2. TenantAdmin rolünü bul (seed'den gelir, ScopeLevel=Tenant)
         var tenantAdminRole = await _db.Roles.AsNoTracking()
@@ -116,27 +126,40 @@ public sealed class CreateTenantCommandHandler : IRequestHandler<CreateTenantCom
         };
         _db.Tenants.Add(tenant);
 
-        // 4. Sorumlu Yönetici User (UserManager ile)
-        var user = new User
+        // 4. Sorumlu Yönetici User — yeni veya mevcut (multi-context user'lar
+        // için reuse). Mevcut user'ın FirstName/LastName/Phone'ı korunur; başka
+        // bağlamlardaki kimliği ezilmemeli.
+        User user;
+        bool isNewUser;
+        if (existingEmailUser is not null)
         {
-            UserName = command.AdminEmail,
-            Email = command.AdminEmail,
-            EmailConfirmed = false,
-            FirstName = command.AdminFirstName,
-            LastName = command.AdminLastName,
-            PhoneNumber = command.AdminPhone,
-            PhoneNumberConfirmed = false,
-        };
+            user = existingEmailUser;
+            isNewUser = false;
+        }
+        else
+        {
+            user = new User
+            {
+                UserName = command.AdminEmail,
+                Email = command.AdminEmail,
+                EmailConfirmed = false,
+                FirstName = command.AdminFirstName,
+                LastName = command.AdminLastName,
+                PhoneNumber = command.AdminPhone,
+                PhoneNumberConfirmed = false,
+            };
 
-        // Geçici rastgele şifre — reset token ile değiştirilecek
-        var tempPassword = GenerateTempPassword();
-        var createResult = await _userManager.CreateAsync(user, tempPassword);
-        if (!createResult.Succeeded)
-        {
-            return Result<CreateTenantResult>.Failure(
-                Error.Validation("USER-CREATE-FAILED",
-                    "Sorumlu Yönetici oluşturulamadı: " +
-                    string.Join("; ", createResult.Errors.Select(e => e.Description))));
+            // Geçici rastgele şifre — reset token ile değiştirilecek
+            var tempPassword = GenerateTempPassword();
+            var createResult = await _userManager.CreateAsync(user, tempPassword);
+            if (!createResult.Succeeded)
+            {
+                return Result<CreateTenantResult>.Failure(
+                    Error.Validation("USER-CREATE-FAILED",
+                        "Sorumlu Yönetici oluşturulamadı: " +
+                        string.Join("; ", createResult.Errors.Select(e => e.Description))));
+            }
+            isNewUser = true;
         }
 
         // 5. UserRoleAssignment — TenantAdmin / Tenant scope
@@ -156,17 +179,25 @@ public sealed class CreateTenantCommandHandler : IRequestHandler<CreateTenantCom
         // 6. SaveChanges (Tenant + Assignment — User UserManager.CreateAsync ile zaten kaydedildi)
         await _db.SaveChangesAsync(cancellationToken);
 
-        // 7. Password reset token + welcome email (best-effort; başarısız olursa
-        // tenant yine yaratılır, manuel reset gerekir).
+        // 7. E-posta bildirimi (best-effort)
         try
         {
-            var resetToken = await _userManager.GeneratePasswordResetTokenAsync(user);
-            await SendWelcomeEmailAsync(user, tenant, resetToken, cancellationToken);
+            if (isNewUser)
+            {
+                // Yeni user → welcome + password reset link
+                var resetToken = await _userManager.GeneratePasswordResetTokenAsync(user);
+                await SendWelcomeEmailAsync(user, tenant, resetToken, cancellationToken);
+            }
+            else
+            {
+                // Mevcut user → "yeni Yönetim'e atandınız" bildirimi (şifre değişmez)
+                await SendAddedToTenantEmailAsync(user, tenant, cancellationToken);
+            }
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex,
-                "Welcome email gönderilemedi (TenantId={TenantId}, UserId={UserId}). Yönetim oluşturuldu; admin manuel reset yapmalı.",
+                "Welcome/bildirim e-postası gönderilemedi (TenantId={TenantId}, UserId={UserId}). Yönetim oluşturuldu.",
                 tenant.Id, user.Id);
         }
 
@@ -182,6 +213,34 @@ public sealed class CreateTenantCommandHandler : IRequestHandler<CreateTenantCom
             tenant.UrlCode,
             user.Id,
             user.Email!));
+    }
+
+    /// <summary>
+    /// Mevcut bir kullanıcı yeni bir Yönetim'e TenantAdmin atandığında bilgilendirme
+    /// e-postası. Şifre veya hesap ile ilgili aksiyon yok — sadece bağlam bildirimi.
+    /// </summary>
+    private async Task SendAddedToTenantEmailAsync(User user, TenantEntity tenant, CancellationToken ct)
+    {
+        var subject = $"CleanTenant — {tenant.Name} Yönetim'ine atandınız";
+        var body =
+            $"""
+            Sayın {user.FirstName} {user.LastName},
+
+            Mevcut hesabınızla '{tenant.Name}' Yönetim'inde Yönetim Admin (TenantAdmin)
+            olarak atandınız. Bu Yönetim'e erişmek için ManagementApp'e mevcut
+            şifrenizle giriş yapabilir, AppBar'daki bağlam (context) seçicisinden
+            yeni Yönetim'e geçebilirsiniz.
+
+            E-posta: {user.Email}
+            Yeni Yönetim: {tenant.Name}
+            Yönetim Kodu: {tenant.UrlCode}
+
+            Bu işlemi siz talep etmediyseniz lütfen sistem yöneticisine bildirin.
+
+            CleanTenant — Toplu Yapı Yönetimi
+            """;
+
+        await _email.SendAsync(user.Email!, subject, body, ct);
     }
 
     private async Task SendWelcomeEmailAsync(User user, TenantEntity tenant, string resetToken, CancellationToken ct)

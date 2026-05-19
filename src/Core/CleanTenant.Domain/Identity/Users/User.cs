@@ -74,6 +74,19 @@ public sealed class User : IdentityUser<Guid>, IAuditable, ISoftDeletable, IHasU
     /// <summary>Son giriş yapılan IP adresi (kabaca lokasyon takibi için).</summary>
     public string? LastLoginIp { get; set; }
 
+    /// <summary>
+    /// <para>
+    /// Kullanıcının tercih ettiği dil (BCP-47, örn. <c>"tr-TR"</c>, <c>"en-US"</c>).
+    /// Login sonrası culture cookie'sini bu değere set ederiz; her oturumda
+    /// kullanıcının dili otomatik gelir (v0.2.10).
+    /// </para>
+    /// <para>
+    /// <c>null</c> → sistem varsayılanı (TR). Kullanıcı AppBar'daki dil seçici
+    /// üzerinden değiştirdiğinde burası güncellenir.
+    /// </para>
+    /// </summary>
+    public string? PreferredCulture { get; set; }
+
     /// <inheritdoc />
     public DateTimeOffset CreatedAt { get; set; }
 

@@ -5,6 +5,9 @@
     v0.2.4.b.3 — Yönetim CRUD paylaşımlı form bileşeni. Üç modda da aynı
     markup; alanların görünür/read-only/gizli durumları code-behind property'leri
     üzerinden kontrol edilir.
+
+    v0.2.10.e.3 — TenantForm.* anahtarları ile lokalize edildi. Phone placeholder
+    "0(5XX) XXX-XX-XX" raw bırakıldı (format mask, locale-bağımsız).
 *@
 
 <MudForm @ref="_form" Model="@Model" Validation="@ValidateValue" ValidationDelay="0">
@@ -12,13 +15,13 @@
         <MudCardContent>
             <MudGrid>
                 <MudItem xs="12">
-                    <MudText Typo="Typo.h6">Yönetim Bilgileri</MudText>
+                    <MudText Typo="Typo.h6">@Loc["TenantForm.Section.Tenant"]</MudText>
                 </MudItem>
 
                 <MudItem xs="12" sm="6">
                     <MudTextField @bind-Value="Model.Name"
                                   For="@(() => Model.Name)"
-                                  Label="Yönetim Adı *"
+                                  Label="@Loc["TenantForm.Name"]"
                                   Variant="Variant.Outlined"
                                   Margin="Margin.Dense"
                                   MaxLength="256"
@@ -27,7 +30,7 @@
                 <MudItem xs="12" sm="6">
                     <MudTextField @bind-Value="Model.LegalName"
                                   For="@(() => Model.LegalName)"
-                                  Label="Yasal Ad"
+                                  Label="@Loc["TenantForm.LegalName"]"
                                   Variant="Variant.Outlined"
                                   Margin="Margin.Dense"
                                   MaxLength="512"
@@ -37,13 +40,13 @@
                 <MudItem xs="12" sm="4">
                     <MudSelect T="LegalIdentityType"
                                @bind-Value="Model.LegalIdentityType"
-                               Label="Kimlik Tipi *"
+                               Label="@Loc["TenantForm.LegalIdentityType"]"
                                Variant="Variant.Outlined"
                                Margin="Margin.Dense"
                                ReadOnly="@IdentityReadOnly">
-                        <MudSelectItem Value="@LegalIdentityType.Vkn">VKN (Vergi Kimlik No)</MudSelectItem>
-                        <MudSelectItem Value="@LegalIdentityType.Tckn">TCKN</MudSelectItem>
-                        <MudSelectItem Value="@LegalIdentityType.Ykn">YKN (Yabancı Kimlik No)</MudSelectItem>
+                        <MudSelectItem Value="@LegalIdentityType.Vkn">@Loc["TenantForm.IdentityType.Vkn"]</MudSelectItem>
+                        <MudSelectItem Value="@LegalIdentityType.Tckn">@Loc["TenantForm.IdentityType.Tckn"]</MudSelectItem>
+                        <MudSelectItem Value="@LegalIdentityType.Ykn">@Loc["TenantForm.IdentityType.Ykn"]</MudSelectItem>
                     </MudSelect>
                 </MudItem>
                 <MudItem xs="12" sm="8">
@@ -61,7 +64,7 @@
                 <MudItem xs="12">
                     <MudTextField @bind-Value="Model.Address"
                                   For="@(() => Model.Address)"
-                                  Label="Adres"
+                                  Label="@Loc["TenantForm.Address"]"
                                   Variant="Variant.Outlined"
                                   Margin="Margin.Dense"
                                   Lines="2"
@@ -72,20 +75,20 @@
                 <MudItem xs="12" sm="6">
                     <MudSelect T="BillingTier"
                                @bind-Value="Model.BillingTier"
-                               Label="Faturalama Katmanı *"
+                               Label="@Loc["TenantForm.BillingTier"]"
                                Variant="Variant.Outlined"
                                Margin="Margin.Dense"
                                ReadOnly="@BillingReadOnly">
-                        <MudSelectItem Value="@BillingTier.Free">Free</MudSelectItem>
-                        <MudSelectItem Value="@BillingTier.Standard">Standard</MudSelectItem>
-                        <MudSelectItem Value="@BillingTier.Enterprise">Enterprise</MudSelectItem>
+                        <MudSelectItem Value="@BillingTier.Free">@Loc["TenantForm.Tier.Free"]</MudSelectItem>
+                        <MudSelectItem Value="@BillingTier.Standard">@Loc["TenantForm.Tier.Standard"]</MudSelectItem>
+                        <MudSelectItem Value="@BillingTier.Enterprise">@Loc["TenantForm.Tier.Enterprise"]</MudSelectItem>
                     </MudSelect>
                 </MudItem>
                 <MudItem xs="12" sm="6" Class="d-flex align-center">
                     <MudSwitch T="bool"
                                @bind-Value="Model.HasDedicatedDatabase"
                                Color="Color.Primary"
-                               Label="Dedicated DB"
+                               Label="@Loc["TenantForm.DedicatedDb"]"
                                ReadOnly="@DedicatedDbReadOnly" />
                 </MudItem>
 
@@ -95,9 +98,9 @@
                         <MudSwitch T="bool"
                                    @bind-Value="Model.AllowSystemWriteAccess"
                                    Color="Color.Primary"
-                                   Label="Sistem operatörünün yazma izni" />
+                                   Label="@Loc["TenantForm.AllowSystemWrite"]" />
                         <MudText Typo="Typo.caption" Color="Color.Default" Class="ml-12">
-                            Açık: Sistem destek kullanıcıları bu Yönetim'de yazma yapabilir. Kapalı: yalnız okuma.
+                            @Loc["TenantForm.AllowSystemWrite.Help"]
                         </MudText>
                     </MudItem>
                 }
@@ -106,16 +109,16 @@
                 {
                     <MudItem xs="12">
                         <MudDivider Class="my-2" />
-                        <MudText Typo="Typo.h6">Sorumlu Yönetici (TenantAdmin)</MudText>
+                        <MudText Typo="Typo.h6">@Loc["TenantForm.Section.Admin"]</MudText>
                         <MudText Typo="Typo.caption" Color="Color.Default">
-                            İlk admin kullanıcı otomatik oluşturulur. Welcome e-posta + şifre belirleme bağlantısı gönderilir.
+                            @Loc["TenantForm.Admin.Caption"]
                         </MudText>
                     </MudItem>
 
                     <MudItem xs="12" sm="6">
                         <MudTextField @bind-Value="Model.AdminFirstName"
                                       For="@(() => Model.AdminFirstName)"
-                                      Label="Ad *"
+                                      Label="@Loc["TenantForm.Admin.FirstName"]"
                                       Variant="Variant.Outlined"
                                       Margin="Margin.Dense"
                                       MaxLength="100"
@@ -124,7 +127,7 @@
                     <MudItem xs="12" sm="6">
                         <MudTextField @bind-Value="Model.AdminLastName"
                                       For="@(() => Model.AdminLastName)"
-                                      Label="Soyad *"
+                                      Label="@Loc["TenantForm.Admin.LastName"]"
                                       Variant="Variant.Outlined"
                                       Margin="Margin.Dense"
                                       MaxLength="100"
@@ -133,7 +136,7 @@
                     <MudItem xs="12" sm="6">
                         <MudTextField @bind-Value="Model.AdminEmail"
                                       For="@(() => Model.AdminEmail)"
-                                      Label="E-posta *"
+                                      Label="@Loc["TenantForm.Admin.Email"]"
                                       InputType="InputType.Email"
                                       Variant="Variant.Outlined"
                                       Margin="Margin.Dense"
@@ -144,13 +147,13 @@
                         <MudTextField @bind-Value="Model.AdminPhone"
                                       @bind-Value:after="FormatAdminPhone"
                                       For="@(() => Model.AdminPhone)"
-                                      Label="Cep Telefonu *"
+                                      Label="@Loc["TenantForm.Admin.Phone"]"
                                       Placeholder="0(5XX) XXX-XX-XX"
                                       MaxLength="17"
                                       InputMode="InputMode.tel"
                                       Variant="Variant.Outlined"
                                       Margin="Margin.Dense"
-                                      HelperText="Format: 0(5XX) XXX-XX-XX"
+                                      HelperText="@Loc["TenantForm.Admin.PhoneFormat"]"
                                       Immediate="true" />
                     </MudItem>
                 }
@@ -164,7 +167,7 @@
                            Variant="Variant.Text"
                            Class="mr-2"
                            Disabled="@IsSubmitting">
-                    İptal
+                    @Loc["Common.Cancel"]
                 </MudButton>
             }
             <MudButton OnClick="@SubmitAsync"
@@ -175,11 +178,11 @@
                 @if (IsSubmitting)
                 {
                     <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
-                    <MudText Class="ms-2">Kaydediliyor…</MudText>
+                    <MudText Class="ms-2">@Loc["Common.Saving"]</MudText>
                 }
                 else
                 {
-                    @SubmitButtonText
+                    @ResolvedSubmitButtonText
                 }
             </MudButton>
         </MudCardActions>

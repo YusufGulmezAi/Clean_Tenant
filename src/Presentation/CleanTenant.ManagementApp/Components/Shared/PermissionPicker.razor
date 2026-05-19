@@ -1,0 +1,195 @@
+@using CleanTenant.Application.Features.Auth.CurrentSession
+@using CleanTenant.Application.Features.Catalog.Permissions
+@using CleanTenant.SharedKernel.Context
+@using MediatR
+@using Microsoft.AspNetCore.Components.Authorization
+
+@inject IMediator Mediator
+@inject AuthenticationStateProvider AuthProvider
+@inject IStringLocalizer Loc
+
+@*
+    İzin seçici — chip tabanlı (oval pill) UI (v0.2.8.e).
+    Kenar rengi action'a (Read/Create/Update/Delete/Approve) göre;
+    arkaplan seçim durumuna göre değişir. Görsel davranış katmanı
+    privilege ceiling sezgisi verir; gerçek savunma backend'de (v0.2.8.c).
+
+    Filtreler:
+    - Privilege ceiling: assigner'ın sahip olmadığı izinler gizlenir
+      (System scope bypass eder).
+    - Scope ceiling: rol scope'una uyumsuz izinler gizlenir
+      (örn. Tenant role'üne System-only izin gizli).
+
+    v0.2.10.e.3 — Permissions.Picker.* anahtarlarıyla lokalize edildi.
+*@
+
+@if (_initialized && VisiblePermissions.Count == 0)
+{
+    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
+        @Loc["Permissions.Picker.NoResults"]
+    </MudAlert>
+}
+else if (_initialized)
+{
+    <div class="legend">
+        <span class="legend-item"><span class="legend-dot" style="border-color:#3b82f6;background-color:#3b82f6"></span> @Loc["Permissions.Picker.Legend.Read"]</span>
+        <span class="legend-item"><span class="legend-dot" style="border-color:#10b981;background-color:#10b981"></span> @Loc["Permissions.Picker.Legend.Create"]</span>
+        <span class="legend-item"><span class="legend-dot" style="border-color:#f59e0b;background-color:#f59e0b"></span> @Loc["Permissions.Picker.Legend.Update"]</span>
+        <span class="legend-item"><span class="legend-dot" style="border-color:#ef4444;background-color:#ef4444"></span> @Loc["Permissions.Picker.Legend.Delete"]</span>
+        <span class="legend-item"><span class="legend-dot" style="border-color:#8b5cf6;background-color:#8b5cf6"></span> @Loc["Permissions.Picker.Legend.Approve"]</span>
+        <span class="legend-item"><span class="legend-dot" style="border-color:#9ca3af;background-color:#9ca3af"></span> @Loc["Permissions.Picker.Legend.Other"]</span>
+    </div>
+
+    @foreach (var module in VisiblePermissions.GroupBy(p => p.Module).OrderBy(g => g.Key))
+    {
+        var modulePerms = module.OrderBy(p => p.Code).ToList();
+        var allSelected = modulePerms.All(p => Selection.Contains(p.Id));
+
+        <div class="module-row">
+            <span class="module-title">@module.Key</span>
+            <MudCheckBox T="bool"
+                         Value="@allSelected"
+                         Label="@(allSelected ? Loc["Permissions.Picker.ClearAll"].Value : Loc["Permissions.Picker.SelectAll"].Value)"
+                         Dense="true"
+                         Disabled="@ReadOnly"
+                         ValueChanged="@(v => ToggleModule(modulePerms, v))" />
+        </div>
+        <div class="chip-grid">
+            @foreach (var p in modulePerms)
+            {
+                var isSelected = Selection.Contains(p.Id);
+                var actionClass = GetActionClass(p.Code);
+                var chipClass = $"perm-chip {actionClass}{(isSelected ? " selected" : "")}{(ReadOnly ? " disabled" : "")}";
+
+                <span class="@chipClass"
+                      @onclick="@(() => TogglePermission(p))"
+                      title="@($"{p.Code} — {p.Description}\n{Loc["Permissions.Picker.MinScope", p.MinimumRoleScope]}")">
+                    <MudIcon Class="perm-icon"
+                             Icon="@(isSelected ? Icons.Material.Filled.CheckCircle : Icons.Material.Outlined.RadioButtonUnchecked)"
+                             Size="Size.Small" />
+                    @p.Code
+                </span>
+            }
+        </div>
+    }
+}
+
+@code {
+    /// <summary>Tüm permission kataloğu (zaten yüklenmiş olarak gelir).</summary>
+    [Parameter, EditorRequired]
+    public IReadOnlyList<PermissionDto> Permissions { get; set; } = [];
+
+    /// <summary>Seçili permission ID'leri. Two-way binding ile parent günceller.</summary>
+    [Parameter, EditorRequired]
+    public HashSet<Guid> Selection { get; set; } = new();
+
+    /// <summary>Atanmakta olan rolün scope'u. Uyumlu olmayan izinler gizlenir.</summary>
+    [Parameter, EditorRequired]
+    public ScopeLevel RoleScope { get; set; }
+
+    /// <summary>Sadece okuma modu — tıklama devre dışı.</summary>
+    [Parameter]
+    public bool ReadOnly { get; set; }
+
+    /// <summary>Seçim değişince parent'a haber ver.</summary>
+    [Parameter]
+    public EventCallback<HashSet<Guid>> SelectionChanged { get; set; }
+
+    private bool _initialized;
+    private HashSet<string> _assignerCodes = new(StringComparer.Ordinal);
+    private bool _assignerIsSystem;
+
+    /// <summary>Picker'da görünür izinler (privilege + scope ceiling sonrası).</summary>
+    private IReadOnlyList<PermissionDto> VisiblePermissions =>
+        Permissions.Where(IsVisible).ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        // İki strateji birleşik (Blazor scope farklılığına karşı sağlam yedek):
+        //   1) Mediator query — SessionLoaderBehavior Redis'ten session yükler.
+        //   2) Fallback: AuthenticationStateProvider üzerinden cookie scope claim.
+        try
+        {
+            var info = await Mediator.Send(new GetCurrentSessionInfoQuery());
+            if (info.IsAuthenticated)
+            {
+                _assignerIsSystem = info.IsSystem;
+                _assignerCodes = info.PermissionCodes.ToHashSet(StringComparer.Ordinal);
+                _initialized = true;
+                return;
+            }
+        }
+        catch
+        {
+            // Pipeline veya backend sorunu — fallback'e geç.
+        }
+
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        _assignerIsSystem = string.Equals(
+            authState.User?.FindFirst("scope")?.Value,
+            "System",
+            StringComparison.OrdinalIgnoreCase);
+        _initialized = true;
+    }
+
+    private bool IsVisible(PermissionDto p)
+    {
+        // Scope ceiling: role.Scope > permission.MinimumRoleScope ise gizle
+        // (örn. Tenant role System-only izin tutamaz).
+        // None (0) = "scope kısıtlaması yok" → her rol tutabilir; bu durumda
+        // scope ceiling'i atla (DB seed'i henüz tamamlanmamış olabilir).
+        if (p.MinimumRoleScope != ScopeLevel.None
+            && (int)RoleScope > (int)p.MinimumRoleScope) return false;
+
+        // Privilege ceiling: assigner kendisinde olmayan izni atayamaz.
+        // System scope bypass eder.
+        if (!_assignerIsSystem && !_assignerCodes.Contains(p.Code)) return false;
+
+        return true;
+    }
+
+    private static string GetActionClass(string code)
+    {
+        // Code formatı: <Module>.<Action>[.<Qualifier>] — büyük/küçük harf duyarsız
+        // anahtar kelime aramasıyla action'ı tespit ediyoruz (kod formatı esnek
+        // olabilir, örn. "company.info.read").
+        var lower = code.ToLowerInvariant();
+        if (lower.Contains(".read") || lower.EndsWith("read")) return "action-read";
+        if (lower.Contains(".create")) return "action-create";
+        if (lower.Contains(".delete")) return "action-delete";
+        if (lower.Contains(".approve")) return "action-approve";
+        if (lower.Contains(".update") || lower.Contains(".write") || lower.Contains(".manage") || lower.Contains(".edit"))
+            return "action-write";
+        return "action-default";
+    }
+
+    private async Task TogglePermission(PermissionDto p)
+    {
+        if (ReadOnly) return;
+
+        if (Selection.Contains(p.Id))
+            Selection.Remove(p.Id);
+        else
+            Selection.Add(p.Id);
+
+        await SelectionChanged.InvokeAsync(Selection);
+    }
+
+    private async Task ToggleModule(IReadOnlyList<PermissionDto> modulePerms, bool selectAll)
+    {
+        if (ReadOnly) return;
+
+        if (selectAll)
+        {
+            foreach (var p in modulePerms)
+                Selection.Add(p.Id);
+        }
+        else
+        {
+            foreach (var p in modulePerms)
+                Selection.Remove(p.Id);
+        }
+
+        await SelectionChanged.InvokeAsync(Selection);
+    }
+}

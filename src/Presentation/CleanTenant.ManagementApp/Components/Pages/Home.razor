@@ -1,14 +1,21 @@
 @page "/"
 @rendermode InteractiveServer
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject IStringLocalizer Loc
 
-<PageTitle>Dashboard — CleanTenant</PageTitle>
+<PageTitle>@Loc["Home.PageTitle"]</PageTitle>
+
+@*
+    v0.2.10.e.6 — Home.* + NavMenu.Dashboard + Common.* anahtarlarıyla
+    lokalize edildi. "Faz 1.4'te dolacak" gibi geliştirici faz işaretleri raw
+    bırakıldı.
+*@
 
 <MudBreadcrumbs Items="@_breadcrumbs" Class="px-0 pb-2" />
 
-<MudText Typo="Typo.h4" Class="mb-1">Dashboard</MudText>
+<MudText Typo="Typo.h4" Class="mb-1">@Loc["NavMenu.Dashboard"]</MudText>
 <MudText Typo="Typo.body1" Color="Color.Default" Class="mb-4">
-    Hoş geldiniz. v0.2.1 Faz 1 başlangıç sürümü — gerçek veriler v0.2.2'de auth devreye girdiğinde gelir.
+    @Loc["Home.Welcome.Full"]
 </MudText>
 
 <MudGrid>
@@ -16,7 +23,7 @@
         <MudPaper Elevation="2" Class="pa-4 d-flex flex-column">
             <div class="d-flex align-center mb-2">
                 <MudIcon Icon="@Icons.Material.Filled.Domain" Color="Color.Primary" />
-                <MudText Typo="Typo.subtitle2" Class="ml-2">Tenant Sayısı</MudText>
+                <MudText Typo="Typo.subtitle2" Class="ml-2">@Loc["Home.Card.Tenants"]</MudText>
             </div>
             <MudText Typo="Typo.h4">—</MudText>
             <MudText Typo="Typo.caption" Color="Color.Default">Faz 1.4'te dolacak</MudText>
@@ -27,7 +34,7 @@
         <MudPaper Elevation="2" Class="pa-4 d-flex flex-column">
             <div class="d-flex align-center mb-2">
                 <MudIcon Icon="@Icons.Material.Filled.People" Color="Color.Secondary" />
-                <MudText Typo="Typo.subtitle2" Class="ml-2">Aktif Kullanıcı</MudText>
+                <MudText Typo="Typo.subtitle2" Class="ml-2">@Loc["Home.Card.ActiveUsers"]</MudText>
             </div>
             <MudText Typo="Typo.h4">—</MudText>
             <MudText Typo="Typo.caption" Color="Color.Default">Faz 1.4'te dolacak</MudText>
@@ -38,7 +45,7 @@
         <MudPaper Elevation="2" Class="pa-4 d-flex flex-column">
             <div class="d-flex align-center mb-2">
                 <MudIcon Icon="@Icons.Material.Filled.Support" Color="Color.Info" />
-                <MudText Typo="Typo.subtitle2" Class="ml-2">Aktif Support</MudText>
+                <MudText Typo="Typo.subtitle2" Class="ml-2">@Loc["Home.Card.ActiveSupport"]</MudText>
             </div>
             <MudText Typo="Typo.h4">—</MudText>
             <MudText Typo="Typo.caption" Color="Color.Default">Faz 1.6'da dolacak</MudText>
@@ -49,7 +56,7 @@
         <MudPaper Elevation="2" Class="pa-4 d-flex flex-column">
             <div class="d-flex align-center mb-2">
                 <MudIcon Icon="@Icons.Material.Filled.History" Color="Color.Tertiary" />
-                <MudText Typo="Typo.subtitle2" Class="ml-2">Bugünkü Audit</MudText>
+                <MudText Typo="Typo.subtitle2" Class="ml-2">@Loc["Home.Card.AuditToday"]</MudText>
             </div>
             <MudText Typo="Typo.h4">—</MudText>
             <MudText Typo="Typo.caption" Color="Color.Default">Faz 1.6'da dolacak</MudText>
@@ -58,7 +65,7 @@
 </MudGrid>
 
 <MudPaper Elevation="0" Outlined="true" Class="pa-4 mt-6">
-    <MudText Typo="Typo.h6" Class="mb-2">Faz 1 Yol Haritası</MudText>
+    <MudText Typo="Typo.h6" Class="mb-2">@Loc["Home.Roadmap.Title"]</MudText>
     <MudList T="string" Dense="true">
         <MudListItem Icon="@Icons.Material.Filled.CheckCircle" IconColor="Color.Success">
             v0.2.1 — ManagementApp shell + 4 tema + MudBlazor (mevcut)
@@ -73,9 +80,14 @@
 </MudPaper>
 
 @code {
-    private readonly List<BreadcrumbItem> _breadcrumbs =
-    [
-        new("Anasayfa", href: "/", icon: Icons.Material.Filled.Home),
-        new("Dashboard", href: null, disabled: true),
-    ];
+    private List<BreadcrumbItem> _breadcrumbs = [];
+
+    protected override void OnInitialized()
+    {
+        _breadcrumbs =
+        [
+            new(Loc["Breadcrumb.Home"].Value, href: "/", icon: Icons.Material.Filled.Home),
+            new(Loc["NavMenu.Dashboard"].Value, href: null, disabled: true),
+        ];
+    }
 }

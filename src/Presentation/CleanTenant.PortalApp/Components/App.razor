@@ -19,6 +19,16 @@
     <ReconnectModal />
     <script src="@Assets["_framework/blazor.web.js"]"></script>
     <script src="@Assets["_content/MudBlazor/MudBlazor.min.js"]"></script>
+    <script>
+        // v0.2.10.f — RTL desteği. MainLayout OnAfterRenderAsync firstRender'da
+        // çağırır; AR culture aktif ise <body>/<html> üzerine dir="rtl" yerleşir.
+        window.cleantenant = window.cleantenant || {};
+        window.cleantenant.setBodyDirection = function (dir) {
+            var d = (dir === 'rtl') ? 'rtl' : 'ltr';
+            document.body.setAttribute('dir', d);
+            document.documentElement.setAttribute('dir', d);
+        };
+    </script>
 </body>
 
 </html>

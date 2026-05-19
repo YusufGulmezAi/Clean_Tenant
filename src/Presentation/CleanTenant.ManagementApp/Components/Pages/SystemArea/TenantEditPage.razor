@@ -1,20 +1,23 @@
-@page "/system/tenants/{TenantId:guid}/edit"
+@page "/system/tenants/{urlCode}/edit"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @inject MediatR.IMediator Mediator
 @inject ITenantCatalogReader TenantReader
 @inject AuthenticationStateProvider AuthProvider
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
+@inject IStringLocalizer Loc
 @using CleanTenant.Application.Features.Catalog.Readers
 @using CleanTenant.Application.Features.Catalog.Tenants
 @using CleanTenant.ManagementApp.Components.Shared
 
-<PageTitle>Yönetim Düzenle — Sistem</PageTitle>
+<PageTitle>@Loc["Tenants.Edit.PageTitle"]</PageTitle>
 
 @*
     v0.2.4.b.3 — Yönetim düzenleme (Sistem operatör için). Detay reader'dan
     yüklenir, TenantForm Edit modunda kullanılır, UpdateTenantCommand
     Mediator'a gönderilir.
+
+    v0.2.10.e.4 — Tenants.Edit.* anahtarlarıyla lokalize edildi.
 *@
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
@@ -23,7 +26,7 @@
     @if (_unauthorized)
     {
         <MudAlert Severity="Severity.Warning">
-            Bu sayfa yalnız Sistem kullanıcıları için. Aktif bağlamınız Sistem değil.
+            @Loc["Tenants.List.UnauthorizedSystem"]
         </MudAlert>
     }
     else if (_loading)
@@ -33,28 +36,29 @@
     else if (_notFound)
     {
         <MudAlert Severity="Severity.Error">
-            Yönetim bulunamadı (Id: <code>@TenantId</code>).
+            @Loc["Tenants.Edit.NotFound", UrlCode]
         </MudAlert>
     }
     else
     {
-        <MudText Typo="Typo.h5" Class="mb-1">Yönetim Düzenle</MudText>
+        <MudText Typo="Typo.h5" Class="mb-1">@Loc["Tenants.Edit.Title"]</MudText>
         <MudText Typo="Typo.caption" Color="Color.Default" Class="mb-4">
-            URL Kodu: <code>@_urlCode</code>
+            @Loc["Tenants.Edit.UrlCodeLabel"] <code>@_urlCode</code>
         </MudText>
 
         <TenantForm Model="_model"
                     Mode="TenantFormMode.Edit"
                     OnValidSubmit="@SubmitAsync"
                     IsSubmitting="@_busy"
-                    SubmitButtonText="Değişiklikleri Kaydet"
+                    SubmitButtonText="@Loc["Tenants.Edit.SubmitButton"]"
                     CancelHref="/system/tenants" />
     }
 </MudContainer>
 
 @code {
-    [Parameter] public Guid TenantId { get; set; }
+    [Parameter] public string UrlCode { get; set; } = string.Empty;
 
+    private Guid _tenantId;
     private TenantFormModel _model = new();
     private string _urlCode = string.Empty;
     private bool _loading = true;
@@ -76,7 +80,7 @@
             return;
         }
 
-        var detail = await TenantReader.GetDetailByIdAsync(TenantId);
+        var detail = await TenantReader.GetDetailByUrlCodeAsync(UrlCode);
         if (detail is null)
         {
             _notFound = true;
@@ -84,13 +88,14 @@
             return;
         }
 
+        _tenantId = detail.Id;
         _model = MapToFormModel(detail);
         _urlCode = detail.UrlCode;
         _breadcrumbs =
         [
-            new("Yönetimler", "/system/tenants"),
+            new(Loc["Nav.Tenants"].Value, "/system/tenants"),
             new(detail.Name, null, disabled: true),
-            new("Düzenle", null, disabled: true),
+            new(Loc["Common.Edit"].Value, null, disabled: true),
         ];
         _loading = false;
     }
@@ -113,7 +118,7 @@
         try
         {
             var command = new UpdateTenantCommand(
-                TenantId: TenantId,
+                TenantId: _tenantId,
                 Name: _model.Name,
                 LegalName: string.IsNullOrWhiteSpace(_model.LegalName) ? null : _model.LegalName,
                 LegalIdentityType: _model.LegalIdentityType,
@@ -126,16 +131,16 @@
             var result = await Mediator.Send(command);
             if (result.IsFailure)
             {
-                Snackbar.Add($"Güncelleme başarısız: {result.FirstError.Message}", Severity.Error);
+                Snackbar.Add(Loc["Tenants.Edit.UpdateError", result.FirstError.Message].Value, Severity.Error);
                 return;
             }
 
-            Snackbar.Add("Yönetim güncellendi.", Severity.Success);
+            Snackbar.Add(Loc["Tenants.Save.UpdateSuccess"].Value, Severity.Success);
             Nav.NavigateTo("/system/tenants");
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Beklenmedik hata: {ex.Message}", Severity.Error);
+            Snackbar.Add(Loc["Common.UnexpectedError", ex.Message].Value, Severity.Error);
         }
         finally
         {

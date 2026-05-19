@@ -1,3 +1,4 @@
+using CleanTenant.SharedKernel.Context;
 using CleanTenant.SharedKernel.Entities;
 
 namespace CleanTenant.Domain.Identity.Authorization;
@@ -32,4 +33,23 @@ public sealed class Permission : BaseEntity
     /// listesini modül başlıkları altında göstermek için kullanılır.
     /// </summary>
     public string Module { get; set; } = string.Empty;
+
+    /// <summary>
+    /// <para>
+    /// Bu izni tutabilmesi için bir rolün en az hangi scope seviyesine sahip
+    /// olması gerektiğini belirtir. ScopeLevel hiyerarşisi
+    /// (System=1 &lt; Tenant=2 &lt; Company=3 &lt; Unit=4) küçük değer = geniş
+    /// yetki olarak yorumlanır.
+    /// </para>
+    /// <para>
+    /// <b>Filtre kuralı:</b> <c>role.Scope &lt;= permission.MinimumRoleScope</c>
+    /// olduğunda izin role atanabilir. Örnekler:
+    /// <list type="bullet">
+    ///   <item><c>Tenant.Create</c> → System: yalnız System rolleri tutabilir</item>
+    ///   <item><c>User.Read</c> → Tenant: System ve Tenant rolleri tutabilir</item>
+    ///   <item><c>Unit.Read</c> → Unit: tüm scope'lar tutabilir</item>
+    /// </list>
+    /// </para>
+    /// </summary>
+    public ScopeLevel MinimumRoleScope { get; set; } = ScopeLevel.Unit;
 }

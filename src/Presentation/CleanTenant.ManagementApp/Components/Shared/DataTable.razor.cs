@@ -1,5 +1,6 @@
 using CleanTenant.Application.Common.Export;
 using Microsoft.AspNetCore.Components;
+using Microsoft.Extensions.Localization;
 using Microsoft.JSInterop;
 using MudBlazor;
 
@@ -40,8 +41,11 @@ public sealed partial class DataTable<TItem> : ComponentBase
     /// <summary>Caller'ın geçtiği MudDataGrid kolonları.</summary>
     [Parameter, EditorRequired] public RenderFragment Columns { get; set; } = default!;
 
-    /// <summary>Quick filter input'unun placeholder metni.</summary>
-    [Parameter] public string SearchPlaceholder { get; set; } = "Ara…";
+    /// <summary>
+    /// Quick filter input'unun placeholder metni. Null/boş bırakılırsa
+    /// <c>DataTable.SearchPlaceholder</c> localizasyon anahtarı kullanılır.
+    /// </summary>
+    [Parameter] public string? SearchPlaceholder { get; set; }
 
     /// <summary>Quick filter'ı göster/gizle (default: göster).</summary>
     [Parameter] public bool ShowQuickFilter { get; set; } = true;
@@ -104,8 +108,14 @@ public sealed partial class DataTable<TItem> : ComponentBase
     [Inject] private IPdfExportService Pdf { get; set; } = default!;
     [Inject] private IJSRuntime JS { get; set; } = default!;
     [Inject] private ISnackbar Snackbar { get; set; } = default!;
+    [Inject] private IStringLocalizer Loc { get; set; } = default!;
 
     private string _searchText = string.Empty;
+
+    /// <summary>SearchPlaceholder parameter null/boş ise lokalize default'a düşer.</summary>
+    private string ResolvedSearchPlaceholder => string.IsNullOrWhiteSpace(SearchPlaceholder)
+        ? Loc["DataTable.SearchPlaceholder"].Value
+        : SearchPlaceholder;
 
     /// <summary>Multi-keyword AND filter — boşlukla ayrılmış kelimelerin tümü eşleşmeli.</summary>
     private Func<TItem, bool> CombinedQuickFilter => item =>
@@ -142,7 +152,7 @@ public sealed partial class DataTable<TItem> : ComponentBase
         var cols = ExcelColumns ?? ExportColumns;
         if (cols is null || cols.Count == 0)
         {
-            Snackbar.Add("Excel export için kolon tanımı verilmedi.", Severity.Warning);
+            Snackbar.Add(Loc["DataTable.Export.NoColumns.Excel"], Severity.Warning);
             return;
         }
         if (Items is null) return;
@@ -157,7 +167,7 @@ public sealed partial class DataTable<TItem> : ComponentBase
         var cols = PdfColumns ?? ExportColumns;
         if (cols is null || cols.Count == 0)
         {
-            Snackbar.Add("PDF export için kolon tanımı verilmedi.", Severity.Warning);
+            Snackbar.Add(Loc["DataTable.Export.NoColumns.Pdf"], Severity.Warning);
             return;
         }
         if (Items is null) return;
@@ -173,7 +183,9 @@ public sealed partial class DataTable<TItem> : ComponentBase
         await JS.InvokeVoidAsync("cleantenant.downloadBlobBase64", fileName, base64, mimeType);
     }
 
-    private string ResolveTitle() => string.IsNullOrWhiteSpace(ExportTitle) ? (Title ?? "Liste") : ExportTitle;
+    private string ResolveTitle() => string.IsNullOrWhiteSpace(ExportTitle)
+        ? (Title ?? Loc["DataTable.DefaultTitle"].Value)
+        : ExportTitle;
 
     private static string SanitizeFileName(string title)
     {

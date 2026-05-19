@@ -5,24 +5,27 @@
 @inject AuthenticationStateProvider AuthProvider
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
+@inject IStringLocalizer Loc
 @using CleanTenant.Application.Features.Catalog.Readers
 @using CleanTenant.Application.Features.Catalog.Tenants
 @using CleanTenant.ManagementApp.Components.Shared
 
-<PageTitle>Yönetim Ayarları</PageTitle>
+<PageTitle>@Loc["Tenants.Settings.PageTitle"]</PageTitle>
 
 @*
     v0.2.4.b.3 — TenantAdmin'in kendi Yönetim'inin ayarlarını düzenlemesi
     için sayfa. TenantForm Settings modunda kullanılır: yalnız Name,
     LegalName, Address, AllowSystemWriteAccess düzenlenebilir; kimlik /
     BillingTier / dedicated DB read-only.
+
+    v0.2.10.e.5 — Tenants.Settings.* + Common.* anahtarlarıyla lokalize edildi.
 *@
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
     @if (_unauthorized)
     {
         <MudAlert Severity="Severity.Warning">
-            Bu sayfa Yönetim Admin (TenantAdmin) için. Aktif bağlamınız Yönetim değil.
+            @Loc["Tenants.Settings.UnauthorizedTenant"]
         </MudAlert>
     }
     else if (_loading)
@@ -32,22 +35,21 @@
     else if (_notFound)
     {
         <MudAlert Severity="Severity.Error">
-            Aktif Yönetim bulunamadı. Lütfen oturumu yenileyin.
+            @Loc["Tenants.Settings.NoActiveTenant"]
         </MudAlert>
     }
     else
     {
-        <MudText Typo="Typo.h5" Class="mb-1">Yönetim Ayarları</MudText>
+        <MudText Typo="Typo.h5" Class="mb-1">@Loc["Tenants.Settings.Title"]</MudText>
         <MudText Typo="Typo.caption" Color="Color.Default" Class="mb-4">
-            URL Kodu: <code>@_urlCode</code> — kimlik bilgisi ve katman bilgisi
-            yalnız sistem yöneticisi tarafından değiştirilebilir.
+            @Loc["Tenants.Settings.Caption", _urlCode]
         </MudText>
 
         <TenantForm Model="_model"
                     Mode="TenantFormMode.Settings"
                     OnValidSubmit="@SubmitAsync"
                     IsSubmitting="@_busy"
-                    SubmitButtonText="Ayarları Kaydet" />
+                    SubmitButtonText="@Loc["Tenants.Save.SettingsButton"]" />
     }
 </MudContainer>
 
@@ -127,15 +129,15 @@
             var result = await Mediator.Send(command);
             if (result.IsFailure)
             {
-                Snackbar.Add($"Ayarlar kaydedilemedi: {result.FirstError.Message}", Severity.Error);
+                Snackbar.Add(Loc["Tenants.Settings.SaveFailed", result.FirstError.Message].Value, Severity.Error);
                 return;
             }
 
-            Snackbar.Add("Yönetim ayarları kaydedildi.", Severity.Success);
+            Snackbar.Add(Loc["Tenants.Settings.SaveSuccess"].Value, Severity.Success);
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Beklenmedik hata: {ex.Message}", Severity.Error);
+            Snackbar.Add(Loc["Common.UnexpectedError", ex.Message].Value, Severity.Error);
         }
         finally
         {

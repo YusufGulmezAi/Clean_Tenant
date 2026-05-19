@@ -48,37 +48,46 @@ public sealed class CatalogSeeder
 
     private async Task SeedPermissionsAsync(CancellationToken cancellationToken)
     {
+        // Mevcut permission'ları tracked olarak çek; hem ekleme (yeni kod) hem
+        // güncelleme (Description/Module/MinimumRoleScope değişmişse) için.
         var existing = await _db.Permissions
-            .AsNoTracking()
-            .Select(p => p.Code)
-            .ToListAsync(cancellationToken);
-        var existingCodes = existing.ToHashSet(StringComparer.Ordinal);
+            .ToDictionaryAsync(p => p.Code, p => p, StringComparer.Ordinal, cancellationToken);
 
         var added = 0;
+        var updated = 0;
         foreach (var def in PermissionCatalog.All)
         {
-            if (existingCodes.Contains(def.Code))
+            if (existing.TryGetValue(def.Code, out var current))
             {
+                // Var olan kayıt; katalog metadata'sına göre senkronla.
+                var dirty = false;
+                if (current.Description != def.Description) { current.Description = def.Description; dirty = true; }
+                if (current.Module != def.Module) { current.Module = def.Module; dirty = true; }
+                if (current.MinimumRoleScope != def.MinimumRoleScope) { current.MinimumRoleScope = def.MinimumRoleScope; dirty = true; }
+                if (dirty) updated++;
                 continue;
             }
 
-            // Id explicit set; toplu Add sırasında Guid.Empty'leri EF duplicate
-            // gibi yorumlamasını engeller (BaseEntity.Id protected setter'lı,
+            // Yeni kayıt — Id explicit set; toplu Add sırasında Guid.Empty'leri EF
+            // duplicate gibi yorumlamasını engeller (BaseEntity.Id protected setter'lı,
             // o yüzden EF tracker entry üzerinden atıyoruz).
             var entry = _db.Permissions.Add(new Permission
             {
                 Code = def.Code,
                 Description = def.Description,
                 Module = def.Module,
+                MinimumRoleScope = def.MinimumRoleScope,
             });
             entry.Property(nameof(Permission.Id)).CurrentValue = Guid.CreateVersion7();
             added++;
         }
 
-        if (added > 0)
+        if (added > 0 || updated > 0)
         {
             await _db.SaveChangesAsync(cancellationToken);
-            _logger.LogInformation("Permission seed: {Added} yeni kayıt eklendi (toplam {Total}).", added, PermissionCatalog.All.Count);
+            _logger.LogInformation(
+                "Permission seed: {Added} eklendi, {Updated} güncellendi (toplam {Total}).",
+                added, updated, PermissionCatalog.All.Count);
         }
         else
         {

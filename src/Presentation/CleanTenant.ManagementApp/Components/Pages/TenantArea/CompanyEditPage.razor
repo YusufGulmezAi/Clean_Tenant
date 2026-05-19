@@ -1,118 +1,59 @@
-@page "/tenant/companies/{CompanyId:guid}/edit"
+@page "/tenant/companies/{urlCode}/edit"
 
 @using CleanTenant.Application.Features.Main.Companies
 @using CleanTenant.Application.Features.Main.Readers
 @using CleanTenant.ManagementApp.Components.Shared
-@using MediatR
 @using Microsoft.AspNetCore.Components
 
 @inject IMainCatalogReader Reader
-@inject IMediator Mediator
-@inject NavigationManager Nav
+@inject IStringLocalizer Loc
 
-<PageTitle>Site Düzenle — CleanTenant</PageTitle>
+<PageTitle>@Loc["Companies.Edit.PageTitle"]</PageTitle>
 
-<MudContainer MaxWidth="MaxWidth.Small" Class="py-8">
+@*
+    v0.2.10.e.5 — Companies.Edit.* anahtarlarıyla lokalize edildi.
+*@
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="py-6">
     <MudBreadcrumbs Items="@_breadcrumbs" Class="px-0 mb-4"></MudBreadcrumbs>
 
-    @if (_initialized)
+    @if (!_initialized)
     {
-        @if (_detail is not null)
-        {
-            <CompanyForm Model="@_model"
-                         Mode="@CompanyFormMode.Edit"
-                         OnValidSubmit="@UpdateAsync"
-                         IsSubmitting="@_isSubmitting"
-                         SubmitButtonText="Güncelle"
-                         CancelHref="/tenant/companies" />
-
-            @if (!string.IsNullOrEmpty(_errorMessage))
-            {
-                <MudAlert Severity="Severity.Error" Class="mt-4">@_errorMessage</MudAlert>
-            }
-        }
-        else
-        {
-            <MudAlert Severity="Severity.Warning">Site bulunamadı.</MudAlert>
-        }
+        <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="60px" Class="mb-2" />
+        <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="300px" />
+    }
+    else if (_detail is null)
+    {
+        <MudAlert Severity="Severity.Warning">@Loc["Companies.Edit.NotFound"]</MudAlert>
     }
     else
     {
-        <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="200px" Class="mb-4" />
-        <MudSkeleton SkeletonType="SkeletonType.Text" />
+        <MudText Typo="Typo.h5" Class="mb-3">@_detail.Name</MudText>
+        <CompanyDetailTabs Detail="@_detail" ListHref="/tenant/companies" />
     }
 </MudContainer>
 
 @code {
     [Parameter]
-    public Guid CompanyId { get; set; }
+    public string UrlCode { get; set; } = string.Empty;
 
     private List<BreadcrumbItem> _breadcrumbs = [];
-    private CompanyFormModel _model = new();
     private CompanyDetail? _detail;
-    private bool _initialized = false;
-    private bool _isSubmitting = false;
-    private string _errorMessage = string.Empty;
+    private bool _initialized;
 
     protected override async Task OnInitializedAsync()
     {
-        _detail = await Reader.GetDetailByIdAsync(CompanyId);
+        _detail = await Reader.GetDetailByUrlCodeAsync(UrlCode);
 
         if (_detail is not null)
         {
-            _model = new CompanyFormModel
-            {
-                Id = _detail.Id,
-                Name = _detail.Name,
-                LegalName = _detail.LegalName,
-                Vkn = _detail.Vkn,
-                Email = _detail.Email,
-                Phone = _detail.Phone,
-            };
-
             _breadcrumbs =
             [
-                new BreadcrumbItem("Siteler", href: "/tenant/companies"),
+                new BreadcrumbItem(Loc["Companies.List.Title"].Value, href: "/tenant/companies"),
                 new BreadcrumbItem(_detail.Name, href: null, disabled: true),
             ];
         }
 
         _initialized = true;
-    }
-
-    private async Task UpdateAsync()
-    {
-        _isSubmitting = true;
-        _errorMessage = string.Empty;
-
-        try
-        {
-            var command = new UpdateCompanyCommand(
-                CompanyId: _model.Id,
-                Name: _model.Name,
-                LegalName: _model.LegalName,
-                Vkn: _model.Vkn,
-                Email: _model.Email,
-                Phone: _model.Phone);
-
-            var result = await Mediator.Send(command);
-
-            if (result.IsSuccess)
-            {
-                Nav.NavigateTo("/tenant/companies");
-            }
-            else
-            {
-                _errorMessage = result.FirstError.Message;
-            }
-        }
-        catch (Exception ex)
-        {
-            _errorMessage = $"Hata: {ex.Message}";
-        }
-        finally
-        {
-            _isSubmitting = false;
-        }
     }
 }

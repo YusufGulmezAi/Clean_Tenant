@@ -1,4 +1,5 @@
 @inject AuthenticationStateProvider AuthProvider
+@inject IStringLocalizer Loc
 
 @*
     v0.2.3.c — Scope-aware sol drawer.
@@ -13,6 +14,10 @@
 
     Üstte canlı arama kutusu (link'leri filtreler); eşleşmeyen NavLink'ler gizlenir.
     Tüm scope'larda altta "Ayarlar" grubu (Tema, Dil, Hakkında).
+
+    v0.2.10.e.2 — NavMenu.* anahtarları ile lokalize edildi. Matches() filter
+    artık localize edilmiş başlık üzerinde çalışır → kullanıcı aktif UI dilinde
+    aratabilir.
 *@
 
 <div class="pa-2">
@@ -22,7 +27,7 @@
                   DebounceInterval="120"
                   Adornment="Adornment.Start"
                   AdornmentIcon="@Icons.Material.Filled.Search"
-                  Placeholder="Menüde ara…"
+                  Placeholder="@Loc["NavMenu.Search"]"
                   Variant="Variant.Outlined"
                   Margin="Margin.Dense"
                   Clearable="true"
@@ -30,50 +35,57 @@
 </div>
 
 <MudNavMenu Color="Color.Primary" Bordered="true">
-    @if (Matches("Dashboard"))
+    @{
+        var dashboardLabel = Loc["NavMenu.Dashboard"].Value;
+    }
+    @if (Matches(dashboardLabel))
     {
         <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">
-            Dashboard
+            @dashboardLabel
         </MudNavLink>
     }
 
     @* ─── SİSTEM BAĞLAMI ─────────────────────────────────────────────── *@
     @if (_scope == "System")
     {
-        @if (Matches("Yönetimler"))
+        var systemTenantsLabel = Loc["NavMenu.Tenants"].Value;
+        var systemCompaniesLabel = Loc["NavMenu.Companies"].Value;
+        var systemRolesLabel = Loc["NavMenu.Roles"].Value;
+
+        @if (Matches(systemTenantsLabel))
         {
             <MudNavLink Href="/system/tenants" Icon="@Icons.Material.Filled.Domain">
-                Yönetimler
+                @systemTenantsLabel
             </MudNavLink>
         }
 
-        @if (Matches("Siteler"))
+        @if (Matches(systemCompaniesLabel))
         {
             <MudNavLink Href="/system/companies" Icon="@Icons.Material.Filled.Apartment">
-                Siteler
+                @systemCompaniesLabel
             </MudNavLink>
         }
 
-        @if (Matches("Roller"))
+        @if (Matches(systemRolesLabel))
         {
             <MudNavLink Href="/system/roles" Icon="@Icons.Material.Filled.Shield">
-                Roller
+                @systemRolesLabel
             </MudNavLink>
         }
 
         var systemAdminChildren = new[]
         {
-            ("LookUp Tablolar", "/system/lookup-tables", Icons.Material.Filled.DataObject, "", false),
-            ("Bankalar", "/system/banks", Icons.Material.Filled.AccountBalance, "", false),
-            ("Audit Explorer", "/system/audit", Icons.Material.Filled.History, "", false),
-            ("Log Görüntüleyici", "/logs", Icons.Material.Filled.Article, "Faz 1.6", true),
-            ("Permission Kataloğu", "/permissions", Icons.Material.Filled.Security, "Faz 1.5", true),
-            ("Sistem Ayarları", "/system/settings", Icons.Material.Filled.Tune, "Faz 1.4", true),
+            (Loc["NavMenu.LookUpTables"].Value, "/system/lookup-tables", Icons.Material.Filled.DataObject, "", false),
+            (Loc["NavMenu.Banks"].Value, "/system/banks", Icons.Material.Filled.AccountBalance, "", false),
+            (Loc["NavMenu.AuditExplorer"].Value, "/system/audit", Icons.Material.Filled.History, "", false),
+            (Loc["NavMenu.LogViewer"].Value, "/logs", Icons.Material.Filled.Article, "Faz 1.6", true),
+            (Loc["NavMenu.PermissionCatalog"].Value, "/permissions", Icons.Material.Filled.Security, "Faz 1.5", true),
+            (Loc["NavMenu.SystemSettings"].Value, "/system/settings", Icons.Material.Filled.Tune, "Faz 1.4", true),
         };
         var systemAdminVisible = AnyMatch(systemAdminChildren.Select(c => c.Item1));
         @if (systemAdminVisible)
         {
-            <MudNavGroup Title="Sistem Yönetimi" Icon="@Icons.Material.Filled.AdminPanelSettings" Expanded="@IsSearching">
+            <MudNavGroup Title="@Loc["NavMenu.SystemAdmin"]" Icon="@Icons.Material.Filled.AdminPanelSettings" Expanded="@IsSearching">
                 @foreach (var (title, href, icon, phase, disabled) in systemAdminChildren)
                 {
                     if (Matches(title))
@@ -94,25 +106,27 @@
     @* ─── YÖNETİM (TENANT) BAĞLAMI ─────────────────────────────────── *@
     @if (_scope == "Tenant" && _activeTenantId.HasValue)
     {
-        @if (Matches("Siteler"))
+        var tenantCompaniesLabel = Loc["NavMenu.Companies"].Value;
+
+        @if (Matches(tenantCompaniesLabel))
         {
             <MudNavLink Href="/tenant/companies" Icon="@Icons.Material.Filled.Apartment">
-                Siteler
+                @tenantCompaniesLabel
             </MudNavLink>
         }
 
         var tenantAdminChildren = new[]
         {
-            ("Kullanıcılar", "/tenant/users", Icons.Material.Filled.People, "Faz 1.5", true),
-            ("Roller ve İzinler", "/tenant/roles", Icons.Material.Filled.Security, "Faz 1.5", true),
-            ("Audit Geçmişi", "/tenant/audit", Icons.Material.Filled.History, "Faz 1.6", true),
-            ("Destek Erişim Geçmişi", "/tenant/support-access", Icons.Material.Filled.Support, "Faz 1.6", true),
-            ("Yönetim Ayarları", "/tenant/settings", Icons.Material.Filled.Settings, string.Empty, false),
+            (Loc["NavMenu.Users"].Value, "/tenant/users", Icons.Material.Filled.People, "Faz 1.5", true),
+            (Loc["NavMenu.RolesAndPermissions"].Value, "/tenant/roles", Icons.Material.Filled.Security, string.Empty, false),
+            (Loc["NavMenu.AuditHistory"].Value, "/tenant/audit", Icons.Material.Filled.History, "Faz 1.6", true),
+            (Loc["NavMenu.SupportAccess"].Value, "/tenant/support-access", Icons.Material.Filled.Support, "Faz 1.6", true),
+            (Loc["NavMenu.TenantSettings"].Value, "/tenant/settings", Icons.Material.Filled.Settings, string.Empty, false),
         };
         var tenantAdminVisible = AnyMatch(tenantAdminChildren.Select(c => c.Item1));
         @if (tenantAdminVisible)
         {
-            <MudNavGroup Title="Yönetim" Icon="@Icons.Material.Filled.AdminPanelSettings" Expanded="@IsSearching">
+            <MudNavGroup Title="@Loc["NavMenu.Tenant"]" Icon="@Icons.Material.Filled.AdminPanelSettings" Expanded="@IsSearching">
                 @foreach (var (title, href, icon, phase, disabled) in tenantAdminChildren)
                 {
                     if (Matches(title))
@@ -135,16 +149,16 @@
     {
         var companyChildren = new[]
         {
-            ("Birimler", "/company/units", Icons.Material.Filled.HomeWork, "Faz 1.6"),
-            ("Sakinler", "/company/residents", Icons.Material.Filled.People, "Faz 1.7"),
-            ("Kullanıcılar", "/company/users", Icons.Material.Filled.PersonOutline, "Faz 1.5"),
-            ("Faturalar", "/company/invoices", Icons.Material.Filled.Receipt, "Faz 1.7"),
-            ("Site Ayarları", "/company/settings", Icons.Material.Filled.Settings, "Faz 1.6"),
+            (Loc["NavMenu.Units"].Value, "/company/units", Icons.Material.Filled.HomeWork, "Faz 1.6"),
+            (Loc["NavMenu.Residents"].Value, "/company/residents", Icons.Material.Filled.People, "Faz 1.7"),
+            (Loc["NavMenu.Users"].Value, "/company/users", Icons.Material.Filled.PersonOutline, "Faz 1.5"),
+            (Loc["NavMenu.Invoices"].Value, "/company/invoices", Icons.Material.Filled.Receipt, "Faz 1.7"),
+            (Loc["NavMenu.CompanySettings"].Value, "/company/settings", Icons.Material.Filled.Settings, "Faz 1.6"),
         };
         var companyVisible = AnyMatch(companyChildren.Select(c => c.Item1));
         @if (companyVisible)
         {
-            <MudNavGroup Title="Site" Icon="@Icons.Material.Filled.Apartment" Expanded="@(IsSearching || true)">
+            <MudNavGroup Title="@Loc["NavMenu.Company"]" Icon="@Icons.Material.Filled.Apartment" Expanded="@(IsSearching || true)">
                 @foreach (var (title, href, icon, phase) in companyChildren)
                 {
                     if (Matches(title))
@@ -164,15 +178,15 @@
     @{
         var settingsChildren = new[]
         {
-            ("Tema", "/settings/theme", Icons.Material.Filled.Palette),
-            ("Dil", "/settings/language", Icons.Material.Filled.Language),
-            ("Hakkında", "/about", Icons.Material.Filled.Info),
+            (Loc["NavMenu.Theme"].Value, "/settings/theme", Icons.Material.Filled.Palette),
+            (Loc["NavMenu.Language"].Value, "/settings/language", Icons.Material.Filled.Language),
+            (Loc["NavMenu.About"].Value, "/about", Icons.Material.Filled.Info),
         };
         var settingsVisible = AnyMatch(settingsChildren.Select(c => c.Item1));
     }
     @if (settingsVisible)
     {
-        <MudNavGroup Title="Ayarlar" Icon="@Icons.Material.Filled.Settings" Expanded="@IsSearching">
+        <MudNavGroup Title="@Loc["NavMenu.Settings"]" Icon="@Icons.Material.Filled.Settings" Expanded="@IsSearching">
             @foreach (var (title, href, icon) in settingsChildren)
             {
                 if (Matches(title))

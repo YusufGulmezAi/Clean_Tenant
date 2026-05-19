@@ -1,21 +1,27 @@
 @page "/about"
 @rendermode InteractiveServer
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject IStringLocalizer Loc
 
-<PageTitle>Hakkında — CleanTenant</PageTitle>
+<PageTitle>@Loc["About.PageTitle"]</PageTitle>
+
+@*
+    v0.2.10.e.6 — About.* anahtarlarıyla lokalize edildi. Teknik stack ve
+    Faz 0 çıktıları geliştirici notları olarak raw bırakıldı.
+*@
 
 <MudBreadcrumbs Items="@_breadcrumbs" Class="px-0 pb-2" />
 
-<MudText Typo="Typo.h4" Class="mb-4">Hakkında</MudText>
+<MudText Typo="Typo.h4" Class="mb-4">@Loc["About.Title"]</MudText>
 
 <MudGrid>
     <MudItem xs="12" md="6">
         <MudPaper Elevation="0" Outlined="true" Class="pa-4">
-            <MudText Typo="Typo.h6" Class="mb-3">Uygulama</MudText>
+            <MudText Typo="Typo.h6" Class="mb-3">@Loc["About.AppSection"]</MudText>
             <MudList T="string" Dense="true">
-                <MudListItem Icon="@Icons.Material.Filled.Apps">Ad: @AppName</MudListItem>
-                <MudListItem Icon="@Icons.Material.Filled.Tag">Sürüm: @AppVersion</MudListItem>
-                <MudListItem Icon="@Icons.Material.Filled.Schedule">Faz: 1 (UI başlangıç)</MudListItem>
+                <MudListItem Icon="@Icons.Material.Filled.Apps">@Loc["About.Name"] @AppName</MudListItem>
+                <MudListItem Icon="@Icons.Material.Filled.Tag">@Loc["About.Version"] @AppVersion</MudListItem>
+                <MudListItem Icon="@Icons.Material.Filled.Schedule">@Loc["About.Phase"] 1 (UI başlangıç)</MudListItem>
                 <MudListItem Icon="@Icons.Material.Filled.Memory">.NET 10 + Blazor Server + MudBlazor</MudListItem>
             </MudList>
         </MudPaper>
@@ -23,7 +29,7 @@
 
     <MudItem xs="12" md="6">
         <MudPaper Elevation="0" Outlined="true" Class="pa-4">
-            <MudText Typo="Typo.h6" Class="mb-3">Faz 0 Çıktıları</MudText>
+            <MudText Typo="Typo.h6" Class="mb-3">@Loc["About.PhaseZero.Title"]</MudText>
             <MudList T="string" Dense="true">
                 <MudListItem Icon="@Icons.Material.Filled.CheckCircle" IconColor="Color.Success">Auth + 2FA + Multi-scope + Support Mode</MudListItem>
                 <MudListItem Icon="@Icons.Material.Filled.CheckCircle" IconColor="Color.Success">MediatR pipeline + FluentValidation + Permission Checker</MudListItem>
@@ -39,9 +45,14 @@
     private static readonly string AppVersion =
         System.Reflection.Assembly.GetEntryAssembly()?.GetName().Version?.ToString() ?? "0.2.1";
 
-    private readonly List<BreadcrumbItem> _breadcrumbs =
-    [
-        new("Anasayfa", href: "/", icon: Icons.Material.Filled.Home),
-        new("Hakkında", href: null, disabled: true),
-    ];
+    private List<BreadcrumbItem> _breadcrumbs = [];
+
+    protected override void OnInitialized()
+    {
+        _breadcrumbs =
+        [
+            new(Loc["Breadcrumb.Home"].Value, href: "/", icon: Icons.Material.Filled.Home),
+            new(Loc["About.Title"].Value, href: null, disabled: true),
+        ];
+    }
 }

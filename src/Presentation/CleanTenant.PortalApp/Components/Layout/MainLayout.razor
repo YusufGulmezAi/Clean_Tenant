@@ -1,11 +1,22 @@
 @inherits LayoutComponentBase
 @inject AuthenticationStateProvider AuthProvider
 @inject NavigationManager Nav
+@inject IJSRuntime JS
+@using System.Globalization
 
-<MudThemeProvider />
-<MudPopoverProvider />
-<MudDialogProvider />
-<MudSnackbarProvider />
+@*
+    v0.2.10.f — RTL desteği eklendi. Aktif kültür AR ise MudRTLProvider
+    RightToLeft=true ve <body dir="rtl"> aktif. Cookie-driven culture
+    değişimi tam reload tetiklediği için her load'da OnAfterRenderAsync
+    firstRender'da JS interop ile dir attribute yeniden set edilir.
+*@
+
+<MudRTLProvider RightToLeft="@_isRtl">
+    <MudThemeProvider />
+    <MudPopoverProvider />
+    <MudDialogProvider />
+    <MudSnackbarProvider />
+</MudRTLProvider>
 
 <MudLayout>
     <MudAppBar Elevation="1" Color="Color.Primary">
@@ -46,6 +57,15 @@
 @code {
     private string? _tenantName;
     private string? _companyName;
+    private bool _isRtl;
+
+    protected override void OnInitialized()
+    {
+        // v0.2.10.f — Aktif kültür AR ise RTL. ManagementApp LanguageService'i
+        // PortalApp referansında yok; inline kontrol yeterli (tek RTL dil ar-*).
+        _isRtl = CultureInfo.CurrentUICulture.Name
+            .StartsWith("ar", StringComparison.OrdinalIgnoreCase);
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -55,6 +75,14 @@
         {
             _tenantName = user.FindFirst("tenant_name")?.Value;
             _companyName = user.FindFirst("company_name")?.Value;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JS.InvokeVoidAsync("cleantenant.setBodyDirection", _isRtl ? "rtl" : "ltr");
         }
     }
 }

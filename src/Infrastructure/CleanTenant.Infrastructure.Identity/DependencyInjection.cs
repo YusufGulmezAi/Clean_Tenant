@@ -8,8 +8,10 @@ using CleanTenant.Infrastructure.Identity.Authorization;
 using CleanTenant.Infrastructure.Identity.Context;
 using CleanTenant.Infrastructure.Identity.Jwt;
 using CleanTenant.Infrastructure.Identity.Notifications;
+using CleanTenant.Infrastructure.Identity.Pipeline;
 using CleanTenant.Infrastructure.Identity.RefreshTokens;
 using CleanTenant.SharedKernel.Context;
+using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Configuration;
@@ -44,6 +46,16 @@ public static class DependencyInjection
         services.AddScoped<IUserContext>(sp => sp.GetRequiredService<HttpUserContext>());
         services.AddScoped<ICurrentSessionAccessor>(sp => sp.GetRequiredService<HttpUserContext>());
         services.AddScoped<ITenantContext, HttpTenantContext>();
+
+        // SessionLoaderBehavior — Application'ın AuthorizationBehavior'undan ÖNCE
+        // çalışmalı. AddApplicationServices() önce çağrıldığı için Insert(0) ile
+        // services collection'ın başına ekliyoruz; MediatR IPipelineBehavior'ları
+        // services collection'daki sırayla zincirler, böylece bu behavior pipeline
+        // başında çalışır. Blazor Server SignalR scope'unda middleware'in
+        // dolduramadığı HttpUserContext'i async olarak doldurur.
+        services.Insert(0, ServiceDescriptor.Transient(
+            typeof(IPipelineBehavior<,>),
+            typeof(SessionLoaderBehavior<,>)));
 
         // Auth command handler'ları MediatR tarafından otomatik kayıt edilir
         // (AddApplicationServices). LoginFinalizer IRequestHandler değil — yardımcı

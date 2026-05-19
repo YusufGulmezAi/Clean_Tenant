@@ -1,17 +1,21 @@
 @using MudBlazor
 
+@*
+    v0.2.10.e.3 — Roles.Form.* + Scope.* + Common.* anahtarlarıyla lokalize edildi.
+*@
+
 <MudForm @ref="_form" Model="@Model" Validation="@ValidateValue" ValidationDelay="0">
     <MudCard Elevation="0" Outlined="true">
         <MudCardContent>
             <MudGrid>
                 <MudItem xs="12">
-                    <MudText Typo="Typo.h6">Rol Bilgileri</MudText>
+                    <MudText Typo="Typo.h6">@Loc["Roles.Form.Section.Info"]</MudText>
                 </MudItem>
 
                 <MudItem xs="12" sm="6">
                     <MudTextField @bind-Value="Model.Name"
                                   For="@(() => Model.Name)"
-                                  Label="Rol Adı *"
+                                  Label="@Loc["Roles.Form.Name"]"
                                   Variant="Variant.Outlined"
                                   Margin="Margin.Dense"
                                   MaxLength="256"
@@ -21,21 +25,24 @@
                 <MudItem xs="12" sm="6">
                     <MudSelect T="int"
                                @bind-Value="Model.Scope"
-                               Label="Kapsam Seviyesi *"
+                               Label="@Loc["Roles.Form.Scope"]"
                                Variant="Variant.Outlined"
                                Margin="Margin.Dense"
                                ReadOnly="@ScopeReadOnly">
-                        <MudSelectItem Value="0">Sistem</MudSelectItem>
-                        <MudSelectItem Value="1">Yönetim</MudSelectItem>
-                        <MudSelectItem Value="2">Site</MudSelectItem>
-                        <MudSelectItem Value="3">Birim</MudSelectItem>
+                        @if (!HideSystemScope)
+                        {
+                            <MudSelectItem Value="1">@Loc["Scope.System"]</MudSelectItem>
+                        }
+                        <MudSelectItem Value="2">@Loc["Scope.Tenant"]</MudSelectItem>
+                        <MudSelectItem Value="3">@Loc["Scope.Company"]</MudSelectItem>
+                        <MudSelectItem Value="4">@Loc["Scope.Unit"]</MudSelectItem>
                     </MudSelect>
                 </MudItem>
 
                 <MudItem xs="12">
                     <MudTextField @bind-Value="Model.Description"
                                   For="@(() => Model.Description)"
-                                  Label="Açıklama"
+                                  Label="@Loc["Roles.Form.Description"]"
                                   Variant="Variant.Outlined"
                                   Margin="Margin.Dense"
                                   Lines="2"
@@ -52,7 +59,7 @@
                            Variant="Variant.Text"
                            Class="mr-2"
                            Disabled="@IsSubmitting">
-                    İptal
+                    @Loc["Common.Cancel"]
                 </MudButton>
             }
             <MudButton OnClick="@SubmitAsync"
@@ -63,11 +70,11 @@
                 @if (IsSubmitting)
                 {
                     <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
-                    <MudText Class="ms-2">Kaydediliyor…</MudText>
+                    <MudText Class="ms-2">@Loc["Common.Saving"]</MudText>
                 }
                 else
                 {
-                    @SubmitButtonText
+                    @ResolvedSubmitButtonText
                 }
             </MudButton>
         </MudCardActions>

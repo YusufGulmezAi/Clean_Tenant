@@ -1,7 +1,7 @@
 using CleanTenant.Application.Common.Caching;
-using CleanTenant.Application.Common.Persistence;
 using CleanTenant.Application.Features.Catalog.Readers;
 using CleanTenant.Application.Features.Main.Readers;
+using CleanTenant.Infrastructure.Persistence.Main;
 using Microsoft.EntityFrameworkCore;
 
 namespace CleanTenant.Infrastructure.Caching.Readers;
@@ -13,18 +13,27 @@ namespace CleanTenant.Infrastructure.Caching.Readers;
 /// "tüm siteler" sorgusunda parent Yönetim adlarını <see cref="ITenantCatalogReader"/>
 /// üzerinden lookup eder (cascade cache).
 /// </para>
+/// <para>
+/// <b>v0.2.9 — IDbContextFactory'ye geçiş:</b> Blazor Server circuit'inde
+/// component'ler (TenantSwitcher, RoleEditPage vb.) paralel olarak reader
+/// çağırabiliyor; scoped DbContext "second operation started" hatası veriyordu.
+/// Artık her metod factory'den taze bir DbContext üretip dispose eder.
+/// </para>
 /// </summary>
 public sealed class MainCatalogReader : IMainCatalogReader
 {
     private readonly ICacheStore _cache;
-    private readonly IMainDbContext _db;
+    private readonly IDbContextFactory<MainDbContext> _dbFactory;
     private readonly ITenantCatalogReader _tenantReader;
 
     /// <summary>DI bağımlılıklarını alır.</summary>
-    public MainCatalogReader(ICacheStore cache, IMainDbContext db, ITenantCatalogReader tenantReader)
+    public MainCatalogReader(
+        ICacheStore cache,
+        IDbContextFactory<MainDbContext> dbFactory,
+        ITenantCatalogReader tenantReader)
     {
         _cache = cache;
-        _db = db;
+        _dbFactory = dbFactory;
         _tenantReader = tenantReader;
     }
 
@@ -34,11 +43,11 @@ public sealed class MainCatalogReader : IMainCatalogReader
             CacheKeys.Company.AllGlobal,
             async ct =>
             {
-                // Parent Yönetim adları için reader (kendi cache'ini kullanır)
                 var tenants = await _tenantReader.GetAllActiveAsync(ct);
                 var tenantNames = tenants.ToDictionary(t => t.Id, t => t.Name);
 
-                var rows = await _db.Companies
+                await using var db = await _dbFactory.CreateDbContextAsync(ct);
+                var rows = await db.Companies
                     .IgnoreQueryFilters()
                     .AsNoTracking()
                     .OrderBy(c => c.Name)
@@ -66,7 +75,8 @@ public sealed class MainCatalogReader : IMainCatalogReader
             CacheKeys.Company.ByTenant(tenantId),
             async ct =>
             {
-                var rows = await _db.Companies
+                await using var db = await _dbFactory.CreateDbContextAsync(ct);
+                var rows = await db.Companies
                     .IgnoreQueryFilters()
                     .AsNoTracking()
                     .Where(c => c.TenantId == tenantId)
@@ -83,13 +93,17 @@ public sealed class MainCatalogReader : IMainCatalogReader
     public Task<CompanyListItem?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
         => _cache.GetOrCreateAsync<CompanyListItem?>(
             CacheKeys.Company.ById(id),
-            async ct => await _db.Companies
-                .IgnoreQueryFilters()
-                .AsNoTracking()
-                .Where(c => c.Id == id)
-                .Select(c => new CompanyListItem(
-                    c.Id, c.TenantId, null, c.UrlCode, c.Name, c.LegalName, c.Vkn, c.Status))
-                .FirstOrDefaultAsync(ct),
+            async ct =>
+            {
+                await using var db = await _dbFactory.CreateDbContextAsync(ct);
+                return await db.Companies
+                    .IgnoreQueryFilters()
+                    .AsNoTracking()
+                    .Where(c => c.Id == id)
+                    .Select(c => new CompanyListItem(
+                        c.Id, c.TenantId, null, c.UrlCode, c.Name, c.LegalName, c.Vkn, c.Status))
+                    .FirstOrDefaultAsync(ct);
+            },
             CacheOptions.DetailMediumLived,
             cancellationToken);
 
@@ -97,13 +111,35 @@ public sealed class MainCatalogReader : IMainCatalogReader
     public Task<CompanyDetail?> GetDetailByIdAsync(Guid id, CancellationToken cancellationToken = default)
         => _cache.GetOrCreateAsync<CompanyDetail?>(
             CacheKeys.Company.DetailById(id),
-            async ct => await _db.Companies
-                .IgnoreQueryFilters()
-                .AsNoTracking()
-                .Where(c => c.Id == id)
-                .Select(c => new CompanyDetail(
-                    c.Id, c.TenantId, c.UrlCode, c.Name, c.LegalName, c.Vkn, c.Email, c.Phone, c.Status))
-                .FirstOrDefaultAsync(ct),
+            async ct =>
+            {
+                await using var db = await _dbFactory.CreateDbContextAsync(ct);
+                return await db.Companies
+                    .IgnoreQueryFilters()
+                    .AsNoTracking()
+                    .Where(c => c.Id == id)
+                    .Select(c => new CompanyDetail(
+                        c.Id, c.TenantId, c.UrlCode, c.Name, c.LegalName, c.Vkn, c.Email, c.Phone, c.Status))
+                    .FirstOrDefaultAsync(ct);
+            },
+            CacheOptions.DetailMediumLived,
+            cancellationToken);
+
+    /// <inheritdoc />
+    public Task<CompanyDetail?> GetDetailByUrlCodeAsync(string urlCode, CancellationToken cancellationToken = default)
+        => _cache.GetOrCreateAsync<CompanyDetail?>(
+            CacheKeys.Company.DetailByUrlCode(urlCode),
+            async ct =>
+            {
+                await using var db = await _dbFactory.CreateDbContextAsync(ct);
+                return await db.Companies
+                    .IgnoreQueryFilters()
+                    .AsNoTracking()
+                    .Where(c => c.UrlCode == urlCode)
+                    .Select(c => new CompanyDetail(
+                        c.Id, c.TenantId, c.UrlCode, c.Name, c.LegalName, c.Vkn, c.Email, c.Phone, c.Status))
+                    .FirstOrDefaultAsync(ct);
+            },
             CacheOptions.DetailMediumLived,
             cancellationToken);
 }

@@ -6,6 +6,7 @@
 @inject IDialogService DialogService
 @inject IJSRuntime JS
 @inject AuthenticationStateProvider AuthProvider
+@inject IStringLocalizer Loc
 @implements IDisposable
 @using CleanTenant.Application.Features.Catalog.Permissions
 @using CleanTenant.Application.Features.Catalog.Readers
@@ -13,12 +14,16 @@
 @using CleanTenant.ManagementApp.Components.Shared
 @using MediatR
 
-<PageTitle>Roller — Sistem</PageTitle>
+<PageTitle>@Loc["Roles.List.PageTitle"]</PageTitle>
+
+@*
+    v0.2.10.e.4 — Roles.List.* + Scope.* + Common.* anahtarlarıyla lokalize edildi.
+*@
 
 @if (_unauthorized)
 {
     <MudAlert Severity="Severity.Warning" Class="my-3">
-        Bu sayfa yalnız Sistem kullanıcıları için. Aktif bağlamınız Sistem değil.
+        @Loc["Roles.List.UnauthorizedSystem"]
     </MudAlert>
 }
 else if (!_initialized)
@@ -32,47 +37,47 @@ else
             <MudSelect T="int"
                        @bind-Value="_scopeLevel"
                        @bind-Value:after="LoadRolesAsync"
-                       Label="Kapsam Seviyesi"
+                       Label="@Loc["Roles.List.ScopeFilter"]"
                        Variant="Variant.Outlined"
                        Size="Size.Small">
-                <MudSelectItem Value="0">Sistem</MudSelectItem>
-                <MudSelectItem Value="1">Yönetim</MudSelectItem>
-                <MudSelectItem Value="2">Site</MudSelectItem>
-                <MudSelectItem Value="3">Birim</MudSelectItem>
+                <MudSelectItem Value="1">@Loc["Scope.System"]</MudSelectItem>
+                <MudSelectItem Value="2">@Loc["Scope.Tenant"]</MudSelectItem>
+                <MudSelectItem Value="3">@Loc["Scope.Company"]</MudSelectItem>
+                <MudSelectItem Value="4">@Loc["Scope.Unit"]</MudSelectItem>
             </MudSelect>
         </div>
         <MudButton StartIcon="@Icons.Material.Filled.Add"
                    Color="Color.Primary"
                    Variant="Variant.Filled"
                    Href="/system/roles/new">
-            Yeni Rol
+            @Loc["Roles.List.NewButton"]
         </MudButton>
     </div>
 
     <DataTable TItem="RoleListItem"
                Items="@_items"
-               SearchPlaceholder="Rol ara…"
+               SearchPlaceholder="@Loc["Roles.List.Search"]"
                SearchableFields="@(row => new[] { row.Name, row.Description ?? "" })"
                Filterable="true">
         <Columns>
-            <PropertyColumn T="RoleListItem" TProperty="string" Property="@(r => r.Name)" Title="Rol Adı" />
-            <PropertyColumn T="RoleListItem" TProperty="string" Property="@(r => r.Description)" Title="Açıklama" />
-            <PropertyColumn T="RoleListItem" TProperty="int" Property="@(r => (int)r.Scope)" Title="Kapsam">
+            <PropertyColumn T="RoleListItem" TProperty="string" Property="@(r => r.Name)" Title="@Loc["Roles.List.Col.Name"].Value" />
+            <PropertyColumn T="RoleListItem" TProperty="string" Property="@(r => r.Description)" Title="@Loc["Roles.List.Col.Description"].Value" />
+            <PropertyColumn T="RoleListItem" TProperty="int" Property="@(r => (int)r.Scope)" Title="@Loc["Roles.List.Col.Scope"].Value">
                 <CellTemplate>
                     <MudText Typo="Typo.body2">
                         @(context.Item.Scope switch
                         {
-                            SharedKernel.Context.ScopeLevel.System => "Sistem",
-                            SharedKernel.Context.ScopeLevel.Tenant => "Yönetim",
-                            SharedKernel.Context.ScopeLevel.Company => "Site",
-                            SharedKernel.Context.ScopeLevel.Unit => "Birim",
+                            SharedKernel.Context.ScopeLevel.System => Loc["Scope.System"].Value,
+                            SharedKernel.Context.ScopeLevel.Tenant => Loc["Scope.Tenant"].Value,
+                            SharedKernel.Context.ScopeLevel.Company => Loc["Scope.Company"].Value,
+                            SharedKernel.Context.ScopeLevel.Unit => Loc["Scope.Unit"].Value,
                             _ => "—"
                         })
                     </MudText>
                 </CellTemplate>
             </PropertyColumn>
-            <PropertyColumn T="RoleListItem" TProperty="int" Property="@(r => r.PermissionCount)" Title="İzin Sayısı" />
-            <PropertyColumn T="RoleListItem" TProperty="bool" Property="@(r => r.IsBuiltIn)" Title="Built-in">
+            <PropertyColumn T="RoleListItem" TProperty="int" Property="@(r => r.PermissionCount)" Title="@Loc["Roles.List.Col.PermCount"].Value" />
+            <PropertyColumn T="RoleListItem" TProperty="bool" Property="@(r => r.IsBuiltIn)" Title="@Loc["Roles.List.Col.BuiltIn"].Value">
                 <CellTemplate>
                     @if (context.Item.IsBuiltIn)
                     {
@@ -82,16 +87,18 @@ else
             </PropertyColumn>
             <TemplateColumn T="RoleListItem" CellClass="d-flex justify-end" Filterable="false" Sortable="false">
                 <CellTemplate>
+                    @* Built-in rol için Edit aktif kalır — System kullanıcısı *izinleri*
+                       düzenleyebilir; ama isim/açıklama UpdateRoleCommandHandler tarafından
+                       reddedilir (RoleEditPage'de bilgilendirme banner'ı görünür). *@
                     <MudIconButton Icon="@Icons.Material.Filled.Edit"
                                    Size="Size.Small"
                                    Color="Color.Default"
-                                   title="Düzenle"
-                                   OnClick="@(() => GoToEdit(context.Item.Id))"
-                                   Disabled="@context.Item.IsBuiltIn" />
+                                   title="@(context.Item.IsBuiltIn ? Loc["Roles.List.BuiltInEditTooltip"].Value : Loc["Common.Edit"].Value)"
+                                   OnClick="@(() => GoToEdit(context.Item.UrlCode))" />
                     <MudIconButton Icon="@Icons.Material.Filled.Delete"
                                    Size="Size.Small"
                                    Color="Color.Error"
-                                   title="Sil"
+                                   title="@Loc["Common.Delete"]"
                                    OnClick="@(() => DeleteAsync(context.Item))"
                                    Disabled="@context.Item.IsBuiltIn" />
                 </CellTemplate>
@@ -103,7 +110,7 @@ else
 @code {
     private bool _unauthorized;
     private bool _initialized;
-    private int _scopeLevel = 0;
+    private int _scopeLevel = 1;
     private IReadOnlyList<RoleListItem>? _items;
     private IMediator? _mediator;
 
@@ -136,18 +143,18 @@ else
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Roller yüklenirken hata: {ex.Message}", Severity.Error);
+            Snackbar.Add(Loc["Roles.List.LoadError", ex.Message].Value, Severity.Error);
         }
     }
 
-    private void GoToEdit(Guid id)
+    private void GoToEdit(string urlCode)
     {
-        Nav.NavigateTo($"/system/roles/{id}/edit");
+        Nav.NavigateTo($"/system/roles/{urlCode}/edit");
     }
 
     private async Task DeleteAsync(RoleListItem role)
     {
-        var confirmed = await JS.InvokeAsync<bool>("confirm", $"'{role.Name}' rolü silinecek. Devam etmek istiyor musunuz?");
+        var confirmed = await JS.InvokeAsync<bool>("confirm", Loc["Roles.List.DeleteConfirm", role.Name].Value);
         if (!confirmed) return;
 
         try
@@ -156,12 +163,12 @@ else
             var command = new DeleteRoleCommand(role.Id);
             await _mediator.Send(command);
 
-            Snackbar.Add("Rol başarıyla silindi.", Severity.Success);
+            Snackbar.Add(Loc["Roles.List.DeleteSuccess"].Value, Severity.Success);
             await LoadRolesAsync();
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Hata: {ex.Message}", Severity.Error);
+            Snackbar.Add(Loc["Lookup.ErrorPrefix", ex.Message].Value, Severity.Error);
         }
     }
 

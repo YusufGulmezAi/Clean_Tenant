@@ -32,4 +32,8 @@ public interface ITenantCatalogReader
     /// <c>DetailMediumLived</c> (10 dk). Tenant CRUD'da invalidate edilir.
     /// </summary>
     Task<TenantDetail?> GetDetailByIdAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>UrlCode (9 karakter Base58) ile tam detay (v0.2.9 — UI rotalarında
+    /// GUID yerine UrlCode kullanılır). Cache TTL <c>DetailMediumLived</c> (10 dk).</summary>
+    Task<TenantDetail?> GetDetailByUrlCodeAsync(string urlCode, CancellationToken cancellationToken = default);
 }

@@ -8,6 +8,7 @@
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 @inject IJSRuntime JS
+@inject IStringLocalizer Loc
 @implements IDisposable
 @using CleanTenant.Application.Common.Export
 @using CleanTenant.Application.Features.Catalog.Readers
@@ -15,18 +16,21 @@
 @using CleanTenant.Domain.Identity.Tenants
 @using CleanTenant.ManagementApp.Components.Shared
 
-<PageTitle>Yönetimler — Sistem</PageTitle>
+<PageTitle>@Loc["Tenants.List.PageTitle"]</PageTitle>
 
 @*
     v0.2.4.b.4 — Özet widget'lar (Yönetim / Site / Bağımsız Bölüm sayısı) DataTable
     üstüne eklendi. "Yeni Yönetim" butonu DataTable toolbar'ından çıkarılıp tablonun
     hemen üst satırına sağa taşındı. DataTable Title/Toplam satırı kaldırıldı.
+
+    v0.2.10.e.4 — Tenants.List.* + Common.* anahtarlarıyla lokalize edildi.
+    _exportColumns OnInitialized'da Loc ile inşa edilir (artık static değil).
 *@
 
 @if (_unauthorized)
 {
     <MudAlert Severity="Severity.Warning" Class="my-3">
-        Bu sayfa yalnız Sistem kullanıcıları için. Aktif bağlamınız Sistem değil.
+        @Loc["Tenants.List.UnauthorizedSystem"]
     </MudAlert>
 }
 else if (!_initialized)
@@ -64,7 +68,7 @@ else
                         @(_items?.Count.ToString() ?? "—")
                     </MudText>
                     <MudText Typo="Typo.body2" Style="color: rgba(255,255,255,0.8);">
-                        Mevcut Yönetim Sayısı
+                        @Loc["Tenants.List.Widget.TenantCount"]
                     </MudText>
                 </div>
             </MudPaper>
@@ -77,7 +81,7 @@ else
                 <div>
                     <MudText Typo="Typo.h4" Style="color: #fff; font-weight: 700; line-height: 1.2;">—</MudText>
                     <MudText Typo="Typo.body2" Style="color: rgba(255,255,255,0.8);">
-                        Mevcut Site Sayısı
+                        @Loc["Tenants.List.Widget.CompanyCount"]
                     </MudText>
                 </div>
             </MudPaper>
@@ -90,7 +94,7 @@ else
                 <div>
                     <MudText Typo="Typo.h4" Style="color: #fff; font-weight: 700; line-height: 1.2;">—</MudText>
                     <MudText Typo="Typo.body2" Style="color: rgba(255,255,255,0.8);">
-                        Mevcut Bağımsız Bölüm Sayısı
+                        @Loc["Tenants.List.Widget.UnitCount"]
                     </MudText>
                 </div>
             </MudPaper>
@@ -103,22 +107,22 @@ else
                    Color="Color.Primary"
                    Variant="Variant.Filled"
                    Href="/system/tenants/new">
-            Yeni Yönetim
+            @Loc["Tenants.List.NewButton"]
         </MudButton>
     </div>
 
     @* ── Veri tablosu ─────────────────────────────────────────────────── *@
     <DataTable TItem="TenantListItem"
                Items="@_items"
-               SearchPlaceholder="Yönetim ara…"
+               SearchPlaceholder="@Loc["Tenants.List.Search"]"
                SearchableFields="@(row => new[] { row.Name, row.UrlCode, row.LegalName })"
                ExportColumns="@_exportColumns"
                RowClick="@OnRowClick">
         <Columns>
-            <PropertyColumn T="TenantListItem" TProperty="string" Property="@(t => t.Name)" Title="Yönetim Adı" />
-            <PropertyColumn T="TenantListItem" TProperty="string" Property="@(t => t.UrlCode)" Title="URL Kodu" />
-            <PropertyColumn T="TenantListItem" TProperty="string" Property="@(t => t.LegalName)" Title="Yasal Ad" />
-            <PropertyColumn T="TenantListItem" TProperty="TenantStatus" Property="@(t => t.Status)" Title="Durum">
+            <PropertyColumn T="TenantListItem" TProperty="string" Property="@(t => t.Name)" Title="@Loc["Tenants.List.Col.Name"].Value" />
+            <PropertyColumn T="TenantListItem" TProperty="string" Property="@(t => t.UrlCode)" Title="@Loc["Tenants.List.Col.UrlCode"].Value" />
+            <PropertyColumn T="TenantListItem" TProperty="string" Property="@(t => t.LegalName)" Title="@Loc["Tenants.List.Col.LegalName"].Value" />
+            <PropertyColumn T="TenantListItem" TProperty="TenantStatus" Property="@(t => t.Status)" Title="@Loc["Tenants.List.Col.Status"].Value">
                 <CellTemplate>
                     <MudChip T="string" Size="Size.Small"
                              Color="@(context.Item.Status == TenantStatus.Active ? Color.Success : Color.Default)">
@@ -126,8 +130,8 @@ else
                     </MudChip>
                 </CellTemplate>
             </PropertyColumn>
-            <PropertyColumn T="TenantListItem" TProperty="BillingTier" Property="@(t => t.BillingTier)" Title="Katman" />
-            <PropertyColumn T="TenantListItem" TProperty="bool" Property="@(t => t.AllowSystemWriteAccess)" Title="Sistem Yazma">
+            <PropertyColumn T="TenantListItem" TProperty="BillingTier" Property="@(t => t.BillingTier)" Title="@Loc["Tenants.List.Col.Tier"].Value" />
+            <PropertyColumn T="TenantListItem" TProperty="bool" Property="@(t => t.AllowSystemWriteAccess)" Title="@Loc["Tenants.List.Col.SystemWrite"].Value">
                 <CellTemplate>
                     <MudIcon Icon="@(context.Item.AllowSystemWriteAccess ? Icons.Material.Filled.LockOpen : Icons.Material.Filled.Lock)"
                              Color="@(context.Item.AllowSystemWriteAccess ? Color.Success : Color.Warning)"
@@ -139,17 +143,17 @@ else
                     <MudIconButton Icon="@Icons.Material.Filled.Login"
                                    Size="Size.Small"
                                    Color="Color.Primary"
-                                   title="Bu Yönetim bağlamına geç"
+                                   title="@Loc["Tenants.List.Action.Switch"]"
                                    OnClick="@(() => SwitchToTenantAsync(context.Item.Id))" />
                     <MudIconButton Icon="@Icons.Material.Filled.Edit"
                                    Size="Size.Small"
                                    Color="Color.Default"
-                                   title="Düzenle"
-                                   OnClick="@(() => GoToEdit(context.Item.Id))" />
+                                   title="@Loc["Common.Edit"]"
+                                   OnClick="@(() => GoToEdit(context.Item.UrlCode))" />
                     <MudIconButton Icon="@Icons.Material.Filled.Delete"
                                    Size="Size.Small"
                                    Color="Color.Error"
-                                   title="Sil"
+                                   title="@Loc["Common.Delete"]"
                                    OnClick="@(() => DeleteAsync(context.Item))" />
                 </CellTemplate>
             </TemplateColumn>
@@ -164,18 +168,22 @@ else
     private IReadOnlyList<TenantListItem>? _items;
     private PersistingComponentStateSubscription _persistSubscription;
 
-    private static readonly IReadOnlyList<ExportColumn<TenantListItem>> _exportColumns =
-    [
-        new() { Header = "Yönetim Adı", Selector = r => r.Name },
-        new() { Header = "URL Kodu", Selector = r => r.UrlCode },
-        new() { Header = "Yasal Ad", Selector = r => r.LegalName },
-        new() { Header = "Durum", Selector = r => r.Status.ToString() },
-        new() { Header = "Katman", Selector = r => r.BillingTier.ToString() },
-        new() { Header = "Sistem Yazma", Selector = r => r.AllowSystemWriteAccess ? "Açık" : "Kapalı" },
-    ];
+    private IReadOnlyList<ExportColumn<TenantListItem>> _exportColumns = [];
 
     protected override async Task OnInitializedAsync()
     {
+        // Export columns'u localize edilmiş başlıklarla inşa et.
+        _exportColumns =
+        [
+            new() { Header = Loc["Tenants.List.Col.Name"].Value, Selector = r => r.Name },
+            new() { Header = Loc["Tenants.List.Col.UrlCode"].Value, Selector = r => r.UrlCode },
+            new() { Header = Loc["Tenants.List.Col.LegalName"].Value, Selector = r => r.LegalName },
+            new() { Header = Loc["Tenants.List.Col.Status"].Value, Selector = r => r.Status.ToString() },
+            new() { Header = Loc["Tenants.List.Col.Tier"].Value, Selector = r => r.BillingTier.ToString() },
+            new() { Header = Loc["Tenants.List.Col.SystemWrite"].Value, Selector = r =>
+                r.AllowSystemWriteAccess ? Loc["Common.SystemWrite.On"].Value : Loc["Common.SystemWrite.Off"].Value },
+        ];
+
         var authState = await AuthProvider.GetAuthenticationStateAsync();
         var user = authState.User;
         if (user?.Identity?.IsAuthenticated != true
@@ -216,29 +224,28 @@ else
             string.Empty);
     }
 
-    private void GoToEdit(Guid tenantId)
-        => Nav.NavigateTo($"/system/tenants/{tenantId}/edit");
+    private void GoToEdit(string urlCode)
+        => Nav.NavigateTo($"/system/tenants/{urlCode}/edit");
 
     private async Task DeleteAsync(TenantListItem tenant)
     {
         var confirm = await DialogService.ShowMessageBox(
-            title: "Yönetim Sil",
+            title: Loc["Tenants.List.Delete.Title"].Value,
             markupMessage: new MarkupString(
-                $"<b>{tenant.Name}</b> Yönetim'i silinecek (soft delete). " +
-                "Tüm kullanıcı rol atamaları pasif olur. Devam edilsin mi?"),
-            yesText: "Sil",
-            cancelText: "Vazgeç");
+                Loc["Tenants.List.Delete.Confirm", $"<b>{tenant.Name}</b>"].Value),
+            yesText: Loc["Common.Delete"].Value,
+            cancelText: Loc["Tenants.List.Delete.Cancel"].Value);
 
         if (confirm != true) return;
 
         var result = await Mediator.Send(new DeleteTenantCommand(tenant.Id));
         if (result.IsFailure)
         {
-            Snackbar.Add($"Silme başarısız: {result.FirstError.Message}", Severity.Error);
+            Snackbar.Add(Loc["Tenants.List.Delete.Failed", result.FirstError.Message].Value, Severity.Error);
             return;
         }
 
-        Snackbar.Add($"Yönetim silindi: {tenant.Name}", Severity.Success);
+        Snackbar.Add(Loc["Tenants.List.Delete.Success", tenant.Name].Value, Severity.Success);
         _items = await TenantReader.GetAllActiveAsync();
     }
 

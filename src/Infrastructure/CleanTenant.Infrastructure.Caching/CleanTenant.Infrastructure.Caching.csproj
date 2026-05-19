@@ -2,6 +2,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Core\CleanTenant.Application\CleanTenant.Application.csproj" />
+    <!-- v0.2.9 — Reader'lar IDbContextFactory<CatalogDbContext|MainDbContext>
+         kullanıyor (Blazor Server scoped DbContext concurrency'sini önlemek için). -->
+    <ProjectReference Include="..\CleanTenant.Infrastructure.Persistence\CleanTenant.Infrastructure.Persistence.csproj" />
   </ItemGroup>
 
   <ItemGroup>

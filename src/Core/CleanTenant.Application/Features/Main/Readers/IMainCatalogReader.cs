@@ -30,4 +30,8 @@ public interface IMainCatalogReader
     /// <summary>Düzenleme formu için tam detay — <see cref="CompanyDetail"/>. Cache TTL
     /// <c>DetailMediumLived</c> (10 dk). Company CRUD'da invalidate edilir.</summary>
     Task<CompanyDetail?> GetDetailByIdAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>UrlCode (9 karakter Base58) ile tam detay (v0.2.9.d — UI rotaları GUID
+    /// yerine UrlCode kullanır). Cache TTL <c>DetailMediumLived</c> (10 dk).</summary>
+    Task<CompanyDetail?> GetDetailByUrlCodeAsync(string urlCode, CancellationToken cancellationToken = default);
 }

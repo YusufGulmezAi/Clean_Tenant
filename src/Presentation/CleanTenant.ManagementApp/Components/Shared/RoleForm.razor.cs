@@ -1,5 +1,6 @@
 using FluentValidation;
 using Microsoft.AspNetCore.Components;
+using Microsoft.Extensions.Localization;
 using MudBlazor;
 
 namespace CleanTenant.ManagementApp.Components.Shared;
@@ -12,8 +13,12 @@ public sealed partial class RoleForm
     [Parameter]
     public RoleFormModel Model { get; set; } = new();
 
+    /// <summary>
+    /// Submit butonu yazısı. Null/boş bırakılırsa <c>Common.Save</c> localizasyon
+    /// anahtarına fallback olur.
+    /// </summary>
     [Parameter]
-    public string SubmitButtonText { get; set; } = "Kaydet";
+    public string? SubmitButtonText { get; set; }
 
     [Parameter]
     public string? CancelHref { get; set; }
@@ -24,8 +29,22 @@ public sealed partial class RoleForm
     [Parameter]
     public bool ScopeReadOnly { get; set; }
 
+    /// <summary>
+    /// TenantArea sayfalarında Sistem scope seçeneğini dropdown'dan gizler.
+    /// TenantAdmin sistem scope rol oluşturamaz (backend zaten reddeder, UI hint).
+    /// </summary>
+    [Parameter]
+    public bool HideSystemScope { get; set; }
+
     [Parameter]
     public EventCallback<RoleFormModel> OnSubmit { get; set; }
+
+    [Inject] private IStringLocalizer Loc { get; set; } = default!;
+
+    /// <summary>SubmitButtonText parameter null/boş ise lokalize default'a düşer.</summary>
+    private string ResolvedSubmitButtonText => string.IsNullOrWhiteSpace(SubmitButtonText)
+        ? Loc["Common.Save"].Value
+        : SubmitButtonText;
 
     public Func<object?, string, Task<IEnumerable<string>>> ValidateValue { get; }
 

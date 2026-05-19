@@ -7,6 +7,7 @@
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
 @inject PersistentComponentState ApplicationState
+@inject IStringLocalizer Loc
 
 @*
     v0.2.2.a — Pre-auth 2FA enrollment.
@@ -20,27 +21,30 @@
     InteractiveServer fazına taşır. Finalize endpoint cookie'den okur.
 
     State machine: QrCode → Verify (kod gir) → RecoveryCodes → Finalize (form post).
+
+    v0.2.10.e.6 — TwoFactor.* + Common.* + Lookup.ErrorPrefix anahtarlarıyla
+    lokalize edildi.
 *@
 
-<PageTitle>2FA Enrollment — CleanTenant</PageTitle>
+<PageTitle>@Loc["TwoFactor.Enroll.PageTitle"]</PageTitle>
 
 <MudPaper Elevation="3" Class="pa-8 mx-auto mt-8" MaxWidth="MaxWidth.Medium" Style="max-width: 560px;">
     <div class="d-flex align-center mb-4">
         <MudIcon Icon="@Icons.Material.Filled.Security" Color="Color.Primary" Size="Size.Large" />
-        <MudText Typo="Typo.h4" Class="ml-2">2FA Kurulumu</MudText>
+        <MudText Typo="Typo.h4" Class="ml-2">@Loc["TwoFactor.PreEnroll.Title"]</MudText>
     </div>
 
     @if (!_hasToken)
     {
         <MudAlert Severity="Severity.Error" Class="mb-4">
-            Aktif bir enrollment oturumu bulunamadı (süresi dolmuş ya da iptal edilmiş olabilir).
-            <MudLink Href="/login">Giriş sayfasına dön</MudLink>.
+            @Loc["TwoFactor.PreEnroll.NoSession"]
+            <MudLink Href="/login">@Loc["TwoFactor.Challenge.BackToLogin"]</MudLink>.
         </MudAlert>
     }
     else if (_step == EnrollmentStep.Loading)
     {
         <MudText Typo="Typo.body1" Class="mb-2">
-            Authenticator secret üretiliyor...
+            @Loc["TwoFactor.PreEnroll.Loading"]
         </MudText>
         <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
 
@@ -52,29 +56,28 @@
     else if (_step == EnrollmentStep.QrCode)
     {
         <MudText Typo="Typo.body1" Color="Color.Default" Class="mb-3">
-            <b>@_email</b> hesabınız System rolünde — 2FA zorunlu. Bu kurulumu
-            tamamlayana kadar Yönetim Paneline erişemezsiniz.
+            @((MarkupString)Loc["TwoFactor.PreEnroll.SystemRoleInfo", $"<b>{_email}</b>"].Value)
         </MudText>
 
-        <MudText Typo="Typo.h6" Class="mb-2">1. Authenticator uygulamasıyla QR kodu tarayın</MudText>
+        <MudText Typo="Typo.h6" Class="mb-2">@Loc["TwoFactor.Enroll.Step1"]</MudText>
 
         @if (_qrCodeBase64 is not null)
         {
             <div class="d-flex justify-center mb-3">
                 <img src="@($"data:image/png;base64,{_qrCodeBase64}")"
-                     alt="TOTP QR kodu"
+                     alt="@Loc["TwoFactor.Enroll.QrAlt"]"
                      style="width: 220px; height: 220px;" />
             </div>
         }
 
         <MudText Typo="Typo.body2" Color="Color.Default" Class="mb-2">
-            QR kodu tarayamıyorsanız bu secret'ı elle girebilirsiniz:
+            @Loc["TwoFactor.Enroll.SecretHint"]
         </MudText>
         <MudPaper Elevation="0" Outlined="true" Class="pa-2 mb-4 d-flex align-center" Style="font-family: monospace;">
             <MudText Typo="Typo.body1">@_secret</MudText>
         </MudPaper>
 
-        <MudText Typo="Typo.h6" Class="mb-2">2. Uygulamanın verdiği 6 haneli kodu girin</MudText>
+        <MudText Typo="Typo.h6" Class="mb-2">@Loc["TwoFactor.Enroll.Step2"]</MudText>
         <div class="mb-3">
             <OtpCodeInput Value="@_confirmCode"
                           ValueChanged="@(v => _confirmCode = v)"
@@ -83,7 +86,7 @@
 
         <MudButton Color="Color.Primary" Variant="Variant.Filled" FullWidth="true"
                    OnClick="@ConfirmAsync" Disabled="@(_busy || _confirmCode.Length < 6)">
-            Onayla
+            @Loc["Common.Confirm"]
         </MudButton>
 
         @if (!string.IsNullOrEmpty(_error))
@@ -94,9 +97,7 @@
     else if (_step == EnrollmentStep.RecoveryCodes)
     {
         <MudAlert Severity="Severity.Success" Class="mb-4">
-            2FA aktif edildi! Aşağıdaki <b>10 recovery kodunu güvenli bir yere kaydedin</b>.
-            Authenticator uygulamanıza erişim kaybederseniz bunlardan birini
-            kullanabilirsiniz — her kod tek kullanımlıktır.
+            @((MarkupString)Loc["TwoFactor.Enroll.Success"].Value)
         </MudAlert>
 
         <MudGrid Class="mb-3">
@@ -115,11 +116,11 @@
                    StartIcon="@Icons.Material.Filled.Download"
                    OnClick="@DownloadRecoveryCodesAsync"
                    Class="mb-3">
-            Kurtarma kodlarını TXT olarak indir
+            @Loc["TwoFactor.Enroll.DownloadCodes"]
         </MudButton>
 
         <MudCheckBox T="bool" @bind-Value="_savedAcknowledged" Color="Color.Primary" Class="mt-2">
-            Recovery kodlarını güvenli bir yere kaydettim.
+            @Loc["TwoFactor.Enroll.AckCodes"]
         </MudCheckBox>
 
         @* Finalize form post — cookie set'lemek için HttpContext gerekli.
@@ -128,7 +129,7 @@
             <button type="submit"
                     disabled="@(!_savedAcknowledged)"
                     style="width: 100%; padding: 12px; background-color: var(--mud-palette-primary); color: white; border: none; border-radius: 4px; font-size: 1rem; font-weight: 500; cursor: pointer; opacity: @(_savedAcknowledged ? "1" : "0.5");">
-                Yönetim Paneline Geç
+                @Loc["TwoFactor.PreEnroll.GoToPanel"]
             </button>
         </form>
     }
@@ -136,7 +137,7 @@
     <MudDivider Class="my-4" />
 
     <MudText Typo="Typo.caption" Color="Color.Default" Class="d-block text-center">
-        Token 10 dakika geçerli. <MudLink Href="/login">Vazgeç</MudLink>
+        @Loc["TwoFactor.PreEnroll.TokenValidity"] <MudLink Href="/login">@Loc["Common.Discard"]</MudLink>
     </MudText>
 </MudPaper>
 
@@ -210,7 +211,7 @@
     {
         if (!TryParseToken(out var challengeToken))
         {
-            _error = "Geçersiz token formatı.";
+            _error = Loc["TwoFactor.PreEnroll.InvalidToken"].Value;
             await InvokeAsync(StateHasChanged);
             return;
         }
@@ -236,7 +237,7 @@
         }
         catch (Exception ex)
         {
-            _error = $"Hata: {ex.Message}";
+            _error = Loc["Lookup.ErrorPrefix", ex.Message].Value;
         }
         finally
         {
@@ -249,7 +250,7 @@
     {
         if (!TryParseToken(out var challengeToken))
         {
-            _error = "Geçersiz token formatı.";
+            _error = Loc["TwoFactor.PreEnroll.InvalidToken"].Value;
             return;
         }
 
@@ -272,7 +273,7 @@
         }
         catch (Exception ex)
         {
-            _error = $"Hata: {ex.Message}";
+            _error = Loc["Lookup.ErrorPrefix", ex.Message].Value;
         }
         finally
         {

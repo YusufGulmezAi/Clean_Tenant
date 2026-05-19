@@ -119,3 +119,6 @@ local.properties
 
 # Hangfire local DB cache
 hangfire-data/
+
+# Claude Code proje-içi ayarlar (per-developer)
+.claude/

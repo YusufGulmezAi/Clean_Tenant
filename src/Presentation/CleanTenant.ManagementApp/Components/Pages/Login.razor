@@ -1,18 +1,22 @@
 @page "/login"
 @layout EmptyLayout
 @attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
+@inject IStringLocalizer Loc
 @*
     Login sayfası — Static SSR. Form /auth/sign-in endpoint'ine POST eder.
     İnteraktivite minimum (loading state SignalR-bağımsız). Hata gösterimi
     query string'den (?error=CODE) alınır.
+
+    v0.2.10.e.6 — Login.* + Layout.AppBar.Brand anahtarlarıyla lokalize edildi.
+    MessageFor static method → instance method (Loc erişimi için).
 *@
 
-<PageTitle>Giriş — CleanTenant</PageTitle>
+<PageTitle>@Loc["Login.PageTitle"]</PageTitle>
 
 <MudPaper Elevation="3" Class="pa-8 mx-auto mt-16" MaxWidth="MaxWidth.Small" Style="max-width: 460px;">
     <div class="d-flex align-center mb-6">
         <MudIcon Icon="@Icons.Material.Filled.Domain" Color="Color.Primary" Size="Size.Large" />
-        <MudText Typo="Typo.h4" Class="ml-2">Toplu Yapı Yönetimi</MudText>
+        <MudText Typo="Typo.h4" Class="ml-2">@Loc["Layout.AppBar.Brand"]</MudText>
     </div>
 
     @if (!string.IsNullOrEmpty(ErrorCode))
@@ -27,7 +31,7 @@
 
         <div class="mb-3">
             <label for="identifier" class="d-block mb-1" style="font-weight: 500;">
-                E-posta / TCKN / VKN / Telefon
+                @Loc["Login.Identifier"]
             </label>
             <input id="identifier"
                    name="identifier"
@@ -40,7 +44,7 @@
         </div>
 
         <div class="mb-3">
-            <label for="password" class="d-block mb-1" style="font-weight: 500;">Şifre</label>
+            <label for="password" class="d-block mb-1" style="font-weight: 500;">@Loc["Login.Password"]</label>
             <input id="password"
                    name="password"
                    type="password"
@@ -51,19 +55,19 @@
 
         <div class="mb-4 d-flex align-center">
             <input id="rememberMe" name="rememberMe" type="checkbox" value="true" />
-            <label for="rememberMe" class="ml-2">Beni hatırla (7 gün)</label>
+            <label for="rememberMe" class="ml-2">@Loc["Login.RememberMe.Days"]</label>
         </div>
 
         <button type="submit"
                 style="width: 100%; padding: 12px; background-color: var(--mud-palette-primary); color: white; border: none; border-radius: 4px; font-size: 1rem; font-weight: 500; cursor: pointer;">
-            Giriş Yap
+            @Loc["Login.SubmitButton"]
         </button>
     </form>
 
     <MudDivider Class="my-4" />
 
     <MudText Typo="Typo.caption" Color="Color.Default" Align="Align.Center" Class="d-block">
-        v0.2.2 · CleanTenant Yönetim Paneli
+        v0.2.2 · @Loc["Login.Footer"]
     </MudText>
 </MudPaper>
 
@@ -82,18 +86,18 @@
         _ => Severity.Error,
     };
 
-    private static string MessageFor(string code) => code switch
+    private string MessageFor(string code) => code switch
     {
-        "AUTH-001" => "Kullanıcı kimliği ve şifre zorunlu.",
-        "AUTH-002" => "Geçersiz kimlik veya şifre.",
-        "AUTH-003" => "Hesap geçici olarak kilitli (çok fazla başarısız deneme).",
-        "AUTH-004" => "Bu kullanıcı için Management persona'sında erişilebilir bir scope yok.",
-        "AUTH-009" => "Kimlik tipi tanınamadı — geçerli bir e-posta/TCKN/VKN/telefon girin.",
+        "AUTH-001" => Loc["Login.Error.IdentifierRequired"].Value,
+        "AUTH-002" => Loc["Login.Error.Invalid"].Value,
+        "AUTH-003" => Loc["Login.Error.Lockout"].Value,
+        "AUTH-004" => Loc["Login.Error.NoManagementScope"].Value,
+        "AUTH-009" => Loc["Login.Error.IdentifierTypeUnknown"].Value,
         // v0.2.2.a öncesi error — sistem normalde otomatik enrollment sayfasına
         // yönlendirir; bu mesaj yalnız edge case'lerde (tutarsız 2FA durumu) görünür.
-        "AUTH-2FA-ENROLLMENT-REQUIRED" => "2FA aktivasyon gerekli. Sayfaya yönlendirilirken bir sorun oluştu — tekrar giriş yapın.",
-        "AUTH-2FA-ENROLL-CHALLENGE-NOT-FOUND" => "Enrollment süresi doldu veya iptal edildi. Lütfen tekrar giriş yapın.",
-        "AUTH-2FA-ENROLL-NOT-VERIFIED" => "Enrollment doğrulanmadan tamamlanamaz — kodu girip onaylamalısınız.",
-        _ => $"Bilinmeyen hata: {code}",
+        "AUTH-2FA-ENROLLMENT-REQUIRED" => Loc["Login.Error.TwoFactorEnrollmentRequired"].Value,
+        "AUTH-2FA-ENROLL-CHALLENGE-NOT-FOUND" => Loc["Login.Error.EnrollmentExpired"].Value,
+        "AUTH-2FA-ENROLL-NOT-VERIFIED" => Loc["Login.Error.EnrollmentNotVerified"].Value,
+        _ => Loc["Login.Error.Unknown", code].Value,
     };
 }
