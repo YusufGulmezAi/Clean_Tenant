@@ -23,4 +23,13 @@ public interface ICacheInvalidator
 
     /// <summary>Tüm Company cache'ini temizler (toplu işlemden sonra).</summary>
     Task InvalidateAllCompaniesAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Tek role'e ait cache entry'leri (by-id, detail, permissions, vb.) temizler.</summary>
+    Task InvalidateRoleAsync(Guid roleId, CancellationToken cancellationToken = default);
+
+    /// <summary>Tüm Role cache'ini temizler (toplu işlemden sonra).</summary>
+    Task InvalidateAllRolesAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Permission cache'ini temizler (create/update/delete işlemlerinden sonra).</summary>
+    Task InvalidatePermissionsAsync(CancellationToken cancellationToken = default);
 }

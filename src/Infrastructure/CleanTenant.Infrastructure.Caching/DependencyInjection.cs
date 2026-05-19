@@ -77,6 +77,7 @@ public static class DependencyInjection
         // Domain-specific reader'lar (cache + EF fallback)
         services.AddScoped<ITenantCatalogReader, TenantCatalogReader>();
         services.AddScoped<IMainCatalogReader, MainCatalogReader>();
+        services.AddScoped<IAuthorizationCatalogReader, AuthorizationCatalogReader>();
 
         // CRUD handler'larının kullanacağı invalidator
         services.AddScoped<ICacheInvalidator, CacheInvalidator>();

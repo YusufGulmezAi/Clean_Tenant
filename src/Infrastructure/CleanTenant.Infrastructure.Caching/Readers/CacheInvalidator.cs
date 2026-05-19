@@ -53,4 +53,28 @@ public sealed class CacheInvalidator : ICacheInvalidator
     /// <inheritdoc />
     public Task InvalidateAllCompaniesAsync(CancellationToken cancellationToken = default)
         => _cache.RemoveByPrefixAsync(CacheKeys.Company.Prefix, cancellationToken);
+
+    /// <inheritdoc />
+    public async Task InvalidateRoleAsync(Guid roleId, CancellationToken cancellationToken = default)
+    {
+        await _cache.RemoveAsync(CacheKeys.Role.ById(roleId), cancellationToken);
+        await _cache.RemoveAsync(CacheKeys.Role.DetailById(roleId), cancellationToken);
+        await _cache.RemoveAsync(CacheKeys.Authorization.PermissionsByRole(roleId), cancellationToken);
+        // Scope-based list cache'i sil (scope level bilinmediği için prefix-based yeterli değil,
+        // tüm scope cache'leri temizle)
+        await _cache.RemoveByPrefixAsync(CacheKeys.Role.Prefix, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public Task InvalidateAllRolesAsync(CancellationToken cancellationToken = default)
+        => _cache.RemoveByPrefixAsync(CacheKeys.Role.Prefix, cancellationToken);
+
+    /// <inheritdoc />
+    public async Task InvalidatePermissionsAsync(CancellationToken cancellationToken = default)
+    {
+        await _cache.RemoveAsync(CacheKeys.Permission.All, cancellationToken);
+        // Permission update → tüm role detail'ler de potentially etkilenir (PermissionIds denormalize)
+        await _cache.RemoveByPrefixAsync(CacheKeys.Role.Prefix, cancellationToken);
+        await _cache.RemoveByPrefixAsync(CacheKeys.Authorization.Prefix, cancellationToken);
+    }
 }
