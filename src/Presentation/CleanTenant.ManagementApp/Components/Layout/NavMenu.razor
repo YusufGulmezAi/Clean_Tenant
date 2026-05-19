@@ -56,24 +56,27 @@
 
         var systemAdminChildren = new[]
         {
-            ("LookUp Tablolar", "/system/lookup-tables", Icons.Material.Filled.DataObject, "v0.3.0"),
-            ("Bankalar", "/system/banks", Icons.Material.Filled.AccountBalance, "v0.3.0"),
-            ("Global Audit", "/audit", Icons.Material.Filled.History, "Faz 1.6"),
-            ("Log Görüntüleyici", "/logs", Icons.Material.Filled.Article, "Faz 1.6"),
-            ("Permission Kataloğu", "/permissions", Icons.Material.Filled.Security, "Faz 1.5"),
-            ("Sistem Ayarları", "/system/settings", Icons.Material.Filled.Tune, "Faz 1.4"),
+            ("LookUp Tablolar", "/system/lookup-tables", Icons.Material.Filled.DataObject, "", false),
+            ("Bankalar", "/system/banks", Icons.Material.Filled.AccountBalance, "", false),
+            ("Global Audit", "/audit", Icons.Material.Filled.History, "Faz 1.6", true),
+            ("Log Görüntüleyici", "/logs", Icons.Material.Filled.Article, "Faz 1.6", true),
+            ("Permission Kataloğu", "/permissions", Icons.Material.Filled.Security, "Faz 1.5", true),
+            ("Sistem Ayarları", "/system/settings", Icons.Material.Filled.Tune, "Faz 1.4", true),
         };
         var systemAdminVisible = AnyMatch(systemAdminChildren.Select(c => c.Item1));
         @if (systemAdminVisible)
         {
             <MudNavGroup Title="Sistem Yönetimi" Icon="@Icons.Material.Filled.AdminPanelSettings" Expanded="@IsSearching">
-                @foreach (var (title, href, icon, phase) in systemAdminChildren)
+                @foreach (var (title, href, icon, phase, disabled) in systemAdminChildren)
                 {
                     if (Matches(title))
                     {
-                        <MudNavLink Href="@href" Icon="@icon" Disabled="true">
+                        <MudNavLink Href="@href" Icon="@icon" Disabled="@disabled">
                             @title
-                            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="ml-2">@phase</MudChip>
+                            @if (!string.IsNullOrEmpty(phase))
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="ml-2">@phase</MudChip>
+                            }
                         </MudNavLink>
                     }
                 }

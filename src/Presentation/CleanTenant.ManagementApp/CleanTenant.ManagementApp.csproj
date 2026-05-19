@@ -29,8 +29,9 @@
       MUD0002: MudBlazor 8.5.x analyzer — kaldırılan/yeniden adlandırılan attribute'lar için
       (Title on MudIconButton, Clickable on MudList vb.). Mevcut bileşenler bir sonraki
       MudBlazor migration sprint'inde düzeltilecek.
+      CS1591: XML documentation comments — UI component properties not documented.
     -->
-    <NoWarn>$(NoWarn);MUD0002</NoWarn>
+    <NoWarn>$(NoWarn);MUD0002;CS1591</NoWarn>
   </PropertyGroup>
 
 </Project>

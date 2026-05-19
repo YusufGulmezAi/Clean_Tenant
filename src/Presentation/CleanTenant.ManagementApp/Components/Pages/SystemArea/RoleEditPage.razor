@@ -1,0 +1,271 @@
+@page "/system/roles/{id:guid}/edit"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject MediatR.IMediator Mediator
+@inject IAuthorizationCatalogReader RoleReader
+@inject AuthenticationStateProvider AuthProvider
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+@using CleanTenant.Application.Features.Catalog.Permissions
+@using CleanTenant.Application.Features.Catalog.Readers
+@using CleanTenant.Application.Features.Catalog.Roles
+@using CleanTenant.ManagementApp.Components.Shared
+@using MudBlazor
+
+<PageTitle>Rol Düzenle — Sistem</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    <MudBreadcrumbs Items="_breadcrumbs" Class="mb-4" />
+
+    @if (_unauthorized)
+    {
+        <MudAlert Severity="Severity.Warning">
+            Bu sayfa yalnız Sistem kullanıcıları için. Aktif bağlamınız Sistem değil.
+        </MudAlert>
+    }
+    else if (_notFound)
+    {
+        <MudAlert Severity="Severity.Error">
+            Rol bulunamadı.
+        </MudAlert>
+    }
+    else if (_loading)
+    {
+        <MudProgressLinear Indeterminate="true" />
+    }
+    else
+    {
+        <MudText Typo="Typo.h5" Class="mb-4">Rol Düzenle</MudText>
+
+        <RoleForm Model="_model"
+                  OnSubmit="@SubmitAsync"
+                  IsSubmitting="@_busy"
+                  SubmitButtonText="Değişiklikleri Kaydet"
+                  CancelHref="/system/roles"
+                  ScopeReadOnly="true" />
+
+        <MudCard Class="mt-4" Elevation="0" Outlined="true">
+            <MudCardHeader>
+                <MudText Typo="Typo.h6">İzinler</MudText>
+            </MudCardHeader>
+            <MudCardContent>
+                @if (_permissions == null)
+                {
+                    <MudProgressLinear Indeterminate="true" />
+                }
+                else if (_permissions.Count == 0)
+                {
+                    <MudText Typo="Typo.body2">İzin bulunamadı.</MudText>
+                }
+                else
+                {
+                    @foreach (var module in _permissionsByModule)
+                    {
+                        <MudExpansionPanel>
+                            <TitleContent>
+                                <MudCheckBox @bind-Value="_moduleSelected[module.Key]"
+                                           @onclick="@((MouseEventArgs e) => ToggleModule(module.Key))"
+                                           Class="mr-2"
+                                           StopPropagation="true" />
+                                <MudText>@module.Key</MudText>
+                            </TitleContent>
+                            <ChildContent>
+                                <MudGrid>
+                                    @foreach (var permission in module.Value)
+                                    {
+                                        <MudItem xs="12" sm="6">
+                                            <MudCheckBox @bind-Value="_selectedPermissions[permission.Id]"
+                                                       @bind-Value:after="OnPermissionChanged"
+                                                       Label="@permission.Code" />
+                                            @if (!string.IsNullOrEmpty(permission.Description))
+                                            {
+                                                <MudText Typo="Typo.caption" Color="Color.Default" Class="ml-8">
+                                                    @permission.Description
+                                                </MudText>
+                                            }
+                                        </MudItem>
+                                    }
+                                </MudGrid>
+                            </ChildContent>
+                        </MudExpansionPanel>
+                    }
+                }
+            </MudCardContent>
+            <MudCardActions Class="d-flex justify-end pa-4">
+                <MudButton OnClick="@SavePermissionsAsync"
+                           Color="Color.Primary"
+                           Variant="Variant.Filled"
+                           Disabled="@(_busy || _saving)"
+                           StartIcon="@((_busy || _saving) ? null : Icons.Material.Filled.Save)">
+                    @if (_saving)
+                    {
+                        <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                        <MudText Class="ms-2">Kaydediliyor…</MudText>
+                    }
+                    else
+                    {
+                        <text>İzinleri Kaydet</text>
+                    }
+                </MudButton>
+            </MudCardActions>
+        </MudCard>
+    }
+</MudContainer>
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private readonly RoleFormModel _model = new();
+    private bool _busy;
+    private bool _saving;
+    private bool _loading = true;
+    private bool _unauthorized;
+    private bool _notFound;
+
+    private IReadOnlyList<PermissionDto>? _permissions;
+    private Dictionary<string, bool> _moduleSelected = new();
+    private Dictionary<Guid, bool> _selectedPermissions = new();
+    private Dictionary<string, List<PermissionDto>> _permissionsByModule = new();
+
+    private readonly List<BreadcrumbItem> _breadcrumbs = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        _unauthorized = !authState.User.IsInRole("SystemUser");
+
+        if (_unauthorized)
+        {
+            _loading = false;
+            return;
+        }
+
+        _breadcrumbs.Add(new("Roller", "/system/roles"));
+        _breadcrumbs.Add(new("Rol Düzenle", null, disabled: true));
+
+        await LoadRoleAsync();
+        await LoadPermissionsAsync();
+    }
+
+    private async Task LoadRoleAsync()
+    {
+        try
+        {
+            var role = await RoleReader.GetRoleDetailAsync(Id);
+
+            if (role is null)
+            {
+                _notFound = true;
+                _loading = false;
+                return;
+            }
+
+            _model.Name = role.Name;
+            _model.Scope = (int)role.Scope;
+            _model.Description = role.Description;
+
+            _selectedPermissions = role.PermissionIds.ToDictionary(id => id, _ => true);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Rol yüklenirken hata: {ex.Message}", Severity.Error);
+            _notFound = true;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task LoadPermissionsAsync()
+    {
+        try
+        {
+            var query = new GetPermissionsQuery();
+            _permissions = await Mediator.Send(query);
+
+            _permissionsByModule = _permissions
+                .GroupBy(p => p.Module)
+                .OrderBy(g => g.Key)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            foreach (var module in _permissionsByModule.Keys)
+            {
+                _moduleSelected[module] = _permissionsByModule[module]
+                    .All(p => _selectedPermissions.ContainsKey(p.Id));
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"İzinler yüklenirken hata: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void ToggleModule(string module)
+    {
+        var isSelected = _moduleSelected[module];
+        foreach (var permission in _permissionsByModule[module])
+        {
+            if (isSelected)
+                _selectedPermissions.Remove(permission.Id);
+            else
+                _selectedPermissions[permission.Id] = true;
+        }
+    }
+
+    private async Task OnPermissionChanged()
+    {
+        foreach (var module in _permissionsByModule.Keys)
+        {
+            _moduleSelected[module] = _permissionsByModule[module]
+                .All(p => _selectedPermissions.ContainsKey(p.Id));
+        }
+    }
+
+    private async Task SubmitAsync(RoleFormModel model)
+    {
+        _busy = true;
+
+        try
+        {
+            var command = new UpdateRoleCommand(Id, model.Name, model.Description);
+            await Mediator.Send(command);
+
+            Snackbar.Add("Rol başarıyla güncellendi.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Hata: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task SavePermissionsAsync()
+    {
+        _saving = true;
+
+        try
+        {
+            var permissionIds = _selectedPermissions
+                .Where(kvp => kvp.Value)
+                .Select(kvp => kvp.Key)
+                .ToList();
+
+            var command = new AssignPermissionsToRoleCommand(Id, permissionIds);
+            await Mediator.Send(command);
+
+            Snackbar.Add("İzinler başarıyla kaydedildi.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Hata: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

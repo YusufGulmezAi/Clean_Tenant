@@ -1,0 +1,1091 @@
+@page "/tenant/building-schema/{CompanyId:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject IMediator Mediator
+@inject IMainCatalogReader CompanyReader
+@inject AuthenticationStateProvider AuthProvider
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+@using CleanTenant.Application.Features.Main.BuildingSchema.Blocks
+@using CleanTenant.Application.Features.Main.BuildingSchema.Parcels
+@using CleanTenant.Application.Features.Main.BuildingSchema.Buildings
+@using CleanTenant.Application.Features.Main.BuildingSchema.Units
+@using CleanTenant.Application.Features.Main.BuildingSchema.Reorder
+@using CleanTenant.Application.Features.Main.BuildingSchema.Queries
+@using CleanTenant.Application.Features.Main.BuildingSchema.Excel
+@using CleanTenant.Application.Features.Main.Readers
+@using CleanTenant.Domain.Tenant.BuildingSchema
+
+<PageTitle>Yapı Şeması — @_companyName</PageTitle>
+
+@if (_unauthorized)
+{
+    <MudAlert Severity="Severity.Warning" Class="my-3">Bu sayfaya erişim yetkiniz yok.</MudAlert>
+}
+else if (_isLoading)
+{
+    <MudProgressLinear Indeterminate="true" Class="my-4" />
+}
+else if (_schema is null)
+{
+    <MudAlert Severity="Severity.Error" Class="my-3">Yapı şeması yüklenemedi.</MudAlert>
+}
+else
+{
+    <div class="d-flex justify-space-between align-center mb-4 flex-wrap gap-2">
+        <MudText Typo="Typo.h5">Yapı Şeması — @_companyName</MudText>
+        <div class="d-flex gap-2">
+            <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                       StartIcon="@Icons.Material.Filled.FileDownload"
+                       OnClick="DownloadTemplateAsync" Disabled="@_isBusy">
+                Şablon İndir
+            </MudButton>
+            <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                       StartIcon="@Icons.Material.Filled.Upload"
+                       OnClick="@(() => _showImport = !_showImport)">
+                Excel Yükle
+            </MudButton>
+        </div>
+    </div>
+
+    @if (_showImport)
+    {
+        <MudPaper Elevation="2" Class="pa-4 mb-4">
+            <MudText Typo="Typo.subtitle1" GutterBottom="true">Excel'den İçe Aktar</MudText>
+            <InputFile id="bs-import-file" OnChange="OnImportFileSelected" accept=".xlsx" style="display:none" />
+            <div class="d-flex align-center gap-3 flex-wrap">
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.AttachFile"
+                           OnClick="@(async () => await JS.InvokeVoidAsync("cleantenant.clickElement", "bs-import-file"))">
+                    Dosya Seç
+                </MudButton>
+                @if (_importFile is not null)
+                {
+                    <MudText Typo="Typo.body2">@_importFile.Name</MudText>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                               OnClick="ImportExcelAsync" Disabled="@_isBusy">
+                        @if (_isBusy)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" />
+                        }
+                        Yükle
+                    </MudButton>
+                }
+            </div>
+        </MudPaper>
+    }
+
+    <div class="d-flex justify-end mb-3">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                   StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="@(() => { _showAddBlock = !_showAddBlock; _addBlockName = string.Empty; })"
+                   Disabled="@_isBusy">
+            Ada Ekle
+        </MudButton>
+    </div>
+
+    @if (_showAddBlock)
+    {
+        <MudPaper Elevation="1" Class="pa-3 mb-3">
+            <MudTextField @bind-Value="_addBlockName" Label="Ada Adı / Numarası *"
+                          MaxLength="100" Margin="Margin.Dense" Immediate="true" />
+            <div class="d-flex gap-2 mt-2">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                           OnClick="AddBlockAsync"
+                           Disabled="@(string.IsNullOrWhiteSpace(_addBlockName) || _isBusy)">
+                    Ekle
+                </MudButton>
+                <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                           OnClick="@(() => { _showAddBlock = false; _addBlockName = string.Empty; })">
+                    Vazgeç
+                </MudButton>
+            </div>
+        </MudPaper>
+    }
+
+    @if (!_schema.Blocks.Any())
+    {
+        <MudAlert Severity="Severity.Info">
+            Henüz Ada tanımlanmamış. "Ada Ekle" butonuyla başlayın.
+        </MudAlert>
+    }
+
+    <MudExpansionPanels MultiExpansion="true">
+        @foreach (var block in _schema.Blocks.OrderBy(b => b.SortOrder))
+        {
+            <MudExpansionPanel @key="block.Id">
+                <TitleContent>
+                    <div class="d-flex align-center" style="width:100%">
+                        @if (_editingBlockId == block.Id)
+                        {
+                            <div @onclick:stopPropagation="true">
+                                <MudTextField @bind-Value="_editingBlockName" Margin="Margin.Dense"
+                                              Style="max-width:200px" />
+                            </div>
+                            <div @onclick:stopPropagation="true">
+                                <MudIconButton Icon="@Icons.Material.Filled.Check" Size="Size.Small"
+                                               Color="Color.Success" Title="Kaydet"
+                                               OnClick="SaveEditBlockAsync" />
+                            </div>
+                            <div @onclick:stopPropagation="true">
+                                <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small"
+                                               Title="İptal"
+                                               OnClick="@(() => { _editingBlockId = null; _editingBlockName = string.Empty; })" />
+                            </div>
+                        }
+                        else
+                        {
+                            <MudText><b>Ada:</b> @block.Name</MudText>
+                            <MudChip T="string" Size="Size.Small" Class="ml-2">@block.Parcels.Count parsel</MudChip>
+                        }
+                        <div class="ml-auto d-flex gap-1" @onclick:stopPropagation="true">
+                            <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Title="Düzenle"
+                                           OnClick="@(() => StartEditBlock(block))"
+                                           Disabled="@(_editingBlockId.HasValue || _isBusy)" />
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small"
+                                           Color="Color.Error" Title="Sil"
+                                           OnClick="@(() => DeleteBlockAsync(block.Id, block.Name))"
+                                           Disabled="@_isBusy" />
+                            <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward" Size="Size.Small"
+                                           Title="Yukarı Taşı"
+                                           OnClick="@(() => MoveBlockAsync(block, -1))"
+                                           Disabled="@_isBusy" />
+                            <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward" Size="Size.Small"
+                                           Title="Aşağı Taşı"
+                                           OnClick="@(() => MoveBlockAsync(block, 1))"
+                                           Disabled="@_isBusy" />
+                        </div>
+                    </div>
+                </TitleContent>
+                <ChildContent>
+                    <div class="d-flex justify-end mb-2">
+                        <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.Add"
+                                   OnClick="@(() => ToggleAddParcel(block.Id))" Disabled="@_isBusy">
+                            Parsel Ekle
+                        </MudButton>
+                    </div>
+
+                    @if (_addParcelForBlock == block.Id)
+                    {
+                        <MudPaper Elevation="1" Class="pa-3 mb-3">
+                            <MudTextField @bind-Value="_addParcelName" Label="Parsel Adı / Numarası *"
+                                          MaxLength="100" Margin="Margin.Dense" Immediate="true" />
+                            <div class="d-flex gap-2 mt-2">
+                                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                           OnClick="@(async () => await AddParcelAsync(block.Id))"
+                                           Disabled="@(string.IsNullOrWhiteSpace(_addParcelName) || _isBusy)">
+                                    Ekle
+                                </MudButton>
+                                <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                                           OnClick="@(() => { _addParcelForBlock = null; _addParcelName = string.Empty; })">
+                                    Vazgeç
+                                </MudButton>
+                            </div>
+                        </MudPaper>
+                    }
+
+                    @if (!block.Parcels.Any())
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">Parsel tanımlanmamış.</MudText>
+                    }
+
+                    <MudExpansionPanels MultiExpansion="true">
+                        @foreach (var parcel in block.Parcels.OrderBy(p => p.SortOrder))
+                        {
+                            <MudExpansionPanel @key="parcel.Id">
+                                <TitleContent>
+                                    <div class="d-flex align-center" style="width:100%">
+                                        @if (_editingParcelId == parcel.Id)
+                                        {
+                                            <div @onclick:stopPropagation="true">
+                                <MudTextField @bind-Value="_editingParcelName" Margin="Margin.Dense"
+                                              Style="max-width:200px" />
+                            </div>
+                                            <div @onclick:stopPropagation="true">
+                                                <MudIconButton Icon="@Icons.Material.Filled.Check" Size="Size.Small"
+                                                               Color="Color.Success" Title="Kaydet"
+                                                               OnClick="SaveEditParcelAsync" />
+                                            </div>
+                                            <div @onclick:stopPropagation="true">
+                                                <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small"
+                                                               Title="İptal"
+                                                               OnClick="@(() => { _editingParcelId = null; _editingParcelName = string.Empty; })" />
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <MudText><b>Parsel:</b> @parcel.Name</MudText>
+                                            <MudChip T="string" Size="Size.Small" Class="ml-2">@parcel.Buildings.Count yapı</MudChip>
+                                        }
+                                        <div class="ml-auto d-flex gap-1" @onclick:stopPropagation="true">
+                                            <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                                                           Title="Düzenle"
+                                                           OnClick="@(() => StartEditParcel(parcel))"
+                                                           Disabled="@(_editingParcelId.HasValue || _isBusy)" />
+                                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small"
+                                                           Color="Color.Error" Title="Sil"
+                                                           OnClick="@(() => DeleteParcelAsync(parcel.Id, parcel.Name))"
+                                                           Disabled="@_isBusy" />
+                                            <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward" Size="Size.Small"
+                                                           Title="Yukarı Taşı"
+                                                           OnClick="@(() => MoveParcelAsync(parcel, block, -1))"
+                                                           Disabled="@_isBusy" />
+                                            <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward" Size="Size.Small"
+                                                           Title="Aşağı Taşı"
+                                                           OnClick="@(() => MoveParcelAsync(parcel, block, 1))"
+                                                           Disabled="@_isBusy" />
+                                        </div>
+                                    </div>
+                                </TitleContent>
+                                <ChildContent>
+                                    <div class="d-flex justify-end mb-2">
+                                        <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.Add"
+                                                   OnClick="@(() => ToggleAddBuilding(parcel.Id))"
+                                                   Disabled="@_isBusy">
+                                            Yapı Ekle
+                                        </MudButton>
+                                    </div>
+
+                                    @if (_addBuildingForParcel == parcel.Id)
+                                    {
+                                        <MudPaper Elevation="1" Class="pa-3 mb-3">
+                                            <MudGrid Spacing="2">
+                                                <MudItem xs="12" sm="6">
+                                                    <MudTextField @bind-Value="_addBuilding.Name" Label="Yapı Adı *"
+                                                                  MaxLength="200" Margin="Margin.Dense" Immediate="true" />
+                                                </MudItem>
+                                                <MudItem xs="12" sm="6">
+                                                    <MudTextField @bind-Value="_addBuilding.MunicipalNo"
+                                                                  Label="Belediye No" MaxLength="50" Margin="Margin.Dense" />
+                                                </MudItem>
+                                                <MudItem xs="12" sm="6">
+                                                    <MudSelect T="BuildingType" @bind-Value="_addBuilding.Type"
+                                                               Label="Yapı Tipi *" Margin="Margin.Dense">
+                                                        @foreach (var t in Enum.GetValues<BuildingType>())
+                                                        {
+                                                            <MudSelectItem Value="@t">@BuildingTypeLabel(t)</MudSelectItem>
+                                                        }
+                                                    </MudSelect>
+                                                </MudItem>
+                                            </MudGrid>
+                                            <div class="d-flex gap-2 mt-2">
+                                                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                                           OnClick="@(async () => await AddBuildingAsync(parcel.Id))"
+                                                           Disabled="@(string.IsNullOrWhiteSpace(_addBuilding.Name) || _isBusy)">
+                                                    Ekle
+                                                </MudButton>
+                                                <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                                                           OnClick="@(() => { _addBuildingForParcel = null; _addBuilding.Reset(); })">
+                                                    Vazgeç
+                                                </MudButton>
+                                            </div>
+                                        </MudPaper>
+                                    }
+
+                                    @if (!parcel.Buildings.Any())
+                                    {
+                                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">Yapı tanımlanmamış.</MudText>
+                                    }
+
+                                    <MudExpansionPanels MultiExpansion="true">
+                                        @foreach (var building in parcel.Buildings.OrderBy(b => b.SortOrder))
+                                        {
+                                            <MudExpansionPanel @key="building.Id">
+                                                <TitleContent>
+                                                    <div class="d-flex align-center" style="width:100%">
+                                                        <MudText><b>@building.Name</b></MudText>
+                                                        <MudChip T="string" Size="Size.Small" Class="ml-1">@BuildingTypeLabel(building.Type)</MudChip>
+                                                        <MudChip T="string" Size="Size.Small" Class="ml-1">@building.Units.Count BB</MudChip>
+                                                        <div class="ml-auto d-flex gap-1" @onclick:stopPropagation="true">
+                                                            <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                                                                           Title="Düzenle"
+                                                                           OnClick="@(() => StartEditBuilding(building))"
+                                                                           Disabled="@(_editingBuildingId.HasValue || _isBusy)" />
+                                                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small"
+                                                                           Color="Color.Error" Title="Sil"
+                                                                           OnClick="@(() => DeleteBuildingAsync(building.Id, building.Name))"
+                                                                           Disabled="@_isBusy" />
+                                                            <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward" Size="Size.Small"
+                                                                           Title="Yukarı Taşı"
+                                                                           OnClick="@(() => MoveBuildingAsync(building, parcel, -1))"
+                                                                           Disabled="@_isBusy" />
+                                                            <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward" Size="Size.Small"
+                                                                           Title="Aşağı Taşı"
+                                                                           OnClick="@(() => MoveBuildingAsync(building, parcel, 1))"
+                                                                           Disabled="@_isBusy" />
+                                                        </div>
+                                                    </div>
+                                                </TitleContent>
+                                                <ChildContent>
+                                                    @if (_editingBuildingId == building.Id)
+                                                    {
+                                                        <MudPaper Elevation="1" Class="pa-3 mb-3">
+                                                            <MudText Typo="Typo.subtitle2" Class="mb-2">Yapı Düzenle</MudText>
+                                                            <MudGrid Spacing="2">
+                                                                <MudItem xs="12" sm="6">
+                                                                    <MudTextField @bind-Value="_editBuilding.Name" Label="Yapı Adı *"
+                                                                                  MaxLength="200" Margin="Margin.Dense" Immediate="true" />
+                                                                </MudItem>
+                                                                <MudItem xs="12" sm="6">
+                                                                    <MudTextField @bind-Value="_editBuilding.MunicipalNo"
+                                                                                  Label="Belediye No" MaxLength="50" Margin="Margin.Dense" />
+                                                                </MudItem>
+                                                                <MudItem xs="12" sm="6">
+                                                                    <MudSelect T="BuildingType" @bind-Value="_editBuilding.Type"
+                                                                               Label="Yapı Tipi *" Margin="Margin.Dense">
+                                                                        @foreach (var t in Enum.GetValues<BuildingType>())
+                                                                        {
+                                                                            <MudSelectItem Value="@t">@BuildingTypeLabel(t)</MudSelectItem>
+                                                                        }
+                                                                    </MudSelect>
+                                                                </MudItem>
+                                                            </MudGrid>
+                                                            <div class="d-flex gap-2 mt-2">
+                                                                <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small"
+                                                                           OnClick="SaveEditBuildingAsync"
+                                                                           Disabled="@(string.IsNullOrWhiteSpace(_editBuilding.Name) || _isBusy)">
+                                                                    Kaydet
+                                                                </MudButton>
+                                                                <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                                                                           OnClick="@(() => { _editingBuildingId = null; _editBuilding.Reset(); })">
+                                                                    İptal
+                                                                </MudButton>
+                                                            </div>
+                                                        </MudPaper>
+                                                    }
+
+                                                    @if (_unitFormBuildingId == building.Id)
+                                                    {
+                                                        <MudPaper Elevation="1" Class="pa-3 mb-3">
+                                                            <MudText Typo="Typo.subtitle2" Class="mb-2">
+                                                                @(_isEditingUnit ? "Bağımsız Bölüm Düzenle" : "Bağımsız Bölüm Ekle")
+                                                            </MudText>
+                                                            <MudGrid Spacing="2">
+                                                                <MudItem xs="6" sm="3">
+                                                                    <MudTextField @bind-Value="_unitForm.Number" Label="BB No *"
+                                                                                  MaxLength="20" Margin="Margin.Dense" Immediate="true" />
+                                                                </MudItem>
+                                                                <MudItem xs="6" sm="3">
+                                                                    <MudTextField @bind-Value="_unitForm.NationalAddressCode"
+                                                                                  Label="Numarataj No" MaxLength="50" Margin="Margin.Dense" />
+                                                                </MudItem>
+                                                                <MudItem xs="6" sm="3">
+                                                                    <MudSelect T="UnitType" @bind-Value="_unitForm.Type"
+                                                                               Label="BB Tipi *" Margin="Margin.Dense">
+                                                                        @foreach (var t in Enum.GetValues<UnitType>())
+                                                                        {
+                                                                            <MudSelectItem Value="@t">@UnitTypeLabel(t)</MudSelectItem>
+                                                                        }
+                                                                    </MudSelect>
+                                                                </MudItem>
+                                                                <MudItem xs="6" sm="3">
+                                                                    <MudNumericField T="decimal" @bind-Value="_unitForm.SquareMeters"
+                                                                                     Label="Metrekare (m²) *" Min="0"
+                                                                                     Margin="Margin.Dense" Format="F2" />
+                                                                </MudItem>
+                                                                <MudItem xs="6" sm="3">
+                                                                    <MudNumericField T="int" @bind-Value="_unitForm.LandShare"
+                                                                                     Label="Arsa Payı *" Min="0" Margin="Margin.Dense" />
+                                                                </MudItem>
+                                                                <MudItem xs="6" sm="3">
+                                                                    <MudNumericField T="decimal?" @bind-Value="_unitForm.AllocatedArea"
+                                                                                     Label="Tahsis Alanı (m²)" Min="0"
+                                                                                     Margin="Margin.Dense" Format="F2" />
+                                                                </MudItem>
+                                                                <MudItem xs="6" sm="3">
+                                                                    <MudNumericField T="int" @bind-Value="_unitForm.Floor"
+                                                                                     Label="Kat" Margin="Margin.Dense" />
+                                                                </MudItem>
+                                                                <MudItem xs="6" sm="3">
+                                                                    <MudSelect T="CleanTenant.Domain.Tenant.BuildingSchema.Orientation" @bind-Value="_unitForm.Orientation"
+                                                                               Label="Yön" Margin="Margin.Dense">
+                                                                        @foreach (var o in Enum.GetValues<CleanTenant.Domain.Tenant.BuildingSchema.Orientation>())
+                                                                        {
+                                                                            <MudSelectItem Value="@o">@OrientationLabel(o)</MudSelectItem>
+                                                                        }
+                                                                    </MudSelect>
+                                                                </MudItem>
+                                                                <MudItem xs="6" sm="3">
+                                                                    <MudSelect T="ApartmentLayout" @bind-Value="_unitForm.Layout"
+                                                                               Label="Oda-Salon" Margin="Margin.Dense">
+                                                                        @foreach (var l in Enum.GetValues<ApartmentLayout>())
+                                                                        {
+                                                                            <MudSelectItem Value="@l">@LayoutLabel(l)</MudSelectItem>
+                                                                        }
+                                                                    </MudSelect>
+                                                                </MudItem>
+                                                            </MudGrid>
+                                                            <div class="d-flex gap-2 mt-2">
+                                                                <MudButton Variant="Variant.Filled" Size="Size.Small"
+                                                                           Color="@(_isEditingUnit ? Color.Success : Color.Primary)"
+                                                                           OnClick="SaveUnitAsync"
+                                                                           Disabled="@(string.IsNullOrWhiteSpace(_unitForm.Number) || _isBusy)">
+                                                                    @(_isEditingUnit ? "Kaydet" : "Ekle")
+                                                                </MudButton>
+                                                                <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                                                                           OnClick="@(() => { _unitFormBuildingId = null; _editingUnitId = null; _isEditingUnit = false; _unitForm.Reset(); })">
+                                                                    İptal
+                                                                </MudButton>
+                                                            </div>
+                                                        </MudPaper>
+                                                    }
+
+                                                    @if (_unitFormBuildingId != building.Id)
+                                                    {
+                                                        <div class="d-flex justify-end mb-2">
+                                                            <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.Add"
+                                                                       OnClick="@(() => ToggleAddUnit(building.Id))"
+                                                                       Disabled="@_isBusy">
+                                                                BB Ekle
+                                                            </MudButton>
+                                                        </div>
+                                                    }
+
+                                                    @if (building.Units.Any())
+                                                    {
+                                                        <MudTable Items="@building.Units.OrderBy(u => u.SortOrder)"
+                                                                  Dense="true" Hover="true" Striped="true" Class="mt-1">
+                                                            <HeaderContent>
+                                                                <MudTh>No</MudTh>
+                                                                <MudTh>Tip</MudTh>
+                                                                <MudTh>m²</MudTh>
+                                                                <MudTh>Arsa Payı</MudTh>
+                                                                <MudTh>Kat</MudTh>
+                                                                <MudTh>Yön</MudTh>
+                                                                <MudTh>Oda-Salon</MudTh>
+                                                                <MudTh></MudTh>
+                                                            </HeaderContent>
+                                                            <RowTemplate>
+                                                                <MudTd DataLabel="No">@context.Number</MudTd>
+                                                                <MudTd DataLabel="Tip">@UnitTypeLabel(context.Type)</MudTd>
+                                                                <MudTd DataLabel="m²">@context.SquareMeters.ToString("F1")</MudTd>
+                                                                <MudTd DataLabel="Arsa Payı">@context.LandShare</MudTd>
+                                                                <MudTd DataLabel="Kat">@context.Floor</MudTd>
+                                                                <MudTd DataLabel="Yön">@OrientationLabel(context.Orientation)</MudTd>
+                                                                <MudTd DataLabel="Oda-Salon">@LayoutLabel(context.Layout)</MudTd>
+                                                                <MudTd>
+                                                                    <div class="d-flex gap-1">
+                                                                        <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                                                                       Size="Size.Small" Title="Düzenle"
+                                                                                       OnClick="@(() => StartEditUnit(building.Id, context))"
+                                                                                       Disabled="@_isBusy" />
+                                                                        <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                                                                       Size="Size.Small" Color="Color.Error" Title="Sil"
+                                                                                       OnClick="@(() => DeleteUnitAsync(context.Id, context.Number))"
+                                                                                       Disabled="@_isBusy" />
+                                                                        <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward"
+                                                                                       Size="Size.Small" Title="Yukarı"
+                                                                                       OnClick="@(() => MoveUnitAsync(context, building, -1))"
+                                                                                       Disabled="@_isBusy" />
+                                                                        <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward"
+                                                                                       Size="Size.Small" Title="Aşağı"
+                                                                                       OnClick="@(() => MoveUnitAsync(context, building, 1))"
+                                                                                       Disabled="@_isBusy" />
+                                                                    </div>
+                                                                </MudTd>
+                                                            </RowTemplate>
+                                                        </MudTable>
+                                                    }
+                                                    else if (_unitFormBuildingId != building.Id)
+                                                    {
+                                                        <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                                            Bağımsız bölüm tanımlanmamış.
+                                                        </MudText>
+                                                    }
+                                                </ChildContent>
+                                            </MudExpansionPanel>
+                                        }
+                                    </MudExpansionPanels>
+                                </ChildContent>
+                            </MudExpansionPanel>
+                        }
+                    </MudExpansionPanels>
+                </ChildContent>
+            </MudExpansionPanel>
+        }
+    </MudExpansionPanels>
+}
+
+@code {
+    [Parameter] public Guid CompanyId { get; set; }
+
+    private string _companyName = "Yükleniyor...";
+    private BuildingSchemaDto? _schema;
+    private bool _isLoading = true;
+    private bool _unauthorized;
+    private bool _isBusy;
+
+    // Block add/edit
+    private bool _showAddBlock;
+    private string _addBlockName = string.Empty;
+    private Guid? _editingBlockId;
+    private string _editingBlockName = string.Empty;
+
+    // Parcel add/edit
+    private Guid? _addParcelForBlock;
+    private string _addParcelName = string.Empty;
+    private Guid? _editingParcelId;
+    private string _editingParcelName = string.Empty;
+
+    // Building add/edit
+    private Guid? _addBuildingForParcel;
+    private readonly BuildingFormModel _addBuilding = new();
+    private Guid? _editingBuildingId;
+    private readonly BuildingFormModel _editBuilding = new();
+
+    // Unit add/edit (shared form)
+    private Guid? _unitFormBuildingId;
+    private bool _isEditingUnit;
+    private Guid? _editingUnitId;
+    private readonly UnitFormModel _unitForm = new();
+
+    // Excel import
+    private bool _showImport;
+    private IBrowserFile? _importFile;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        if (authState.User?.Identity?.IsAuthenticated != true)
+        {
+            _unauthorized = true;
+            _isLoading = false;
+            return;
+        }
+
+        var company = await CompanyReader.GetByIdAsync(CompanyId);
+        if (company is null)
+        {
+            _unauthorized = true;
+            _isLoading = false;
+            return;
+        }
+
+        _companyName = company.Name;
+        await LoadSchemaAsync();
+    }
+
+    private async Task LoadSchemaAsync()
+    {
+        _isLoading = true;
+        var result = await Mediator.Send(new GetBuildingSchemaQuery(CompanyId));
+        _schema = result.IsSuccess ? result.Value : null;
+        _isLoading = false;
+    }
+
+    // ── Block ────────────────────────────────────────────────────────────────
+
+    private void StartEditBlock(BlockDto block)
+    {
+        _editingBlockId = block.Id;
+        _editingBlockName = block.Name;
+    }
+
+    private async Task AddBlockAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_addBlockName) || _isBusy) return;
+        _isBusy = true;
+        try
+        {
+            var result = await Mediator.Send(new CreateBlockCommand(CompanyId, _addBlockName.Trim()));
+            if (result.IsSuccess)
+            {
+                _addBlockName = string.Empty;
+                _showAddBlock = false;
+                await LoadSchemaAsync();
+            }
+            else Snackbar.Add(result.FirstError.Message, Severity.Error);
+        }
+        finally { _isBusy = false; }
+    }
+
+    private async Task SaveEditBlockAsync()
+    {
+        if (_editingBlockId is null || string.IsNullOrWhiteSpace(_editingBlockName) || _isBusy) return;
+        _isBusy = true;
+        try
+        {
+            var result = await Mediator.Send(new UpdateBlockCommand(_editingBlockId.Value, _editingBlockName.Trim()));
+            if (result.IsSuccess) { _editingBlockId = null; await LoadSchemaAsync(); }
+            else Snackbar.Add(result.FirstError.Message, Severity.Error);
+        }
+        finally { _isBusy = false; }
+    }
+
+    private async Task DeleteBlockAsync(Guid blockId, string name)
+    {
+        if (_isBusy) return;
+        var ok = await JS.InvokeAsync<bool>("confirm", $"Ada '{name}' silinecek. Devam edilsin mi?");
+        if (!ok) return;
+        _isBusy = true;
+        try
+        {
+            var result = await Mediator.Send(new DeleteBlockCommand(blockId));
+            if (result.IsSuccess) await LoadSchemaAsync();
+            else Snackbar.Add(result.FirstError.Message, Severity.Error);
+        }
+        finally { _isBusy = false; }
+    }
+
+    private async Task MoveBlockAsync(BlockDto block, int direction)
+    {
+        if (_isBusy) return;
+        var ordered = _schema!.Blocks.OrderBy(b => b.SortOrder).ToList();
+        var idx = ordered.IndexOf(block);
+        if (idx + direction < 0 || idx + direction >= ordered.Count) return;
+        ordered.RemoveAt(idx);
+        ordered.Insert(idx + direction, block);
+        _isBusy = true;
+        try
+        {
+            var result = await Mediator.Send(
+                new ReorderBlocksCommand(CompanyId, ordered.Select(b => b.Id).ToList()));
+            if (result.IsSuccess) await LoadSchemaAsync();
+            else Snackbar.Add(result.FirstError.Message, Severity.Error);
+        }
+        finally { _isBusy = false; }
+    }
+
+    // ── Parcel ───────────────────────────────────────────────────────────────
+
+    private void ToggleAddParcel(Guid blockId)
+    {
+        _addParcelForBlock = _addParcelForBlock == blockId ? null : blockId;
+        _addParcelName = string.Empty;
+    }
+
+    private void StartEditParcel(ParcelDto parcel)
+    {
+        _editingParcelId = parcel.Id;
+        _editingParcelName = parcel.Name;
+    }
+
+    private async Task AddParcelAsync(Guid blockId)
+    {
+        if (string.IsNullOrWhiteSpace(_addParcelName) || _isBusy) return;
+        _isBusy = true;
+        try
+        {
+            var result = await Mediator.Send(new CreateParcelCommand(blockId, _addParcelName.Trim()));
+            if (result.IsSuccess)
+            {
+                _addParcelName = string.Empty;
+                _addParcelForBlock = null;
+                await LoadSchemaAsync();
+            }
+            else Snackbar.Add(result.FirstError.Message, Severity.Error);
+        }
+        finally { _isBusy = false; }
+    }
+
+    private async Task SaveEditParcelAsync()
+    {
+        if (_editingParcelId is null || string.IsNullOrWhiteSpace(_editingParcelName) || _isBusy) return;
+        _isBusy = true;
+        try
+        {
+            var result = await Mediator.Send(
+                new UpdateParcelCommand(_editingParcelId.Value, _editingParcelName.Trim()));
+            if (result.IsSuccess) { _editingParcelId = null; await LoadSchemaAsync(); }
+            else Snackbar.Add(result.FirstError.Message, Severity.Error);
+        }
+        finally { _isBusy = false; }
+    }
+
+    private async Task DeleteParcelAsync(Guid parcelId, string name)
+    {
+        if (_isBusy) return;
+        var ok = await JS.InvokeAsync<bool>("confirm", $"Parsel '{name}' silinecek. Devam?");
+        if (!ok) return;
+        _isBusy = true;
+        try
+        {
+            var result = await Mediator.Send(new DeleteParcelCommand(parcelId));
+            if (result.IsSuccess) await LoadSchemaAsync();
+            else Snackbar.Add(result.FirstError.Message, Severity.Error);
+        }
+        finally { _isBusy = false; }
+    }
+
+    private async Task MoveParcelAsync(ParcelDto parcel, BlockDto block, int direction)
+    {
+        if (_isBusy) return;
+        var ordered = block.Parcels.OrderBy(p => p.SortOrder).ToList();
+        var idx = ordered.IndexOf(parcel);
+        if (idx + direction < 0 || idx + direction >= ordered.Count) return;
+        ordered.RemoveAt(idx);
+        ordered.Insert(idx + direction, parcel);
+        _isBusy = true;
+        try
+        {
+            var result = await Mediator.Send(
+                new ReorderParcelsCommand(block.Id, ordered.Select(p => p.Id).ToList()));
+            if (result.IsSuccess) await LoadSchemaAsync();
+            else Snackbar.Add(result.FirstError.Message, Severity.Error);
+        }
+        finally { _isBusy = false; }
+    }
+
+    // ── Building ─────────────────────────────────────────────────────────────
+
+    private void ToggleAddBuilding(Guid parcelId)
+    {
+        _addBuildingForParcel = _addBuildingForParcel == parcelId ? null : parcelId;
+        _addBuilding.Reset();
+    }
+
+    private void StartEditBuilding(BuildingDto building)
+    {
+        _editingBuildingId = building.Id;
+        _editBuilding.Load(building);
+    }
+
+    private async Task AddBuildingAsync(Guid parcelId)
+    {
+        if (string.IsNullOrWhiteSpace(_addBuilding.Name) || _isBusy) return;
+        _isBusy = true;
+        try
+        {
+            var result = await Mediator.Send(new CreateBuildingCommand(
+                parcelId, _addBuilding.Name.Trim(), _addBuilding.MunicipalNo?.Trim(), _addBuilding.Type));
+            if (result.IsSuccess)
+            {
+                _addBuildingForParcel = null;
+                _addBuilding.Reset();
+                await LoadSchemaAsync();
+            }
+            else Snackbar.Add(result.FirstError.Message, Severity.Error);
+        }
+        finally { _isBusy = false; }
+    }
+
+    private async Task SaveEditBuildingAsync()
+    {
+        if (_editingBuildingId is null || string.IsNullOrWhiteSpace(_editBuilding.Name) || _isBusy) return;
+        _isBusy = true;
+        try
+        {
+            var result = await Mediator.Send(new UpdateBuildingCommand(
+                _editingBuildingId.Value,
+                _editBuilding.Name.Trim(),
+                _editBuilding.MunicipalNo?.Trim(),
+                _editBuilding.Type));
+            if (result.IsSuccess) { _editingBuildingId = null; await LoadSchemaAsync(); }
+            else Snackbar.Add(result.FirstError.Message, Severity.Error);
+        }
+        finally { _isBusy = false; }
+    }
+
+    private async Task DeleteBuildingAsync(Guid buildingId, string name)
+    {
+        if (_isBusy) return;
+        var ok = await JS.InvokeAsync<bool>("confirm", $"Yapı '{name}' silinecek. Devam?");
+        if (!ok) return;
+        _isBusy = true;
+        try
+        {
+            var result = await Mediator.Send(new DeleteBuildingCommand(buildingId));
+            if (result.IsSuccess) await LoadSchemaAsync();
+            else Snackbar.Add(result.FirstError.Message, Severity.Error);
+        }
+        finally { _isBusy = false; }
+    }
+
+    private async Task MoveBuildingAsync(BuildingDto building, ParcelDto parcel, int direction)
+    {
+        if (_isBusy) return;
+        var ordered = parcel.Buildings.OrderBy(b => b.SortOrder).ToList();
+        var idx = ordered.IndexOf(building);
+        if (idx + direction < 0 || idx + direction >= ordered.Count) return;
+        ordered.RemoveAt(idx);
+        ordered.Insert(idx + direction, building);
+        _isBusy = true;
+        try
+        {
+            var result = await Mediator.Send(
+                new ReorderBuildingsCommand(parcel.Id, ordered.Select(b => b.Id).ToList()));
+            if (result.IsSuccess) await LoadSchemaAsync();
+            else Snackbar.Add(result.FirstError.Message, Severity.Error);
+        }
+        finally { _isBusy = false; }
+    }
+
+    // ── Unit ─────────────────────────────────────────────────────────────────
+
+    private void ToggleAddUnit(Guid buildingId)
+    {
+        if (_unitFormBuildingId == buildingId)
+        {
+            _unitFormBuildingId = null;
+        }
+        else
+        {
+            _unitFormBuildingId = buildingId;
+            _isEditingUnit = false;
+            _editingUnitId = null;
+            _unitForm.Reset();
+        }
+    }
+
+    private void StartEditUnit(Guid buildingId, UnitDto unit)
+    {
+        _unitFormBuildingId = buildingId;
+        _isEditingUnit = true;
+        _editingUnitId = unit.Id;
+        _unitForm.Load(unit);
+    }
+
+    private async Task SaveUnitAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_unitForm.Number) || _isBusy) return;
+        _isBusy = true;
+        try
+        {
+            if (_isEditingUnit && _editingUnitId.HasValue)
+            {
+                var result = await Mediator.Send(new UpdateUnitCommand(
+                    _editingUnitId.Value,
+                    _unitForm.Number.Trim(),
+                    _unitForm.NationalAddressCode?.Trim(),
+                    _unitForm.Type,
+                    _unitForm.SquareMeters,
+                    _unitForm.LandShare,
+                    _unitForm.AllocatedArea,
+                    _unitForm.Floor,
+                    _unitForm.Orientation,
+                    _unitForm.Layout));
+
+                if (result.IsSuccess)
+                {
+                    _unitFormBuildingId = null;
+                    _editingUnitId = null;
+                    _isEditingUnit = false;
+                    _unitForm.Reset();
+                    await LoadSchemaAsync();
+                }
+                else Snackbar.Add(result.FirstError.Message, Severity.Error);
+            }
+            else if (_unitFormBuildingId.HasValue)
+            {
+                var result = await Mediator.Send(new CreateUnitCommand(
+                    _unitFormBuildingId.Value,
+                    _unitForm.Number.Trim(),
+                    _unitForm.NationalAddressCode?.Trim(),
+                    _unitForm.Type,
+                    _unitForm.SquareMeters,
+                    _unitForm.LandShare,
+                    _unitForm.AllocatedArea,
+                    _unitForm.Floor,
+                    _unitForm.Orientation,
+                    _unitForm.Layout));
+
+                if (result.IsSuccess)
+                {
+                    _unitForm.Reset();
+                    Snackbar.Add("BB eklendi.", Severity.Success);
+                    await LoadSchemaAsync();
+                }
+                else Snackbar.Add(result.FirstError.Message, Severity.Error);
+            }
+        }
+        finally { _isBusy = false; }
+    }
+
+    private async Task DeleteUnitAsync(Guid unitId, string number)
+    {
+        if (_isBusy) return;
+        var ok = await JS.InvokeAsync<bool>("confirm", $"BB '{number}' silinecek. Devam?");
+        if (!ok) return;
+        _isBusy = true;
+        try
+        {
+            var result = await Mediator.Send(new DeleteUnitCommand(unitId));
+            if (result.IsSuccess) await LoadSchemaAsync();
+            else Snackbar.Add(result.FirstError.Message, Severity.Error);
+        }
+        finally { _isBusy = false; }
+    }
+
+    private async Task MoveUnitAsync(UnitDto unit, BuildingDto building, int direction)
+    {
+        if (_isBusy) return;
+        var ordered = building.Units.OrderBy(u => u.SortOrder).ToList();
+        var idx = ordered.IndexOf(unit);
+        if (idx + direction < 0 || idx + direction >= ordered.Count) return;
+        ordered.RemoveAt(idx);
+        ordered.Insert(idx + direction, unit);
+        _isBusy = true;
+        try
+        {
+            var result = await Mediator.Send(
+                new ReorderUnitsCommand(building.Id, ordered.Select(u => u.Id).ToList()));
+            if (result.IsSuccess) await LoadSchemaAsync();
+            else Snackbar.Add(result.FirstError.Message, Severity.Error);
+        }
+        finally { _isBusy = false; }
+    }
+
+    // ── Excel ────────────────────────────────────────────────────────────────
+
+    private async Task DownloadTemplateAsync()
+    {
+        if (_isBusy) return;
+        _isBusy = true;
+        try
+        {
+            var result = await Mediator.Send(new GenerateBuildingSchemaTemplateQuery());
+            if (result.IsSuccess)
+            {
+                var base64 = Convert.ToBase64String(result.Value!);
+                await JS.InvokeVoidAsync("cleantenant.downloadBlobBase64",
+                    "yapi-semasi-sablonu.xlsx", base64,
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            }
+            else Snackbar.Add(result.FirstError.Message, Severity.Error);
+        }
+        finally { _isBusy = false; }
+    }
+
+    private void OnImportFileSelected(InputFileChangeEventArgs e) => _importFile = e.File;
+
+    private async Task ImportExcelAsync()
+    {
+        if (_importFile is null || _isBusy) return;
+        _isBusy = true;
+        try
+        {
+            await using var stream = _importFile.OpenReadStream(maxAllowedSize: 10_485_760);
+            var result = await Mediator.Send(new ImportBuildingSchemaCommand(CompanyId, stream));
+
+            if (result.IsFailure) { Snackbar.Add(result.FirstError.Message, Severity.Error); return; }
+
+            var importResult = result.Value;
+            if (importResult is null) return;
+            if (importResult.HasErrors && importResult.ErrorWorkbook is not null)
+            {
+                var base64 = Convert.ToBase64String(importResult.ErrorWorkbook);
+                await JS.InvokeVoidAsync("cleantenant.downloadBlobBase64",
+                    "yapi-semasi-hatalar.xlsx", base64,
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+                Snackbar.Add("Excel'de hatalar var. Hata raporu indirildi.", Severity.Warning);
+            }
+            else
+            {
+                Snackbar.Add($"{importResult.ImportedUnitCount} bağımsız bölüm aktarıldı.", Severity.Success);
+                _showImport = false;
+                _importFile = null;
+                await LoadSchemaAsync();
+            }
+        }
+        finally { _isBusy = false; }
+    }
+
+    // ── Label helpers ────────────────────────────────────────────────────────
+
+    private static string BuildingTypeLabel(BuildingType t) => t switch
+    {
+        BuildingType.Residential => "Konut",
+        BuildingType.ResidentialCommercial => "Konut+İşyeri",
+        BuildingType.ShoppingMall => "AVM",
+        BuildingType.Office => "Ofis",
+        BuildingType.Warehouse => "Depo",
+        _ => "Diğer",
+    };
+
+    private static string UnitTypeLabel(UnitType t) => t switch
+    {
+        UnitType.Apartment => "Daire",
+        UnitType.Office => "Ofis",
+        UnitType.Shop => "Dükkan",
+        UnitType.Store => "Mağaza",
+        UnitType.Storage => "Depo",
+        UnitType.Parking => "Otopark",
+        UnitType.Shelter => "Sığınak",
+        _ => "Diğer",
+    };
+
+    private static string OrientationLabel(CleanTenant.Domain.Tenant.BuildingSchema.Orientation o) => o switch
+    {
+        CleanTenant.Domain.Tenant.BuildingSchema.Orientation.North => "Kuzey",
+        CleanTenant.Domain.Tenant.BuildingSchema.Orientation.South => "Güney",
+        CleanTenant.Domain.Tenant.BuildingSchema.Orientation.East => "Doğu",
+        CleanTenant.Domain.Tenant.BuildingSchema.Orientation.West => "Batı",
+        CleanTenant.Domain.Tenant.BuildingSchema.Orientation.NorthEast => "Kuzeydoğu",
+        CleanTenant.Domain.Tenant.BuildingSchema.Orientation.NorthWest => "Kuzeybatı",
+        CleanTenant.Domain.Tenant.BuildingSchema.Orientation.SouthEast => "Güneydoğu",
+        CleanTenant.Domain.Tenant.BuildingSchema.Orientation.SouthWest => "Güneybatı",
+        _ => "Belirsiz",
+    };
+
+    private static string LayoutLabel(ApartmentLayout l) => l switch
+    {
+        ApartmentLayout.Studio => "Stüdyo",
+        ApartmentLayout.OneRoom => "1+0",
+        ApartmentLayout.OneBedroom => "1+1",
+        ApartmentLayout.TwoBedroom => "2+1",
+        ApartmentLayout.ThreeBedroom => "3+1",
+        ApartmentLayout.FourBedroom => "4+1",
+        ApartmentLayout.FiveBedroom => "5+1",
+        _ => "Diğer",
+    };
+
+    // ── Inner models ─────────────────────────────────────────────────────────
+
+    private sealed class BuildingFormModel
+    {
+        public string Name { get; set; } = string.Empty;
+        public string? MunicipalNo { get; set; }
+        public BuildingType Type { get; set; } = BuildingType.Residential;
+
+        public void Reset()
+        {
+            Name = string.Empty;
+            MunicipalNo = null;
+            Type = BuildingType.Residential;
+        }
+
+        public void Load(BuildingDto b)
+        {
+            Name = b.Name;
+            MunicipalNo = b.MunicipalNo;
+            Type = b.Type;
+        }
+    }
+
+    private sealed class UnitFormModel
+    {
+        public string Number { get; set; } = string.Empty;
+        public string? NationalAddressCode { get; set; }
+        public UnitType Type { get; set; } = UnitType.Apartment;
+        public decimal SquareMeters { get; set; }
+        public int LandShare { get; set; }
+        public decimal? AllocatedArea { get; set; }
+        public int Floor { get; set; }
+        public CleanTenant.Domain.Tenant.BuildingSchema.Orientation Orientation { get; set; } = CleanTenant.Domain.Tenant.BuildingSchema.Orientation.Unknown;
+        public ApartmentLayout Layout { get; set; } = ApartmentLayout.OneBedroom;
+
+        public void Reset()
+        {
+            Number = string.Empty;
+            NationalAddressCode = null;
+            Type = UnitType.Apartment;
+            SquareMeters = 0;
+            LandShare = 0;
+            AllocatedArea = null;
+            Floor = 0;
+            Orientation = CleanTenant.Domain.Tenant.BuildingSchema.Orientation.Unknown;
+            Layout = ApartmentLayout.OneBedroom;
+        }
+
+        public void Load(UnitDto u)
+        {
+            Number = u.Number;
+            NationalAddressCode = u.NationalAddressCode;
+            Type = u.Type;
+            SquareMeters = u.SquareMeters;
+            LandShare = u.LandShare;
+            AllocatedArea = u.AllocatedArea;
+            Floor = u.Floor;
+            Orientation = u.Orientation;
+            Layout = u.Layout;
+        }
+    }
+}

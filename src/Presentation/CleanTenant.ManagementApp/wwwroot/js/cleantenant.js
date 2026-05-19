@@ -207,6 +207,15 @@ window.cleantenant.submitTenantSwitch = function (tenantId, returnUrl, companyId
     submitFormWithReturn('/auth/switch-tenant', returnUrl, fields);
 };
 
+// ---------------------------------------------------------------------------
+// Verilen id'li elementi programatik olarak click'ler.
+// Blazor'da gizli InputFile'ı tetiklemek için kullanılır.
+// ---------------------------------------------------------------------------
+window.cleantenant.clickElement = function (id) {
+    const el = document.getElementById(id);
+    if (el) el.click();
+};
+
 // System scope'a geri dönüş (TenantSwitcher dropdown'undaki "System Scope" seçeneği)
 window.cleantenant.submitSwitchToSystem = function (returnUrl) {
     submitFormWithReturn('/auth/switch-to-system', returnUrl, {});

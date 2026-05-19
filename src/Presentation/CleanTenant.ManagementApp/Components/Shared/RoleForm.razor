@@ -1,0 +1,75 @@
+@using MudBlazor
+
+<MudForm @ref="_form" Model="@Model" Validation="@ValidateValue" ValidationDelay="0">
+    <MudCard Elevation="0" Outlined="true">
+        <MudCardContent>
+            <MudGrid>
+                <MudItem xs="12">
+                    <MudText Typo="Typo.h6">Rol Bilgileri</MudText>
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudTextField @bind-Value="Model.Name"
+                                  For="@(() => Model.Name)"
+                                  Label="Rol Adı *"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  MaxLength="256"
+                                  Immediate="true" />
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="int"
+                               @bind-Value="Model.Scope"
+                               Label="Kapsam Seviyesi *"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               ReadOnly="@ScopeReadOnly">
+                        <MudSelectItem Value="0">Sistem</MudSelectItem>
+                        <MudSelectItem Value="1">Yönetim</MudSelectItem>
+                        <MudSelectItem Value="2">Site</MudSelectItem>
+                        <MudSelectItem Value="3">Birim</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="Model.Description"
+                                  For="@(() => Model.Description)"
+                                  Label="Açıklama"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Lines="2"
+                                  MaxLength="1024"
+                                  Immediate="true" />
+                </MudItem>
+            </MudGrid>
+        </MudCardContent>
+
+        <MudCardActions Class="d-flex justify-end pa-4">
+            @if (!string.IsNullOrEmpty(CancelHref))
+            {
+                <MudButton Href="@CancelHref"
+                           Variant="Variant.Text"
+                           Class="mr-2"
+                           Disabled="@IsSubmitting">
+                    İptal
+                </MudButton>
+            }
+            <MudButton OnClick="@SubmitAsync"
+                       Color="Color.Primary"
+                       Variant="Variant.Filled"
+                       Disabled="@IsSubmitting"
+                       StartIcon="@(IsSubmitting ? null : Icons.Material.Filled.Save)">
+                @if (IsSubmitting)
+                {
+                    <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                    <MudText Class="ms-2">Kaydediliyor…</MudText>
+                }
+                else
+                {
+                    @SubmitButtonText
+                }
+            </MudButton>
+        </MudCardActions>
+    </MudCard>
+</MudForm>

@@ -67,6 +67,11 @@ else
                                    Color="Color.Info"
                                    Title="Düzenle"
                                    Href="@($"/tenant/companies/{context.Item.Id}/edit")" />
+                    <MudIconButton Icon="@Icons.Material.Filled.AccountTree"
+                                   Size="Size.Small"
+                                   Color="Color.Secondary"
+                                   Title="Yapı Şeması"
+                                   Href="@($"/tenant/building-schema/{context.Item.Id}")" />
                     <MudIconButton Icon="@Icons.Material.Filled.Login"
                                    Size="Size.Small"
                                    Color="Color.Primary"
