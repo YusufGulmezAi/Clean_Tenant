@@ -163,81 +163,81 @@ namespace CleanTenant.Infrastructure.Persistence.Catalog.Migrations
                 table: "banks",
                 column: "full_name",
                 unique: true,
-                filter: "\"IsDeleted\" = false");
+                filter: "is_deleted = false");
 
             migrationBuilder.CreateIndex(
                 name: "ix_banks_url_code",
                 table: "banks",
                 column: "url_code",
                 unique: true,
-                filter: "\"IsDeleted\" = false");
+                filter: "is_deleted = false");
 
             migrationBuilder.CreateIndex(
                 name: "ix_building_types_name",
                 table: "building_types",
                 column: "name",
                 unique: true,
-                filter: "\"IsDeleted\" = false");
+                filter: "is_deleted = false");
 
             migrationBuilder.CreateIndex(
                 name: "ix_building_types_url_code",
                 table: "building_types",
                 column: "url_code",
                 unique: true,
-                filter: "\"IsDeleted\" = false");
+                filter: "is_deleted = false");
 
             migrationBuilder.CreateIndex(
                 name: "ix_districts_province_id_name",
                 table: "districts",
                 columns: new[] { "province_id", "name" },
-                filter: "\"IsDeleted\" = false");
+                filter: "is_deleted = false");
 
             migrationBuilder.CreateIndex(
                 name: "ix_districts_url_code",
                 table: "districts",
                 column: "url_code",
                 unique: true,
-                filter: "\"IsDeleted\" = false");
+                filter: "is_deleted = false");
 
             migrationBuilder.CreateIndex(
                 name: "ix_neighborhoods_district_id_name",
                 table: "neighborhoods",
                 columns: new[] { "district_id", "name" },
-                filter: "\"IsDeleted\" = false");
+                filter: "is_deleted = false");
 
             migrationBuilder.CreateIndex(
                 name: "ix_neighborhoods_url_code",
                 table: "neighborhoods",
                 column: "url_code",
                 unique: true,
-                filter: "\"IsDeleted\" = false");
+                filter: "is_deleted = false");
 
             migrationBuilder.CreateIndex(
                 name: "ix_provinces_name",
                 table: "provinces",
                 column: "name",
-                filter: "\"IsDeleted\" = false");
+                filter: "is_deleted = false");
 
             migrationBuilder.CreateIndex(
                 name: "ix_provinces_url_code",
                 table: "provinces",
                 column: "url_code",
                 unique: true,
-                filter: "\"IsDeleted\" = false");
+                filter: "is_deleted = false");
 
             migrationBuilder.CreateIndex(
                 name: "ix_residential_types_name",
                 table: "residential_types",
                 column: "name",
                 unique: true,
-                filter: "\"IsDeleted\" = false");
+                filter: "is_deleted = false");
 
             migrationBuilder.CreateIndex(
                 name: "ix_residential_types_url_code",
                 table: "residential_types",
                 column: "url_code",
                 unique: true,
-                filter: "\"IsDeleted\" = false");
+                filter: "is_deleted = false");
         }
 
         /// <inheritdoc />

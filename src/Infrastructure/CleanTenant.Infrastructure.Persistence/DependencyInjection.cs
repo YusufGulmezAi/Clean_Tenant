@@ -152,6 +152,7 @@ public static class DependencyInjection
                 .UseSnakeCaseNamingConvention()
                 .ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning));
         });
+        services.AddScoped<IAuditDbContext>(sp => sp.GetRequiredService<AuditDbContext>());
         return services;
     }
 

@@ -87,5 +87,9 @@ public static class PermissionCatalog
         // ---------- System ----------
         new("System.Settings.Manage", "Sistem ayarlarını yönetme", "System"),
         new("System.Localization.Manage", "Dil kaynaklarını yönetme", "System"),
+
+        // ---------- LookUp Tabloları ----------
+        new("LookUp.Read", "LookUp tabloları (il, ilçe, mahalle, mesken tipi, yapı tipi, banka) görüntüleme", "LookUp"),
+        new("LookUp.Manage", "LookUp tablolarını oluşturma, güncelleme ve silme", "LookUp"),
     ];
 }

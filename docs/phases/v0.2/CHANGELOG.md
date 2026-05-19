@@ -7,6 +7,47 @@ Bu dosya, Faz 1 (UI başlangıç + ManagementApp) kapsamında yapılan tüm alt-
 
 ---
 
+## v0.2.6 — 2026-05-19 — Audit Explorer
+
+### Kapsam
+`audit_entries` tablosunu filtreli ve sayfalı okuyabilen sistem yöneticisi sayfası.
+
+### Eklenen Dosyalar (9 yeni)
+
+**Application:**
+- [IAuditDbContext.cs](../../../src/Core/CleanTenant.Application/Common/Persistence/IAuditDbContext.cs) — AuditDbContext'i Application katmanına açan interface (`DbSet<AuditEntry> AuditEntries`)
+- [AuditListItem.cs](../../../src/Core/CleanTenant.Application/Features/System/Audit/AuditListItem.cs) — Audit Explorer özet DTO (17 alan)
+- [AuditFilter.cs](../../../src/Core/CleanTenant.Application/Features/System/Audit/AuditFilter.cs) — Filtre parametreleri (DateFrom/To, UserId, UserEmail, EntityType, Action, TenantId, CompanyId, Page, PageSize)
+- [AuditPageResult.cs](../../../src/Core/CleanTenant.Application/Features/System/Audit/AuditPageResult.cs) — Sayfalı sonuç wrapper (Items, TotalCount, Page, PageSize)
+- [GetAuditEntriesQuery.cs](../../../src/Core/CleanTenant.Application/Features/System/Audit/GetAuditEntriesQuery.cs) + [GetAuditEntriesQueryHandler.cs](../../../src/Core/CleanTenant.Application/Features/System/Audit/GetAuditEntriesQueryHandler.cs) — EF Core AsNoTracking, dinamik filtre zinciri, OrderByDescending(Timestamp), Skip/Take sayfalama; maks 200/sayfa
+
+**ManagementApp:**
+- [AuditExplorerPage.razor](../../../src/Presentation/CleanTenant.ManagementApp/Components/Pages/SystemArea/AuditExplorerPage.razor) — `/system/audit` — MudExpansionPanel filtre paneli + MudDataGrid (Hideable kolonlar) + el ile sayfalama + MudDrawer sağ detay görünümü
+
+### Güncellenen Dosyalar
+
+**Infrastructure:**
+- [AuditDbContext.cs](../../../src/Infrastructure/CleanTenant.Infrastructure.Persistence/Audit/AuditDbContext.cs) — `IAuditDbContext` eklendi
+- [DependencyInjection.cs](../../../src/Infrastructure/CleanTenant.Infrastructure.Persistence/DependencyInjection.cs) — `services.AddScoped<IAuditDbContext>(...)` kaydı
+
+**ManagementApp:**
+- [NavMenu.razor](../../../src/Presentation/CleanTenant.ManagementApp/Components/Layout/NavMenu.razor) — "Audit Explorer" → `/system/audit` aktif link (önceki "Faz 1.6 / disabled" yerini aldı)
+
+### UI Kararları
+- Varsayılan görünür kolonlar: Tarih/Saat, Entity Tipi, Entity ID (kısa), İşlem chip, Kullanıcı, Yönetim (TenantName), Site ID (kısa), Değişiklikler (truncated)
+- Varsayılan gizli (toggle edilebilir): IP Adresi, Tarayıcı, İşletim Sistemi, Endpoint
+- MudDataGrid `ShowColumnOptions=true` ile built-in kolon seçici aktif
+- Satıra tıklayınca sağ MudDrawer'da tam detay + güzel-formatlanmış JSON
+
+### Kısıtlar
+- `CompanyName` ve entity instance adı (EntityName) audit DB'de denormalize edilmemiş; CompanyId ve EntityType gösterilir
+- TenantName audit_entries'e denormalize yazıldığından "Yönetim" kolonu TenantId yerine ad gösterir
+
+### Doğrulama
+- ✓ `dotnet build CleanTenant.ManagementApp.csproj` — 0 uyarı / 0 hata
+
+---
+
 ## v0.2.3.b — 2026-05-18 — Switch-Tenant UI (AppBar dropdown + cross-tenant context)
 
 ### Sorun

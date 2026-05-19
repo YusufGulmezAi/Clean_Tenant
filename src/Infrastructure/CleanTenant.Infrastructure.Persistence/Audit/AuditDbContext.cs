@@ -1,3 +1,4 @@
+using CleanTenant.Application.Common.Persistence;
 using CleanTenant.Domain.Auditing;
 using Microsoft.EntityFrameworkCore;
 
@@ -11,7 +12,7 @@ namespace CleanTenant.Infrastructure.Persistence.Audit;
 /// kabul edilemez).
 /// </para>
 /// </summary>
-public sealed class AuditDbContext : DbContext
+public sealed class AuditDbContext : DbContext, IAuditDbContext
 {
     /// <summary>EF design-time için ctor.</summary>
     public AuditDbContext(DbContextOptions<AuditDbContext> options) : base(options)

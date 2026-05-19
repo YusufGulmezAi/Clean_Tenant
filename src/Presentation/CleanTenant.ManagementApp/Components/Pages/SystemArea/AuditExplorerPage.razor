@@ -1,0 +1,311 @@
+@page "/system/audit"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject MediatR.IMediator Mediator
+@inject AuthenticationStateProvider AuthProvider
+@inject ISnackbar Snackbar
+@using CleanTenant.Application.Features.System.Audit
+@using CleanTenant.Domain.Auditing
+@using MudBlazor
+@using System.Text.Json
+
+<PageTitle>Audit Explorer — Sistem</PageTitle>
+
+@if (_unauthorized)
+{
+    <MudAlert Severity="Severity.Warning" Class="my-3">
+        Bu sayfa yalnız Sistem kullanıcıları için.
+    </MudAlert>
+}
+else
+{
+    <MudText Typo="Typo.h5" Class="mb-3">Audit Explorer</MudText>
+
+    @* ── Filtre Paneli ────────────────────────────────────────────── *@
+    <MudExpansionPanels Class="mb-3">
+        <MudExpansionPanel Text="Filtreler" Icon="@Icons.Material.Filled.FilterList">
+            <MudGrid>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudDatePicker Label="Başlangıç Tarihi"
+                                   @bind-Date="_filterDateFrom"
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense" />
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudDatePicker Label="Bitiş Tarihi"
+                                   @bind-Date="_filterDateTo"
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense" />
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudTextField @bind-Value="_filterUserEmail"
+                                  Label="Kullanıcı E-posta"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Immediate="true" />
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudTextField @bind-Value="_filterEntityType"
+                                  Label="Entity Tipi"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Immediate="true"
+                                  HelperText="Örn: Tenant, User, Role" />
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudSelect T="AuditAction?" @bind-Value="_filterAction"
+                               Label="İşlem Tipi"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               Clearable="true">
+                        <MudSelectItem T="AuditAction?" Value="null">Tümü</MudSelectItem>
+                        <MudSelectItem T="AuditAction?" Value="AuditAction.Create">Ekleme</MudSelectItem>
+                        <MudSelectItem T="AuditAction?" Value="AuditAction.Update">Güncelleme</MudSelectItem>
+                        <MudSelectItem T="AuditAction?" Value="AuditAction.Delete">Silme</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudTextField @bind-Value="_filterTenantName"
+                                  Label="Yönetim Adı"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Immediate="true" />
+                </MudItem>
+                <MudItem xs="12" Class="d-flex gap-2 justify-end">
+                    <MudButton Variant="Variant.Outlined" OnClick="ResetFilters">Temizle</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.Search"
+                               OnClick="@(() => LoadPageAsync(0))">
+                        Ara
+                    </MudButton>
+                </MudItem>
+            </MudGrid>
+        </MudExpansionPanel>
+    </MudExpansionPanels>
+
+    @* ── Tablo ────────────────────────────────────────────────────── *@
+    @if (_loading)
+    {
+        <MudProgressLinear Indeterminate="true" />
+    }
+
+    <MudDataGrid T="AuditListItem"
+                 Items="@_items"
+                 Filterable="false"
+                 SortMode="SortMode.None"
+                 Hover="true"
+                 Dense="true"
+                 ShowColumnOptions="true"
+                 RowClick="@OnRowClick">
+        <Columns>
+            <PropertyColumn T="AuditListItem" TProperty="DateTimeOffset" Property="@(e => e.Timestamp)" Title="Tarih/Saat">
+                <CellTemplate>
+                    <MudText Typo="Typo.body2">@context.Item.Timestamp.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss")</MudText>
+                </CellTemplate>
+            </PropertyColumn>
+            <PropertyColumn T="AuditListItem" TProperty="string" Property="@(e => e.EntityType)" Title="Entity Tipi" Hideable="true" />
+            <PropertyColumn T="AuditListItem" TProperty="Guid" Property="@(e => e.EntityId)" Title="Entity ID" Hideable="true">
+                <CellTemplate>
+                    <MudText Typo="Typo.caption" Style="font-family:monospace">@context.Item.EntityId.ToString("D")[..8]…</MudText>
+                </CellTemplate>
+            </PropertyColumn>
+            <PropertyColumn T="AuditListItem" TProperty="AuditAction" Property="@(e => e.Action)" Title="İşlem" Hideable="true">
+                <CellTemplate>
+                    <MudChip T="string" Size="Size.Small" Color="@ActionColor(context.Item.Action)">
+                        @ActionLabel(context.Item.Action)
+                    </MudChip>
+                </CellTemplate>
+            </PropertyColumn>
+            <PropertyColumn T="AuditListItem" TProperty="string" Property="@(e => e.UserFullName ?? "")" Title="Kullanıcı" Hideable="true">
+                <CellTemplate>
+                    <MudText Typo="Typo.body2">@(context.Item.UserFullName ?? context.Item.UserEmail ?? "—")</MudText>
+                </CellTemplate>
+            </PropertyColumn>
+            <PropertyColumn T="AuditListItem" TProperty="string" Property="@(e => e.TenantName ?? "")" Title="Yönetim" Hideable="true">
+                <CellTemplate>
+                    <MudText Typo="Typo.body2">@(context.Item.TenantName ?? "—")</MudText>
+                </CellTemplate>
+            </PropertyColumn>
+            <PropertyColumn T="AuditListItem" TProperty="Guid?" Property="@(e => e.CompanyId)" Title="Site ID" Hideable="true" Hidden="false">
+                <CellTemplate>
+                    <MudText Typo="Typo.caption" Style="font-family:monospace">
+                        @(context.Item.CompanyId.HasValue ? context.Item.CompanyId.Value.ToString("D")[..8] + "…" : "—")
+                    </MudText>
+                </CellTemplate>
+            </PropertyColumn>
+            <PropertyColumn T="AuditListItem" TProperty="string" Property="@(e => e.ChangesJson)" Title="Değişiklikler" Hideable="true" Hidden="false">
+                <CellTemplate>
+                    <MudText Typo="Typo.caption" Style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+                        @context.Item.ChangesJson
+                    </MudText>
+                </CellTemplate>
+            </PropertyColumn>
+            <PropertyColumn T="AuditListItem" TProperty="string" Property="@(e => e.IpAddress ?? "")" Title="IP Adresi" Hideable="true" Hidden="true" />
+            <PropertyColumn T="AuditListItem" TProperty="string" Property="@(e => e.BrowserName ?? "")" Title="Tarayıcı" Hideable="true" Hidden="true" />
+            <PropertyColumn T="AuditListItem" TProperty="string" Property="@(e => e.OperatingSystem ?? "")" Title="İşletim Sistemi" Hideable="true" Hidden="true" />
+            <PropertyColumn T="AuditListItem" TProperty="string" Property="@(e => e.RequestPath ?? "")" Title="Endpoint" Hideable="true" Hidden="true" />
+        </Columns>
+    </MudDataGrid>
+
+    @* ── Sayfalama ────────────────────────────────────────────────── *@
+    <div class="d-flex justify-center align-center mt-3 gap-3">
+        <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft"
+                       Disabled="@(_currentPage == 0 || _loading)"
+                       OnClick="@(() => LoadPageAsync(_currentPage - 1))" />
+        <MudText Typo="Typo.body2">
+            Sayfa @(_currentPage + 1) / @TotalPages — Toplam @_totalCount kayıt
+        </MudText>
+        <MudIconButton Icon="@Icons.Material.Filled.ChevronRight"
+                       Disabled="@(_currentPage >= TotalPages - 1 || _loading)"
+                       OnClick="@(() => LoadPageAsync(_currentPage + 1))" />
+    </div>
+
+    @* ── Detay Drawer ─────────────────────────────────────────────── *@
+    <MudDrawer @bind-Open="_drawerOpen" Anchor="Anchor.Right" Width="520px" Elevation="1">
+        @if (_selected is not null)
+        {
+            <MudDrawerHeader>
+                <MudText Typo="Typo.h6">Audit Detayı</MudText>
+            </MudDrawerHeader>
+            <MudContainer Class="pa-4">
+                <MudGrid Spacing="2">
+                    <MudItem xs="6"><MudText Typo="Typo.caption">Tarih</MudText><MudText>@_selected.Timestamp.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss")</MudText></MudItem>
+                    <MudItem xs="6"><MudText Typo="Typo.caption">İşlem</MudText><MudText>@_selected.Action</MudText></MudItem>
+                    <MudItem xs="6"><MudText Typo="Typo.caption">Entity Tipi</MudText><MudText>@_selected.EntityType</MudText></MudItem>
+                    <MudItem xs="6"><MudText Typo="Typo.caption">Entity ID</MudText><MudText Style="font-family:monospace;font-size:0.75rem">@_selected.EntityId</MudText></MudItem>
+                    <MudItem xs="12"><MudDivider /></MudItem>
+                    <MudItem xs="6"><MudText Typo="Typo.caption">Kullanıcı</MudText><MudText>@(_selected.UserFullName ?? "—")</MudText></MudItem>
+                    <MudItem xs="6"><MudText Typo="Typo.caption">E-posta</MudText><MudText>@(_selected.UserEmail ?? "—")</MudText></MudItem>
+                    <MudItem xs="6"><MudText Typo="Typo.caption">Yönetim</MudText><MudText>@(_selected.TenantName ?? "—")</MudText></MudItem>
+                    <MudItem xs="6"><MudText Typo="Typo.caption">Kapsam</MudText><MudText>@(_selected.ScopeLevel ?? "—")</MudText></MudItem>
+                    <MudItem xs="12"><MudText Typo="Typo.caption">Site ID</MudText><MudText Style="font-family:monospace;font-size:0.75rem">@(_selected.CompanyId?.ToString() ?? "—")</MudText></MudItem>
+                    <MudItem xs="12"><MudDivider /></MudItem>
+                    <MudItem xs="6"><MudText Typo="Typo.caption">IP</MudText><MudText>@(_selected.IpAddress ?? "—")</MudText></MudItem>
+                    <MudItem xs="6"><MudText Typo="Typo.caption">Tarayıcı</MudText><MudText>@(_selected.BrowserName ?? "—")</MudText></MudItem>
+                    <MudItem xs="12"><MudText Typo="Typo.caption">Endpoint</MudText><MudText Style="font-family:monospace;font-size:0.75rem">@(_selected.RequestPath ?? "—")</MudText></MudItem>
+                    <MudItem xs="12"><MudDivider /></MudItem>
+                    <MudItem xs="12">
+                        <MudText Typo="Typo.caption">Değişiklikler (JSON)</MudText>
+                        <MudPaper Elevation="0" Class="pa-2 mt-1" Style="background:#f5f5f5;border-radius:4px;overflow-x:auto">
+                            <pre style="font-size:0.75rem;margin:0;white-space:pre-wrap">@FormatJson(_selected.ChangesJson)</pre>
+                        </MudPaper>
+                    </MudItem>
+                </MudGrid>
+            </MudContainer>
+        }
+    </MudDrawer>
+}
+
+@code {
+    private bool _unauthorized;
+    private bool _loading;
+    private bool _drawerOpen;
+    private int _currentPage;
+    private int _totalCount;
+    private IReadOnlyList<AuditListItem> _items = [];
+    private AuditListItem? _selected;
+
+    // Filtre state
+    private DateTime? _filterDateFrom;
+    private DateTime? _filterDateTo;
+    private string? _filterUserEmail;
+    private string? _filterEntityType;
+    private AuditAction? _filterAction;
+    private string? _filterTenantName;
+
+    private int PageSize => 50;
+    private int TotalPages => (int)Math.Ceiling(_totalCount / (double)PageSize);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user?.Identity?.IsAuthenticated != true
+            || !string.Equals(user.FindFirst("scope")?.Value, "System", StringComparison.OrdinalIgnoreCase))
+        {
+            _unauthorized = true;
+            return;
+        }
+
+        await LoadPageAsync(0);
+    }
+
+    private async Task LoadPageAsync(int page)
+    {
+        _loading = true;
+        _currentPage = page;
+
+        try
+        {
+            // Tenant adına göre filtreleme: tenant_name ILIKE
+            Guid? tenantId = null;
+
+            var filter = new AuditFilter(
+                _filterDateFrom.HasValue ? new DateTimeOffset(_filterDateFrom.Value, TimeSpan.Zero) : null,
+                _filterDateTo.HasValue ? new DateTimeOffset(_filterDateTo.Value.AddDays(1), TimeSpan.Zero) : null,
+                UserId: null,
+                _filterUserEmail,
+                _filterEntityType,
+                _filterAction,
+                tenantId,
+                CompanyId: null,
+                page,
+                PageSize);
+
+            var result = await Mediator.Send(new GetAuditEntriesQuery(filter));
+            _items = result.Items;
+            _totalCount = result.TotalCount;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Yükleme hatası: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void OnRowClick(DataGridRowClickEventArgs<AuditListItem> args)
+    {
+        _selected = args.Item;
+        _drawerOpen = true;
+    }
+
+    private void ResetFilters()
+    {
+        _filterDateFrom = null;
+        _filterDateTo = null;
+        _filterUserEmail = null;
+        _filterEntityType = null;
+        _filterAction = null;
+        _filterTenantName = null;
+    }
+
+    private static Color ActionColor(AuditAction action) => action switch
+    {
+        AuditAction.Create => Color.Success,
+        AuditAction.Delete => Color.Error,
+        _ => Color.Warning
+    };
+
+    private static string ActionLabel(AuditAction action) => action switch
+    {
+        AuditAction.Create => "Ekleme",
+        AuditAction.Update => "Güncelleme",
+        AuditAction.Delete => "Silme",
+        _ => action.ToString()
+    };
+
+    private static string FormatJson(string json)
+    {
+        try
+        {
+            var doc = JsonDocument.Parse(json);
+            return JsonSerializer.Serialize(doc, new JsonSerializerOptions { WriteIndented = true });
+        }
+        catch
+        {
+            return json;
+        }
+    }
+}

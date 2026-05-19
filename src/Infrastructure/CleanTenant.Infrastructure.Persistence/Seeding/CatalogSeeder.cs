@@ -43,6 +43,7 @@ public sealed class CatalogSeeder
     {
         await SeedPermissionsAsync(cancellationToken);
         await SeedBuiltInRolesAsync(cancellationToken);
+        await SeedDeveloperPermissionsAsync(cancellationToken);
     }
 
     private async Task SeedPermissionsAsync(CancellationToken cancellationToken)
@@ -128,6 +129,60 @@ public sealed class CatalogSeeder
         else
         {
             _logger.LogInformation("Built-in rol seed: değişiklik yok ({Total} kayıt zaten mevcut).", BuiltInRoleCatalog.All.Count);
+        }
+    }
+
+    /// <summary>
+    /// Developer rolüne katalogdaki tüm permission'ları idempotent olarak atar.
+    /// Developer "tam erişim" rolüdür; yeni permission eklenince otomatik kazanır.
+    /// </summary>
+    private async Task SeedDeveloperPermissionsAsync(CancellationToken cancellationToken)
+    {
+        var developerRole = await _db.Roles
+            .AsNoTracking()
+            .FirstOrDefaultAsync(r => r.NormalizedName == "DEVELOPER", cancellationToken);
+
+        if (developerRole is null)
+        {
+            _logger.LogWarning("Developer rolü bulunamadı; permission seed atlandı.");
+            return;
+        }
+
+        var allPermissions = await _db.Permissions
+            .AsNoTracking()
+            .Select(p => new { p.Id })
+            .ToListAsync(cancellationToken);
+
+        var existingAssignments = await _db.RolePermissions
+            .AsNoTracking()
+            .Where(rp => rp.RoleId == developerRole.Id)
+            .Select(rp => rp.PermissionId)
+            .ToHashSetAsync(cancellationToken);
+
+        var added = 0;
+        foreach (var permission in allPermissions)
+        {
+            if (existingAssignments.Contains(permission.Id))
+                continue;
+
+            _db.RolePermissions.Add(new RolePermission
+            {
+                RoleId = developerRole.Id,
+                PermissionId = permission.Id,
+                GrantedAt = DateTimeOffset.UtcNow,
+                GrantedBy = null,
+            });
+            added++;
+        }
+
+        if (added > 0)
+        {
+            await _db.SaveChangesAsync(cancellationToken);
+            _logger.LogInformation("Developer rol permission seed: {Added} yeni atama yapıldı.", added);
+        }
+        else
+        {
+            _logger.LogInformation("Developer rol permission seed: değişiklik yok.");
         }
     }
 }
