@@ -16,6 +16,7 @@ public static class EndpointMappingExtensions
         app.MapSystemEndpoints();
         app.MapTenantAuditEndpoints();
         app.MapCompanyEndpoints();
+        app.MapRoleEndpoints();
         return app;
     }
 }
