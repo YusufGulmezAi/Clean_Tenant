@@ -7,12 +7,12 @@ Bu dosya, Faz 1 (UI başlangıç + ManagementApp) kapsamında yapılan tüm alt-
 
 ---
 
-## v0.2.10 — 🚧 IN PROGRESS (commit edilmemiş) — Lokalizasyon (Tam Tarama + RTL + Admin)
+## v0.2.10 — 2026-05-19 — Lokalizasyon (TR/EN/AR/RU/DE + RTL + DB-tabanlı + Admin)
+
+**Tag**: `v0.2.10` · **Mimari harita**: [v0.2.10-FINAL-ARCHITECTURE-MAP.md](v0.2.10-FINAL-ARCHITECTURE-MAP.md)
 
 ### Kapsam
-DB-tabanlı çoklu dil altyapısı (TR/EN/AR/RU/DE), tüm UI yüzeyinin lokalizasyonu, RTL (Arapça) desteği ve dil kaynakları yönetim sayfası. Faz 0/1 backend lokalize edilmemiştir — yalnız Presentation katmanı kapsamdadır.
-
-**Son commit'lenen tag**: v0.2.7. Tüm v0.2.10 işi şu an **uncommitted**; alt-fazlar bittikçe tek `v0.2.10` tag'iyle commit'lenecek.
+DB-tabanlı çoklu dil altyapısı (TR/EN/AR/RU/DE), tüm UI yüzeyinin lokalizasyonu, RTL (Arapça) desteği ve `/system/localization` admin yönetim sayfası. Faz 0/1 backend lokalize edilmemiştir — yalnız Presentation katmanı kapsamdadır.
 
 ### Mimari Karar: DB-Backed Localization (DbStringLocalizer + LocalizationStore)
 
@@ -48,7 +48,7 @@ DB-tabanlı çoklu dil altyapısı (TR/EN/AR/RU/DE), tüm UI yüzeyinin lokaliza
 | e.5 | TenantArea sayfaları (Companies, Roles, BuildingSchema, Settings — 8 sayfa) | ✅ |
 | e.6 | Auth (Login, 2FA Challenge, 2FA PreAuth Enroll, authenticated Enroll) + Home/About/Settings + NotFound — 10 sayfa | ✅ |
 | f | RTL (Arabic) — `MudRTLProvider` + `<body dir="rtl">` JS interop (ManagementApp + PortalApp) | ✅ |
-| **g** | **`/system/localization` admin sayfası (`System.Localization.Manage` izniyle) — anahtar düzenleme UI** | **⏸ Sıradaki** |
+| **g** | **`/system/localization` admin sayfası + permission seed + Application slice + WebApi endpoint + cache refresher** | ✅ (2026-05-19) |
 
 ### Eklenen Anahtar İstatistiği
 
@@ -119,24 +119,55 @@ DB-tabanlı çoklu dil altyapısı (TR/EN/AR/RU/DE), tüm UI yüzeyinin lokaliza
 - Home roadmap items + About Faz 0 listesi raw — dev notes
 - `Pages/Error.razor` (ASP.NET default) lokalize edilmedi
 
-### Kalan İş (g)
+### v0.2.10.g — Localization Admin Sayfası
 
-`/system/localization` admin sayfası:
-- `GetLocalizationEntriesQuery` + `UpdateLocalizationEntryCommand` (Application)
-- `Permission.System.Localization.Manage` PermissionCatalog'a ekle + SystemAdmin built-in role bağla
-- Razor sayfa: culture seçici + filtre + DataTable + drawer/inline edit
-- NavMenu `Sistem Yönetimi` grubunda link aktive edilir (link tanımı zaten hazır, `Disabled=true` → `false`)
+`/system/localization` — System operatör DB'deki çeviri anahtarlarını UI'dan düzenler. Tek-culture görünüm (culture dropdown + arama + "yalnız makine çevirisi" filtresi); sağdan drawer ile inline edit; kaydet sonrası `LocalizationStore.ReloadAsync` → NavMenu / sayfa label'ları canlı yansır.
 
-### Doğrulama (Tamamlanan Alt-fazlar)
+**Yeni dosyalar (Application):**
+- `Common/Localization/ILocalizationCacheRefresher.cs` — provider-agnostic abstraction
+- `Features/System/Localization/`:
+  - `LocalizationEntryListItem.cs` (DTO)
+  - `LocalizationEntryFilter.cs` (filter record)
+  - `LocalizationPageResult.cs` (sayfalı sonuç)
+  - `GetLocalizationEntriesQuery.cs` + `Handler.cs` (`[RequirePermission("System.Localization.Manage")]`)
+  - `UpdateLocalizationEntryCommand.cs` + `Handler.cs` + `Validator.cs` (FluentValidation)
 
-- ✓ Her alt-faz sonrası `dotnet build -t:Compile` — CSC/RZ hatası yok
-- ⏸ Manuel UI testi (TR/EN/AR culture spot-check) g sonrası
-- ⏸ `dotnet test` (mevcut testler etkilenmemeli) g sonrası
-- ⏸ Faz mimari haritası `v0.2.10-FINAL-ARCHITECTURE-MAP.md` g sonrası
+**Yeni dosyalar (Infrastructure.Persistence):**
+- `Localization/LocalizationCacheRefresher.cs` — `ILocalizationCacheRefresher` → `LocalizationStore.ReloadAsync` köprüsü
+
+**Yeni dosyalar (Presentation.WebApi):**
+- `Endpoints/SystemLocalizationEndpoints.cs` — `GET` + `PUT /api/v1/system/localization/entries`
+
+**Yeni dosyalar (Presentation.ManagementApp):**
+- `Components/Pages/SystemArea/LocalizationManagePage.razor` — filtre paneli + MudDataGrid + edit drawer (Audit Explorer pattern'iyle simetrik)
+
+**Güncellenen dosyalar:**
+- `Application/Common/Persistence/ICatalogDbContext.cs` — `DbSet<LocalizedResource> LocalizedResources`
+- `Infrastructure/Persistence/DependencyInjection.cs` — `ILocalizationCacheRefresher` scoped register
+- `Infrastructure/Persistence/Seeding/CatalogSeeder.cs` — `SeedSystemAdminPermissionsAsync` + `SystemAdminBaselinePermissions` baseline listesi
+- `Infrastructure/Persistence/Seeding/LocalizationCatalog.cs` — 27 yeni `LocalizationManage.*` anahtarı (TR + EN explicit)
+- `Presentation/WebApi/Endpoints/EndpointMappingExtensions.cs` — `MapSystemLocalizationEndpoints` registered
+- `Presentation/ManagementApp/Components/Layout/NavMenu.razor` — "Dil Kaynakları" link aktif (Sistem Yönetimi grubu, ikon: Translate)
+
+**Mimari kararlar (g'ye özel):**
+- **EF Core (Application via `ICatalogDbContext`)** kullanıldı, Dapper değil — `LocalizedResource` küçük tablo (~3K satır), Audit Explorer pattern'iyle simetri + provider-agnostic mimari.
+- **`ILocalizationCacheRefresher` abstraction Application'da, concrete `LocalizationCacheRefresher` Infrastructure'da** — Clean Architecture provider sızıntısı yok; `LocalizationStore.ReloadAsync` sarmalanır.
+- **SystemAdmin baseline permission seed**: Developer "tam erişim"den farklı olarak SystemAdmin yalnız sistem yönetim sorumluluğuna giren `SystemAdminBaselinePermissions` listesini alır — şu an sadece `System.Localization.Manage`; ileride aynı listede genişler.
+- **Türkçe karakter arama**: PostgreSQL `LOWER()` Unicode case-folding kullanılıyor (`ToLowerInvariant().Contains(lower)` EF Core'da bu çevirimi yapar) — Ö↔ö, Ü↔ü, Ş↔ş, Ç↔ç, Ğ↔ğ doğru eşleşir. İ↔ı dotted/dotless ileride `tr-x-icu` collation ile genişletilir.
+- **`IsMachineTranslated` auto-clear**: Admin manuel düzeltme yaptığı için update sonrası flag otomatik false; reload sonrası MachineYes chip'i kalkar.
+
+### Doğrulama
+
+- ✓ `dotnet build CleanTenant.slnx` — 0 hata, 0 uyarı (Adım 8a)
+- ✓ ManagementApp dev server: `Now listening on http://localhost:5081`
+- ✓ SystemAdmin baseline permission seed log: "1 yeni atama yapıldı — `System.Localization.Manage`"
+- ✓ Localization seed: 916 yeni satır + LocalizationStore yüklendi (2 kültür, 1230 kayıt)
+- ✓ Manuel UI testi — filtre + edit + cache reload + Türkçe arama (Ö↔ö) doğrulandı
+- ✓ Faz mimari haritası: [v0.2.10-FINAL-ARCHITECTURE-MAP.md](v0.2.10-FINAL-ARCHITECTURE-MAP.md) (kompakt 9 bölüm)
 
 ### Sonraki Adım
 
-**g — Localization Admin Sayfası**, sonrasında v0.2.10 tag'i ve v0.3 Unit/Resident modeline geçiş.
+**v0.3 — Unit / Resident Modeli** (Faz 1.6 alt-faz). Domain: `Unit`/`Resident`/`UnitResident` (Main DB); Application: CRUD handler'ları; WebApi: `UnitEndpoints`/`ResidentEndpoints`; ManagementApp: `CompanyArea/Units` + Resident yönetimi; PortalApp: sakin self-servis. v0.3 başlangıcında `docs/phases/v0.3/v0.3-FINAL-ARCHITECTURE-MAP.md` yazılır.
 
 ---
 

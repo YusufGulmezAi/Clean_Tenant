@@ -14,6 +14,7 @@ public static class EndpointMappingExtensions
         app.MapTwoFactorEndpoints();
         app.MapUserAdminEndpoints();
         app.MapSystemEndpoints();
+        app.MapSystemLocalizationEndpoints();
         app.MapTenantAuditEndpoints();
         app.MapCompanyEndpoints();
         app.MapRoleEndpoints();

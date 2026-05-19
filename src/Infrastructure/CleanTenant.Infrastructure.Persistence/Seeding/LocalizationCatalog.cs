@@ -779,5 +779,38 @@ public static class LocalizationCatalog
 
         new("Settings.Theme.PageTitle",       "Tema Ayarları — CleanTenant", "Theme Settings — CleanTenant"),
         new("Settings.Language.PageTitle",    "Dil Ayarları — CleanTenant",  "Language Settings — CleanTenant"),
+
+        // ========== Localization Manage Page (v0.2.10.g) ==========
+        new("LocalizationManage.PageTitle",            "Dil Kaynakları — CleanTenant",                  "Localization Resources — CleanTenant"),
+        new("LocalizationManage.Title",                "Dil Kaynakları Yönetimi",                       "Localization Resources Management"),
+        new("LocalizationManage.UnauthorizedSystem",   "Bu sayfaya sadece Sistem operatörleri erişebilir.", "This page is only accessible to System operators."),
+
+        new("LocalizationManage.Filter.Title",             "Filtreler",                                 "Filters"),
+        new("LocalizationManage.Filter.Culture",           "Kültür",                                    "Culture"),
+        new("LocalizationManage.Filter.Search",            "Ara (anahtar veya değer)",                  "Search (key or value)"),
+        new("LocalizationManage.Filter.SearchPlaceholder", "Örn. Roles.New veya Hoşgeldin",             "e.g. Roles.New or Welcome"),
+        new("LocalizationManage.Filter.OnlyMachine",       "Yalnız makine çevirileri",                  "Only machine translations"),
+        new("LocalizationManage.Filter.SearchButton",      "Ara",                                       "Search"),
+        new("LocalizationManage.Filter.Clear",             "Temizle",                                   "Clear"),
+
+        new("LocalizationManage.Col.Key",          "Anahtar",                                           "Key"),
+        new("LocalizationManage.Col.Value",        "Değer",                                             "Value"),
+        new("LocalizationManage.Col.MachineFlag",  "Makine",                                            "Machine"),
+        new("LocalizationManage.Col.UpdatedAt",    "Güncellenme",                                       "Updated"),
+        new("LocalizationManage.Col.Edit",         "İşlem",                                             "Action"),
+
+        new("LocalizationManage.Drawer.Title",         "Çeviri Düzenle",                                "Edit Translation"),
+        new("LocalizationManage.Drawer.Key",           "Anahtar",                                       "Key"),
+        new("LocalizationManage.Drawer.Culture",       "Kültür",                                        "Culture"),
+        new("LocalizationManage.Drawer.CurrentValue",  "Mevcut Değer",                                  "Current Value"),
+        new("LocalizationManage.Drawer.NewValue",      "Yeni Değer",                                    "New Value"),
+        new("LocalizationManage.Drawer.SaveButton",    "Kaydet",                                        "Save"),
+        new("LocalizationManage.Drawer.CancelButton",  "İptal",                                         "Cancel"),
+
+        new("LocalizationManage.Pagination",   "Sayfa {0} / {1} (toplam {2} kayıt)",                    "Page {0} / {1} (total {2} records)"),
+        new("LocalizationManage.MachineYes",   "Otomatik",                                              "Auto"),
+        new("LocalizationManage.LoadError",    "Kayıtlar yüklenemedi: {0}",                             "Failed to load records: {0}"),
+        new("LocalizationManage.SaveSuccess",  "Kayıt güncellendi.",                                    "Record updated."),
+        new("LocalizationManage.SaveError",    "Kayıt güncellenemedi: {0}",                             "Failed to update record: {0}"),
     ];
 }

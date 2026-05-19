@@ -1,0 +1,339 @@
+@page "/system/localization"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject MediatR.IMediator Mediator
+@inject AuthenticationStateProvider AuthProvider
+@inject ISnackbar Snackbar
+@inject IStringLocalizer Loc
+@using CleanTenant.Application.Features.System.Localization
+@using CleanTenant.ManagementApp.Services
+@using MudBlazor
+
+<PageTitle>@Loc["LocalizationManage.PageTitle"]</PageTitle>
+
+@if (_unauthorized)
+{
+    <MudAlert Severity="Severity.Warning" Class="my-3">
+        @Loc["LocalizationManage.UnauthorizedSystem"]
+    </MudAlert>
+}
+else
+{
+    <MudText Typo="Typo.h5" Class="mb-3">@Loc["LocalizationManage.Title"]</MudText>
+
+    @* ── Filtre Paneli ────────────────────────────────────────────── *@
+    <MudExpansionPanels Class="mb-3">
+        <MudExpansionPanel Text="@Loc["LocalizationManage.Filter.Title"].Value"
+                           Icon="@Icons.Material.Filled.FilterList"
+                           Expanded="true">
+            <MudGrid>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudSelect T="string"
+                               @bind-Value="_filterCulture"
+                               Label="@Loc["LocalizationManage.Filter.Culture"]"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense">
+                        @foreach (var lang in LanguageService.Supported)
+                        {
+                            <MudSelectItem T="string" Value="@lang.Code">
+                                @lang.Flag @lang.Name (@lang.Code)
+                            </MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="6" md="4">
+                    <MudTextField @bind-Value="_filterSearch"
+                                  Label="@Loc["LocalizationManage.Filter.Search"]"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Clearable="true"
+                                  Placeholder="@Loc["LocalizationManage.Filter.SearchPlaceholder"].Value" />
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3" Class="d-flex align-center">
+                    <MudSwitch T="bool" @bind-Value="_filterOnlyMachine"
+                               Label="@Loc["LocalizationManage.Filter.OnlyMachine"]"
+                               Color="Color.Warning" />
+                </MudItem>
+                <MudItem xs="12" Class="d-flex gap-2 justify-end">
+                    <MudButton Variant="Variant.Outlined" OnClick="ResetFilters">
+                        @Loc["LocalizationManage.Filter.Clear"]
+                    </MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.Search"
+                               OnClick="@(() => LoadPageAsync(0))">
+                        @Loc["LocalizationManage.Filter.SearchButton"]
+                    </MudButton>
+                </MudItem>
+            </MudGrid>
+        </MudExpansionPanel>
+    </MudExpansionPanels>
+
+    @* ── Tablo ────────────────────────────────────────────────────── *@
+    @if (_loading)
+    {
+        <MudProgressLinear Indeterminate="true" />
+    }
+
+    <MudDataGrid T="LocalizationEntryListItem"
+                 Items="@_items"
+                 Filterable="false"
+                 SortMode="SortMode.None"
+                 Hover="true"
+                 Dense="true">
+        <Columns>
+            <PropertyColumn T="LocalizationEntryListItem" TProperty="string"
+                            Property="@(e => e.Key)"
+                            Title="@Loc["LocalizationManage.Col.Key"].Value">
+                <CellTemplate>
+                    <MudText Typo="Typo.body2" Style="font-family:monospace">@context.Item.Key</MudText>
+                </CellTemplate>
+            </PropertyColumn>
+            <PropertyColumn T="LocalizationEntryListItem" TProperty="string"
+                            Property="@(e => e.Value)"
+                            Title="@Loc["LocalizationManage.Col.Value"].Value">
+                <CellTemplate>
+                    <MudText Typo="Typo.body2"
+                             Style="max-width:480px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+                        @context.Item.Value
+                    </MudText>
+                </CellTemplate>
+            </PropertyColumn>
+            <PropertyColumn T="LocalizationEntryListItem" TProperty="bool"
+                            Property="@(e => e.IsMachineTranslated)"
+                            Title="@Loc["LocalizationManage.Col.MachineFlag"].Value">
+                <CellTemplate>
+                    @if (context.Item.IsMachineTranslated)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Warning">
+                            @Loc["LocalizationManage.MachineYes"]
+                        </MudChip>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Tertiary">—</MudText>
+                    }
+                </CellTemplate>
+            </PropertyColumn>
+            <PropertyColumn T="LocalizationEntryListItem" TProperty="DateTimeOffset"
+                            Property="@(e => e.UpdatedAt)"
+                            Title="@Loc["LocalizationManage.Col.UpdatedAt"].Value">
+                <CellTemplate>
+                    <MudText Typo="Typo.caption">
+                        @context.Item.UpdatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")
+                    </MudText>
+                </CellTemplate>
+            </PropertyColumn>
+            <TemplateColumn T="LocalizationEntryListItem" Title="@Loc["LocalizationManage.Col.Edit"].Value">
+                <CellTemplate>
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                   Size="Size.Small"
+                                   Color="Color.Primary"
+                                   OnClick="@(() => OpenEditDrawer(context.Item))" />
+                </CellTemplate>
+            </TemplateColumn>
+        </Columns>
+    </MudDataGrid>
+
+    @* ── Sayfalama ────────────────────────────────────────────────── *@
+    <div class="d-flex justify-center align-center mt-3 gap-3">
+        <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft"
+                       Disabled="@(_currentPage == 0 || _loading)"
+                       OnClick="@(() => LoadPageAsync(_currentPage - 1))" />
+        <MudText Typo="Typo.body2">
+            @Loc["LocalizationManage.Pagination", _currentPage + 1, TotalPages, _totalCount]
+        </MudText>
+        <MudIconButton Icon="@Icons.Material.Filled.ChevronRight"
+                       Disabled="@(_currentPage >= TotalPages - 1 || _loading)"
+                       OnClick="@(() => LoadPageAsync(_currentPage + 1))" />
+    </div>
+
+    @* ── Edit Drawer ──────────────────────────────────────────────── *@
+    <MudDrawer @bind-Open="_drawerOpen"
+               Anchor="Anchor.Right"
+               Variant="DrawerVariant.Temporary"
+               Width="540px"
+               Elevation="4">
+        @if (_selected is not null)
+        {
+            <MudDrawerHeader Style="border-bottom:1px solid rgba(0,0,0,0.12)">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Style="width:100%">
+                    <MudText Typo="Typo.h6">@Loc["LocalizationManage.Drawer.Title"]</MudText>
+                    <MudIconButton Icon="@Icons.Material.Filled.Close"
+                                   OnClick="@(() => _drawerOpen = false)" />
+                </MudStack>
+            </MudDrawerHeader>
+            <MudContainer Class="pa-4" Style="overflow-y:auto">
+                <MudGrid Spacing="2">
+                    <MudItem xs="12">
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                            @Loc["LocalizationManage.Drawer.Key"]
+                        </MudText>
+                        <MudText Style="font-family:monospace;font-size:0.85rem">@_selected.Key</MudText>
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                            @Loc["LocalizationManage.Drawer.Culture"]
+                        </MudText>
+                        @{
+                            var lang = LanguageService.Resolve(_selected.Culture);
+                        }
+                        <MudText>@lang.Flag @lang.Name (@_selected.Culture)</MudText>
+                    </MudItem>
+                    <MudItem xs="12"><MudDivider /></MudItem>
+                    <MudItem xs="12">
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                            @Loc["LocalizationManage.Drawer.CurrentValue"]
+                        </MudText>
+                        <MudPaper Elevation="0" Class="pa-2 mt-1"
+                                  Style="background:#f5f5f5;border-radius:4px;max-height:120px;overflow-y:auto">
+                            <MudText Typo="Typo.body2" Style="white-space:pre-wrap;word-break:break-word">
+                                @_selected.Value
+                            </MudText>
+                        </MudPaper>
+                        @if (_selected.IsMachineTranslated)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="mt-1">
+                                @Loc["LocalizationManage.MachineYes"]
+                            </MudChip>
+                        }
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="_editNewValue"
+                                      Label="@Loc["LocalizationManage.Drawer.NewValue"]"
+                                      Variant="Variant.Outlined"
+                                      Lines="6"
+                                      MaxLength="4000"
+                                      AutoGrow="true"
+                                      Counter="0" />
+                    </MudItem>
+                    <MudItem xs="12" Class="d-flex gap-2 justify-end mt-3">
+                        <MudButton Variant="Variant.Outlined"
+                                   OnClick="@(() => _drawerOpen = false)">
+                            @Loc["LocalizationManage.Drawer.CancelButton"]
+                        </MudButton>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.Save"
+                                   Disabled="@_saving"
+                                   OnClick="SaveAsync">
+                            @Loc["LocalizationManage.Drawer.SaveButton"]
+                        </MudButton>
+                    </MudItem>
+                </MudGrid>
+            </MudContainer>
+        }
+    </MudDrawer>
+}
+
+@code {
+    private bool _unauthorized;
+    private bool _loading;
+    private bool _saving;
+    private bool _drawerOpen;
+    private int _currentPage;
+    private int _totalCount;
+    private IReadOnlyList<LocalizationEntryListItem> _items = [];
+    private LocalizationEntryListItem? _selected;
+
+    private string _filterCulture = "tr-TR";
+    private string? _filterSearch;
+    private bool _filterOnlyMachine;
+
+    private string _editNewValue = string.Empty;
+
+    private int PageSize => 50;
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_totalCount / (double)PageSize));
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user?.Identity?.IsAuthenticated != true
+            || !string.Equals(user.FindFirst("scope")?.Value, "System", StringComparison.OrdinalIgnoreCase))
+        {
+            _unauthorized = true;
+            return;
+        }
+
+        _filterCulture = System.Globalization.CultureInfo.CurrentUICulture.Name;
+        if (!LanguageService.Supported.Any(l => string.Equals(l.Code, _filterCulture, StringComparison.OrdinalIgnoreCase)))
+        {
+            _filterCulture = "tr-TR";
+        }
+
+        await LoadPageAsync(0);
+    }
+
+    private async Task LoadPageAsync(int page)
+    {
+        _loading = true;
+        _currentPage = page;
+
+        try
+        {
+            var filter = new LocalizationEntryFilter(
+                _filterCulture,
+                _filterSearch,
+                _filterOnlyMachine,
+                page,
+                PageSize);
+
+            var result = await Mediator.Send(new GetLocalizationEntriesQuery(filter));
+            _items = result.Items;
+            _totalCount = result.TotalCount;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(Loc["LocalizationManage.LoadError", ex.Message].Value, Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void OpenEditDrawer(LocalizationEntryListItem item)
+    {
+        _selected = item;
+        _editNewValue = item.Value;
+        _drawerOpen = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_selected is null) return;
+
+        _saving = true;
+        try
+        {
+            var command = new UpdateLocalizationEntryCommand(
+                _selected.Key,
+                _selected.Culture,
+                _editNewValue ?? string.Empty);
+
+            var result = await Mediator.Send(command);
+            if (result.IsSuccess)
+            {
+                Snackbar.Add(Loc["LocalizationManage.SaveSuccess"].Value, Severity.Success);
+                _drawerOpen = false;
+                await LoadPageAsync(_currentPage);
+            }
+            else
+            {
+                Snackbar.Add(Loc["LocalizationManage.SaveError", result.FirstError.Message].Value, Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(Loc["LocalizationManage.SaveError", ex.Message].Value, Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void ResetFilters()
+    {
+        _filterSearch = null;
+        _filterOnlyMachine = false;
+    }
+}

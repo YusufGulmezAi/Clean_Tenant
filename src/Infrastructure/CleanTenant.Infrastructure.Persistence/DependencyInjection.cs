@@ -148,6 +148,7 @@ public static class DependencyInjection
         // (Program.cs'de). DbStringLocalizer scoped — IStringLocalizer'a bağlanır.
         services.AddSingleton<LocalizationStore>();
         services.AddScoped<Microsoft.Extensions.Localization.IStringLocalizer, DbStringLocalizer>();
+        services.AddScoped<CleanTenant.Application.Common.Localization.ILocalizationCacheRefresher, LocalizationCacheRefresher>();
 
         return services;
     }

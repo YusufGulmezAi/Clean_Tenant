@@ -2,6 +2,7 @@ using CleanTenant.Domain.Identity.Authorization;
 using CleanTenant.Domain.Identity.Support;
 using CleanTenant.Domain.Identity.Tenants;
 using CleanTenant.Domain.Identity.Users;
+using CleanTenant.Domain.Localization;
 using CleanTenant.Domain.LookUp.Banks;
 using CleanTenant.Domain.LookUp.BuildingTypes;
 using CleanTenant.Domain.LookUp.Districts;
@@ -76,6 +77,9 @@ public interface ICatalogDbContext
 
     /// <summary>LookUp: Banka referans verisi (EFT, sanal POS, tahsilat entegrasyonları).</summary>
     DbSet<Bank> Banks { get; }
+
+    /// <summary>Lokalizasyon kaynakları (Key + Culture composite unique).</summary>
+    DbSet<LocalizedResource> LocalizedResources { get; }
 
     /// <summary>Bekleyen değişiklikleri persist eder. Cancellation desteği var.</summary>
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);

@@ -44,7 +44,17 @@ public sealed class CatalogSeeder
         await SeedPermissionsAsync(cancellationToken);
         await SeedBuiltInRolesAsync(cancellationToken);
         await SeedDeveloperPermissionsAsync(cancellationToken);
+        await SeedSystemAdminPermissionsAsync(cancellationToken);
     }
+
+    // SystemAdmin built-in rolüne her deployment'ta otomatik atanması gereken
+    // baseline izinler. Developer "tam erişim"den farklı olarak SystemAdmin
+    // yalnız sistem yönetim sorumluluğuna giren izinleri alır; kalan System
+    // izinleri (Support Mode, Impersonate vb.) operatörce elle verilir.
+    private static readonly string[] SystemAdminBaselinePermissions =
+    [
+        "System.Localization.Manage",
+    ];
 
     private async Task SeedPermissionsAsync(CancellationToken cancellationToken)
     {
@@ -192,6 +202,69 @@ public sealed class CatalogSeeder
         else
         {
             _logger.LogInformation("Developer rol permission seed: değişiklik yok.");
+        }
+    }
+
+    /// <summary>
+    /// SystemAdmin built-in rolüne <see cref="SystemAdminBaselinePermissions"/>
+    /// listesindeki izinleri idempotent atar. Yeni baseline izinler eklenince
+    /// otomatik kazanılır; mevcut atamalar korunur.
+    /// </summary>
+    private async Task SeedSystemAdminPermissionsAsync(CancellationToken cancellationToken)
+    {
+        if (SystemAdminBaselinePermissions.Length == 0)
+        {
+            return;
+        }
+
+        var systemAdminRole = await _db.Roles
+            .AsNoTracking()
+            .FirstOrDefaultAsync(r => r.NormalizedName == "SYSTEMADMIN", cancellationToken);
+
+        if (systemAdminRole is null)
+        {
+            _logger.LogWarning("SystemAdmin rolü bulunamadı; baseline permission seed atlandı.");
+            return;
+        }
+
+        var baselinePermissionIds = await _db.Permissions
+            .AsNoTracking()
+            .Where(p => SystemAdminBaselinePermissions.Contains(p.Code))
+            .Select(p => p.Id)
+            .ToListAsync(cancellationToken);
+
+        var existingAssignments = await _db.RolePermissions
+            .AsNoTracking()
+            .Where(rp => rp.RoleId == systemAdminRole.Id)
+            .Select(rp => rp.PermissionId)
+            .ToHashSetAsync(cancellationToken);
+
+        var added = 0;
+        foreach (var permissionId in baselinePermissionIds)
+        {
+            if (existingAssignments.Contains(permissionId))
+            {
+                continue;
+            }
+
+            _db.RolePermissions.Add(new RolePermission
+            {
+                RoleId = systemAdminRole.Id,
+                PermissionId = permissionId,
+                GrantedAt = DateTimeOffset.UtcNow,
+                GrantedBy = null,
+            });
+            added++;
+        }
+
+        if (added > 0)
+        {
+            await _db.SaveChangesAsync(cancellationToken);
+            _logger.LogInformation("SystemAdmin baseline permission seed: {Added} yeni atama yapıldı.", added);
+        }
+        else
+        {
+            _logger.LogInformation("SystemAdmin baseline permission seed: değişiklik yok.");
         }
     }
 }
