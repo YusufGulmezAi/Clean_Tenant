@@ -60,13 +60,13 @@ public sealed class AuthorizationCatalogReader : IAuthorizationCatalogReader
                         r.Scope,
                         r.Description,
                         r.IsBuiltIn,
-                        PermissionCount = r.RolePermissions != null ? r.RolePermissions.Count : 0
+                        PermissionCount = _db.RolePermissions.Count(rp => rp.RoleId == r.Id)
                     })
                     .ToListAsync(ct);
 
                 var list = rows.Select(r => new RoleListItem(
                     r.Id,
-                    r.Name,
+                    r.Name ?? string.Empty,
                     r.Scope,
                     r.Description,
                     r.IsBuiltIn,
@@ -94,7 +94,8 @@ public sealed class AuthorizationCatalogReader : IAuthorizationCatalogReader
                         r.Scope,
                         r.Description,
                         r.IsBuiltIn,
-                        PermissionIds = r.RolePermissions!
+                        PermissionIds = _db.RolePermissions
+                            .Where(rp => rp.RoleId == r.Id)
                             .Select(rp => rp.PermissionId)
                             .ToList()
                     })
@@ -104,7 +105,7 @@ public sealed class AuthorizationCatalogReader : IAuthorizationCatalogReader
 
                 return new RoleDetail(
                     role.Id,
-                    role.Name,
+                    role.Name ?? string.Empty,
                     role.Scope,
                     role.Description,
                     role.IsBuiltIn,

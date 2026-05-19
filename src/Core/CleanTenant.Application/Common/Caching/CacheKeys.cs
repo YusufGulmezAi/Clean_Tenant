@@ -76,6 +76,42 @@ public static class CacheKeys
         public static string Contexts(Guid userId) => $"{Prefix}:contexts:{userId:N}";
     }
 
+    /// <summary>Rol ile ilgili cache anahtarları (Catalog DB).</summary>
+    public static class Role
+    {
+        /// <summary>Tüm Role cache key'lerinin ortak ön eki — prefix invalidation için.</summary>
+        public const string Prefix = $"{KeyPrefix}:catalog:roles";
+
+        /// <summary>Id ile tek rol.</summary>
+        public static string ById(Guid id) => $"{Prefix}:by-id:{id:N}";
+
+        /// <summary>Scope seviyesine göre rol listesi.</summary>
+        public static string AllByScope(int scopeLevel) => $"{Prefix}:by-scope:{scopeLevel}";
+
+        /// <summary>Detail (Permission listesi dahil) projection.</summary>
+        public static string DetailById(Guid id) => $"{Prefix}:detail:{id:N}";
+    }
+
+    /// <summary>Permission ile ilgili cache anahtarları (Catalog DB).</summary>
+    public static class Permission
+    {
+        /// <summary>Tüm Permission cache key'lerinin ortak ön eki — prefix invalidation için.</summary>
+        public const string Prefix = $"{KeyPrefix}:catalog:permissions";
+
+        /// <summary>Tüm permission'ların listesi.</summary>
+        public static readonly string All = $"{Prefix}:all";
+    }
+
+    /// <summary>Yetkilendirme türevli cache anahtarları (role → permission eşlemeleri).</summary>
+    public static class Authorization
+    {
+        /// <summary>Tüm Authorization cache key'lerinin ortak ön eki — prefix invalidation için.</summary>
+        public const string Prefix = $"{KeyPrefix}:catalog:authorization";
+
+        /// <summary>Bir role atanmış permission ID'leri listesi.</summary>
+        public static string PermissionsByRole(Guid roleId) => $"{Prefix}:permissions-by-role:{roleId:N}";
+    }
+
     /// <summary>Pub/sub channel adı — multi-instance L1 invalidation.</summary>
     public const string InvalidationChannel = $"{KeyPrefix}:cache-invalidate";
 }

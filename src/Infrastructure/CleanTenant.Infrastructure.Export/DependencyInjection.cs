@@ -1,4 +1,6 @@
 using CleanTenant.Application.Common.Export;
+using CleanTenant.Application.Features.Main.BuildingSchema.Excel;
+using CleanTenant.Infrastructure.Export.BuildingSchema;
 using CleanTenant.Infrastructure.Export.Excel;
 using CleanTenant.Infrastructure.Export.Pdf;
 using Microsoft.Extensions.DependencyInjection;
@@ -26,6 +28,7 @@ public static class DependencyInjection
 
         services.AddSingleton<IExcelExportService, ClosedXmlExportService>();
         services.AddSingleton<IPdfExportService, QuestPdfExportService>();
+        services.AddSingleton<IBuildingSchemaExcelService, BuildingSchemaExcelService>();
 
         return services;
     }

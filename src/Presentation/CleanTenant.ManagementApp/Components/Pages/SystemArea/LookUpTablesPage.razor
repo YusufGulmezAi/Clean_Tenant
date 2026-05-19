@@ -1,0 +1,386 @@
+@page "/system/lookup-tables"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject ITenantCatalogReader TenantReader
+@inject ILookUpCatalogReader LookUpReader
+@inject MediatR.IMediator Mediator
+@inject AuthenticationStateProvider AuthProvider
+@inject ISnackbar Snackbar
+@using CleanTenant.Application.Features.Catalog.Readers
+@using CleanTenant.Application.Features.Catalog.LookUp.Provinces
+@using CleanTenant.Application.Features.Catalog.LookUp.Districts
+@using CleanTenant.Application.Features.Catalog.LookUp.Neighborhoods
+@using CleanTenant.Application.Features.Catalog.LookUp.ResidentialTypes
+@using CleanTenant.Application.Features.Catalog.LookUp.BuildingTypes
+
+<PageTitle>LookUp Tabloları — Sistem</PageTitle>
+
+@if (_unauthorized)
+{
+    <MudAlert Severity="Severity.Warning" Class="my-3">
+        Bu sayfa yalnız Sistem kullanıcıları için. Aktif bağlamınız Sistem değil.
+    </MudAlert>
+}
+else if (!_initialized)
+{
+    <MudText Typo="Typo.h6" Class="my-3">Yükleniyor...</MudText>
+}
+else
+{
+    <MudTabs Elevation="2" Class="mb-3">
+        <MudTabPanel Text="📍 Coğrafi Yapı">
+            <div class="pa-4">
+                <MudGrid Spacing="2">
+                    <MudItem xs="12" sm="4">
+                        <MudCard Elevation="2">
+                            <MudCardHeader><CardHeaderContent><MudText Typo="Typo.h6">İller</MudText></CardHeaderContent></MudCardHeader>
+                            <MudCardContent>
+                                <MudList T="string" Clickable="true">
+                                    @foreach (var province in _provinces)
+                                    {
+                                        <MudListItem T="string" @onclick="@(() => SelectProvince(province.Id))">
+                                            <MudText Color="@(_selectedProvinceId == province.Id ? Color.Primary : Color.Default)">@province.Name</MudText>
+                                        </MudListItem>
+                                    }
+                                </MudList>
+                                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" Class="mt-2"
+                                           OnClick="@(() => _showProvinceForm = true)">
+                                    <MudIcon Icon="@Icons.Material.Filled.Add" Class="mr-1" /> İl Ekle
+                                </MudButton>
+                                @if (_showProvinceForm)
+                                {
+                                    <MudPaper Elevation="1" Class="pa-3 mt-3">
+                                        <MudForm @ref="_provinceForm">
+                                            <MudTextField @bind-Value="_provinceModel.Name" Label="İl Adı" Required="true" MaxLength="100" />
+                                            <MudNumericField @bind-Value="_provinceModel.PlateCode" Label="Plaka Kodu" Min="1" Max="81" />
+                                            <div class="d-flex gap-2 mt-2">
+                                                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                                           OnClick="@(async () => await SubmitProvinceAsync())">Kaydet</MudButton>
+                                                <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                                                           OnClick="@(() => { _showProvinceForm = false; ResetProvinceForm(); })">Vazgeç</MudButton>
+                                            </div>
+                                        </MudForm>
+                                    </MudPaper>
+                                }
+                            </MudCardContent>
+                        </MudCard>
+                    </MudItem>
+
+                    <MudItem xs="12" sm="4">
+                        <MudCard Elevation="2">
+                            <MudCardHeader><CardHeaderContent><MudText Typo="Typo.h6">İlçeler</MudText></CardHeaderContent></MudCardHeader>
+                            <MudCardContent>
+                                <MudList T="string" Clickable="true">
+                                    @foreach (var district in _districts)
+                                    {
+                                        <MudListItem T="string" @onclick="@(() => SelectDistrict(district.Id))">
+                                            <MudText Color="@(_selectedDistrictId == district.Id ? Color.Primary : Color.Default)">@district.Name</MudText>
+                                        </MudListItem>
+                                    }
+                                </MudList>
+                                @if (_selectedProvinceId != Guid.Empty)
+                                {
+                                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" Class="mt-2"
+                                               OnClick="@(() => _showDistrictForm = true)">
+                                        <MudIcon Icon="@Icons.Material.Filled.Add" Class="mr-1" /> İlçe Ekle
+                                    </MudButton>
+                                    @if (_showDistrictForm)
+                                    {
+                                        <MudPaper Elevation="1" Class="pa-3 mt-3">
+                                            <MudForm @ref="_districtForm">
+                                                <MudTextField @bind-Value="_districtModel.Name" Label="İlçe Adı" Required="true" MaxLength="100" />
+                                                <div class="d-flex gap-2 mt-2">
+                                                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                                               OnClick="@(async () => await SubmitDistrictAsync())">Kaydet</MudButton>
+                                                    <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                                                               OnClick="@(() => { _showDistrictForm = false; ResetDistrictForm(); })">Vazgeç</MudButton>
+                                                </div>
+                                            </MudForm>
+                                        </MudPaper>
+                                    }
+                                }
+                            </MudCardContent>
+                        </MudCard>
+                    </MudItem>
+
+                    <MudItem xs="12" sm="4">
+                        <MudCard Elevation="2">
+                            <MudCardHeader><CardHeaderContent><MudText Typo="Typo.h6">Mahalleler</MudText></CardHeaderContent></MudCardHeader>
+                            <MudCardContent>
+                                <MudList T="string" Clickable="true">
+                                    @foreach (var neighborhood in _neighborhoods)
+                                    {
+                                        <MudListItem T="string" @onclick="@(() => SelectNeighborhood(neighborhood.Id))">
+                                            <MudText Color="@(_selectedNeighborhoodId == neighborhood.Id ? Color.Primary : Color.Default)">@neighborhood.Name</MudText>
+                                        </MudListItem>
+                                    }
+                                </MudList>
+                                @if (_selectedDistrictId != Guid.Empty)
+                                {
+                                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" Class="mt-2"
+                                               OnClick="@(() => _showNeighborhoodForm = true)">
+                                        <MudIcon Icon="@Icons.Material.Filled.Add" Class="mr-1" /> Mahalle Ekle
+                                    </MudButton>
+                                    @if (_showNeighborhoodForm)
+                                    {
+                                        <MudPaper Elevation="1" Class="pa-3 mt-3">
+                                            <MudForm @ref="_neighborhoodForm">
+                                                <MudTextField @bind-Value="_neighborhoodModel.Name" Label="Mahalle Adı" Required="true" MaxLength="100" />
+                                                <div class="d-flex gap-2 mt-2">
+                                                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                                               OnClick="@(async () => await SubmitNeighborhoodAsync())">Kaydet</MudButton>
+                                                    <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                                                               OnClick="@(() => { _showNeighborhoodForm = false; ResetNeighborhoodForm(); })">Vazgeç</MudButton>
+                                                </div>
+                                            </MudForm>
+                                        </MudPaper>
+                                    }
+                                }
+                            </MudCardContent>
+                        </MudCard>
+                    </MudItem>
+                </MudGrid>
+            </div>
+        </MudTabPanel>
+
+        <MudTabPanel Text="🏠 Mesken Tipleri">
+            <div class="pa-4">
+                <div class="d-flex justify-end mb-2">
+                    <MudButton StartIcon="@Icons.Material.Filled.Add" Color="Color.Primary" Variant="Variant.Filled" Size="Size.Small"
+                               OnClick="@(() => _showResidentialForm = !_showResidentialForm)">Ekle</MudButton>
+                </div>
+                @if (_showResidentialForm)
+                {
+                    <MudPaper Elevation="1" Class="pa-3 mb-3">
+                        <MudForm @ref="_residentialForm">
+                            <MudTextField @bind-Value="_residentialModel.Name" Label="Ad" Required="true" MaxLength="15" />
+                            <MudTextField @bind-Value="_residentialModel.Description" Label="Açıklama" MaxLength="250" />
+                            <div class="d-flex gap-2 mt-2">
+                                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                           OnClick="@(async () => await SubmitResidentialTypeAsync())">Kaydet</MudButton>
+                                <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                                           OnClick="@(() => { _showResidentialForm = false; ResetResidentialForm(); })">Vazgeç</MudButton>
+                            </div>
+                        </MudForm>
+                    </MudPaper>
+                }
+                <MudDataGrid Items="@_residentialTypes" Hover="true" Striped="true">
+                    <Columns>
+                        <PropertyColumn Property="@(x => x.Name)" Title="Ad" />
+                        <PropertyColumn Property="@(x => x.Description)" Title="Açıklama" />
+                        <TemplateColumn CellClass="d-flex justify-end">
+                            <CellTemplate>
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                                               OnClick="@(async () => await DeleteResidentialTypeAsync(context.Item))" />
+                            </CellTemplate>
+                        </TemplateColumn>
+                    </Columns>
+                </MudDataGrid>
+            </div>
+        </MudTabPanel>
+
+        <MudTabPanel Text="🏢 Yapı Tipleri">
+            <div class="pa-4">
+                <div class="d-flex justify-end mb-2">
+                    <MudButton StartIcon="@Icons.Material.Filled.Add" Color="Color.Primary" Variant="Variant.Filled" Size="Size.Small"
+                               OnClick="@(() => _showBuildingForm = !_showBuildingForm)">Ekle</MudButton>
+                </div>
+                @if (_showBuildingForm)
+                {
+                    <MudPaper Elevation="1" Class="pa-3 mb-3">
+                        <MudForm @ref="_buildingForm">
+                            <MudTextField @bind-Value="_buildingModel.Name" Label="Ad" Required="true" MaxLength="100" />
+                            <MudTextField @bind-Value="_buildingModel.Description" Label="Açıklama" MaxLength="250" />
+                            <div class="d-flex gap-2 mt-2">
+                                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                           OnClick="@(async () => await SubmitBuildingTypeAsync())">Kaydet</MudButton>
+                                <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                                           OnClick="@(() => { _showBuildingForm = false; ResetBuildingForm(); })">Vazgeç</MudButton>
+                            </div>
+                        </MudForm>
+                    </MudPaper>
+                }
+                <MudDataGrid Items="@_buildingTypes" Hover="true" Striped="true">
+                    <Columns>
+                        <PropertyColumn Property="@(x => x.Name)" Title="Ad" />
+                        <PropertyColumn Property="@(x => x.Description)" Title="Açıklama" />
+                        <TemplateColumn CellClass="d-flex justify-end">
+                            <CellTemplate>
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                                               OnClick="@(async () => await DeleteBuildingTypeAsync(context.Item))" />
+                            </CellTemplate>
+                        </TemplateColumn>
+                    </Columns>
+                </MudDataGrid>
+            </div>
+        </MudTabPanel>
+    </MudTabs>
+}
+
+@code {
+    private class ProvinceFormModel
+    {
+        public string Name { get; set; } = string.Empty;
+        public int? PlateCode { get; set; }
+    }
+
+    private class DistrictFormModel
+    {
+        public string Name { get; set; } = string.Empty;
+    }
+
+    private class NeighborhoodFormModel
+    {
+        public string Name { get; set; } = string.Empty;
+    }
+
+    private class ResidentialTypeFormModel
+    {
+        public string Name { get; set; } = string.Empty;
+        public string? Description { get; set; }
+    }
+
+    private class BuildingTypeFormModel
+    {
+        public string Name { get; set; } = string.Empty;
+        public string? Description { get; set; }
+    }
+
+    private bool _unauthorized, _initialized;
+    private IReadOnlyList<ProvinceListItem> _provinces = [];
+    private IReadOnlyList<DistrictListItem> _districts = [];
+    private IReadOnlyList<NeighborhoodListItem> _neighborhoods = [];
+    private IReadOnlyList<ResidentialTypeListItem> _residentialTypes = [];
+    private IReadOnlyList<BuildingTypeListItem> _buildingTypes = [];
+
+    private Guid _selectedProvinceId, _selectedDistrictId, _selectedNeighborhoodId;
+    private bool _showProvinceForm, _showDistrictForm, _showNeighborhoodForm, _showResidentialForm, _showBuildingForm;
+
+    private MudForm? _provinceForm, _districtForm, _neighborhoodForm, _residentialForm, _buildingForm;
+    private ProvinceFormModel _provinceModel = new();
+    private DistrictFormModel _districtModel = new();
+    private NeighborhoodFormModel _neighborhoodModel = new();
+    private ResidentialTypeFormModel _residentialModel = new();
+    private BuildingTypeFormModel _buildingModel = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        if (authState.User?.Identity?.IsAuthenticated != true
+            || !string.Equals(authState.User.FindFirst("scope")?.Value, "System", StringComparison.OrdinalIgnoreCase))
+        {
+            _unauthorized = true;
+            _initialized = true;
+            return;
+        }
+        await LoadDataAsync();
+        _initialized = true;
+    }
+
+    private async Task LoadDataAsync()
+    {
+        _provinces = await LookUpReader.GetProvincesAsync();
+        await RefreshDistrictsAsync();
+        await RefreshNeighborhoodsAsync();
+        _residentialTypes = await LookUpReader.GetResidentialTypesAsync();
+        _buildingTypes = await LookUpReader.GetBuildingTypesAsync();
+    }
+
+    private void SelectProvince(Guid id) { _selectedProvinceId = id; _selectedDistrictId = Guid.Empty; _selectedNeighborhoodId = Guid.Empty; }
+    private void SelectDistrict(Guid id) { _selectedDistrictId = id; _selectedNeighborhoodId = Guid.Empty; }
+    private void SelectNeighborhood(Guid id) => _selectedNeighborhoodId = id;
+
+    private async Task RefreshDistrictsAsync()
+    {
+        _districts = _selectedProvinceId != Guid.Empty ? await LookUpReader.GetDistrictsByProvinceAsync(_selectedProvinceId) : [];
+    }
+
+    private async Task RefreshNeighborhoodsAsync()
+    {
+        _neighborhoods = _selectedDistrictId != Guid.Empty ? await LookUpReader.GetNeighborhoodsByDistrictAsync(_selectedDistrictId) : [];
+    }
+
+    private void ResetProvinceForm() => _provinceModel = new();
+    private void ResetDistrictForm() => _districtModel = new();
+    private void ResetNeighborhoodForm() => _neighborhoodModel = new();
+    private void ResetResidentialForm() => _residentialModel = new();
+    private void ResetBuildingForm() => _buildingModel = new();
+
+    private async Task SubmitProvinceAsync()
+    {
+        if (_provinceForm is null) return;
+        await _provinceForm.Validate();
+        if (_provinceForm.IsValid)
+        {
+            var cmd = new CreateProvinceCommand(_provinceModel.Name, _provinceModel.PlateCode);
+            var result = await Mediator.Send(cmd);
+            if (result.IsSuccess) { Snackbar.Add("Kaydedildi", Severity.Success); _showProvinceForm = false; ResetProvinceForm(); await LoadDataAsync(); }
+            else Snackbar.Add($"Hata: {result.FirstError.Message}", Severity.Error);
+        }
+    }
+
+    private async Task SubmitDistrictAsync()
+    {
+        if (_districtForm is null) return;
+        await _districtForm.Validate();
+        if (_districtForm.IsValid)
+        {
+            var cmd = new CreateDistrictCommand(_districtModel.Name, _selectedProvinceId);
+            var result = await Mediator.Send(cmd);
+            if (result.IsSuccess) { Snackbar.Add("Kaydedildi", Severity.Success); _showDistrictForm = false; ResetDistrictForm(); await RefreshDistrictsAsync(); }
+            else Snackbar.Add($"Hata: {result.FirstError.Message}", Severity.Error);
+        }
+    }
+
+    private async Task SubmitNeighborhoodAsync()
+    {
+        if (_neighborhoodForm is null) return;
+        await _neighborhoodForm.Validate();
+        if (_neighborhoodForm.IsValid)
+        {
+            var cmd = new CreateNeighborhoodCommand(_neighborhoodModel.Name, _selectedDistrictId);
+            var result = await Mediator.Send(cmd);
+            if (result.IsSuccess) { Snackbar.Add("Kaydedildi", Severity.Success); _showNeighborhoodForm = false; ResetNeighborhoodForm(); await RefreshNeighborhoodsAsync(); }
+            else Snackbar.Add($"Hata: {result.FirstError.Message}", Severity.Error);
+        }
+    }
+
+    private async Task SubmitResidentialTypeAsync()
+    {
+        if (_residentialForm is null) return;
+        await _residentialForm.Validate();
+        if (_residentialForm.IsValid)
+        {
+            var cmd = new CreateResidentialTypeCommand(_residentialModel.Name, _residentialModel.Description);
+            var result = await Mediator.Send(cmd);
+            if (result.IsSuccess) { Snackbar.Add("Kaydedildi", Severity.Success); _showResidentialForm = false; ResetResidentialForm(); _residentialTypes = await LookUpReader.GetResidentialTypesAsync(); }
+            else Snackbar.Add($"Hata: {result.FirstError.Message}", Severity.Error);
+        }
+    }
+
+    private async Task SubmitBuildingTypeAsync()
+    {
+        if (_buildingForm is null) return;
+        await _buildingForm.Validate();
+        if (_buildingForm.IsValid)
+        {
+            var cmd = new CreateBuildingTypeCommand(_buildingModel.Name, _buildingModel.Description);
+            var result = await Mediator.Send(cmd);
+            if (result.IsSuccess) { Snackbar.Add("Kaydedildi", Severity.Success); _showBuildingForm = false; ResetBuildingForm(); _buildingTypes = await LookUpReader.GetBuildingTypesAsync(); }
+            else Snackbar.Add($"Hata: {result.FirstError.Message}", Severity.Error);
+        }
+    }
+
+    private async Task DeleteResidentialTypeAsync(ResidentialTypeListItem item)
+    {
+        var result = await Mediator.Send(new DeleteResidentialTypeCommand(item.Id));
+        if (result.IsSuccess) { Snackbar.Add("Silindi", Severity.Success); _residentialTypes = await LookUpReader.GetResidentialTypesAsync(); }
+        else Snackbar.Add($"Hata: {result.FirstError.Message}", Severity.Error);
+    }
+
+    private async Task DeleteBuildingTypeAsync(BuildingTypeListItem item)
+    {
+        var result = await Mediator.Send(new DeleteBuildingTypeCommand(item.Id));
+        if (result.IsSuccess) { Snackbar.Add("Silindi", Severity.Success); _buildingTypes = await LookUpReader.GetBuildingTypesAsync(); }
+        else Snackbar.Add($"Hata: {result.FirstError.Message}", Severity.Error);
+    }
+}

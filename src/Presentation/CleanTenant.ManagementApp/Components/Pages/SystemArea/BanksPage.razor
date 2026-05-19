@@ -1,0 +1,239 @@
+@page "/system/banks"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject ILookUpCatalogReader LookUpReader
+@inject MediatR.IMediator Mediator
+@inject AuthenticationStateProvider AuthProvider
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@using CleanTenant.Application.Features.Catalog.Readers
+@using CleanTenant.Application.Features.Catalog.LookUp.Banks
+
+<PageTitle>Bankalar — Sistem</PageTitle>
+
+@if (_unauthorized)
+{
+    <MudAlert Severity="Severity.Warning" Class="my-3">
+        Bu sayfa yalnız Sistem kullanıcıları için. Aktif bağlamınız Sistem değil.
+    </MudAlert>
+}
+else if (!_initialized)
+{
+    <MudText Typo="Typo.h6" Class="my-3">Yükleniyor...</MudText>
+}
+else
+{
+    <div class="d-flex justify-end mb-2">
+        <MudButton StartIcon="@(_showForm ? Icons.Material.Filled.Close : Icons.Material.Filled.Add)"
+                   Color="Color.Primary" Variant="Variant.Filled"
+                   OnClick="@(() => ToggleFormAsync())">
+            @(_showForm ? "İptal" : "Yeni Banka")
+        </MudButton>
+    </div>
+
+    @if (_showForm)
+    {
+        <MudPaper Class="pa-4 mb-4" Elevation="1">
+            <MudForm @ref="_bankForm" Model="@_formModel" Validate="true">
+                <MudGrid>
+                    <MudItem xs="12" sm="6">
+                        <MudTextField @bind-Value="_formModel.FullName"
+                                      Label="Tam Adı"
+                                      For="@(() => _formModel.FullName)"
+                                      MaxLength="200"
+                                      Required="true" />
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudTextField @bind-Value="_formModel.ShortName"
+                                      Label="Kısa Adı"
+                                      For="@(() => _formModel.ShortName)"
+                                      MaxLength="30"
+                                      Required="true" />
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudTextField @bind-Value="_formModel.EftCode"
+                                      Label="EFT Kodu"
+                                      For="@(() => _formModel.EftCode)"
+                                      MaxLength="10" />
+                    </MudItem>
+                    <MudItem xs="12" sm="3">
+                        <MudSwitch T="bool" @bind-Checked="_formModel.HasVirtualPosIntegration"
+                                   Label="Sanal POS"
+                                   Color="Color.Primary" />
+                    </MudItem>
+                    <MudItem xs="12" sm="3">
+                        <MudSwitch T="bool" @bind-Checked="_formModel.HasCorporateCollectionIntegration"
+                                   Label="Kurumsal Tahsilat"
+                                   Color="Color.Primary" />
+                    </MudItem>
+                </MudGrid>
+                <div class="d-flex gap-2 mt-4">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@SubmitBankAsync">
+                        @(_editingId.HasValue ? "Güncelle" : "Ekle")
+                    </MudButton>
+                    <MudButton Variant="Variant.Text" OnClick="@(() => ToggleFormAsync())">
+                        İptal
+                    </MudButton>
+                </div>
+            </MudForm>
+        </MudPaper>
+    }
+
+    <MudDataGrid Items="@_banks" Hover="true" Striped="true" Bordered="true">
+        <Columns>
+            <PropertyColumn Property="@(x => x.FullName)" Title="Tam Adı" />
+            <PropertyColumn Property="@(x => x.ShortName)" Title="Kısa Adı" />
+            <TemplateColumn CellClass="d-flex justify-end" Filterable="false" Sortable="false">
+                <CellTemplate>
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Color="Color.Default"
+                                   OnClick="@(() => EditBankAsync(context.Item.Id))" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                                   OnClick="@(() => DeleteBankAsync(context.Item))" />
+                </CellTemplate>
+            </TemplateColumn>
+        </Columns>
+    </MudDataGrid>
+}
+
+@code {
+    private class BankFormModel
+    {
+        public string FullName { get; set; } = string.Empty;
+        public string ShortName { get; set; } = string.Empty;
+        public string? EftCode { get; set; }
+        public bool HasVirtualPosIntegration { get; set; }
+        public bool HasCorporateCollectionIntegration { get; set; }
+    }
+
+    private bool _unauthorized;
+    private bool _initialized;
+    private bool _showForm;
+    private Guid? _editingId;
+    private IReadOnlyList<BankListItem> _banks = [];
+    private MudForm? _bankForm;
+    private BankFormModel _formModel = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user?.Identity?.IsAuthenticated != true
+            || !string.Equals(user.FindFirst("scope")?.Value, "System", StringComparison.OrdinalIgnoreCase))
+        {
+            _unauthorized = true;
+            _initialized = true;
+            return;
+        }
+
+        await LoadBanksAsync();
+        _initialized = true;
+    }
+
+    private async Task LoadBanksAsync()
+    {
+        _banks = await LookUpReader.GetBanksAsync();
+    }
+
+    private void ToggleFormAsync()
+    {
+        _showForm = !_showForm;
+        if (!_showForm)
+        {
+            ResetForm();
+        }
+    }
+
+    private void ResetForm()
+    {
+        _formModel = new();
+        _editingId = null;
+    }
+
+    private async Task EditBankAsync(Guid bankId)
+    {
+        var bank = await LookUpReader.GetBankDetailAsync(bankId);
+        if (bank is null)
+        {
+            Snackbar.Add("Banka bulunamadı", Severity.Error);
+            return;
+        }
+
+        _editingId = bankId;
+        _formModel = new()
+        {
+            FullName = bank.FullName,
+            ShortName = bank.ShortName,
+            EftCode = bank.EftCode,
+            HasVirtualPosIntegration = bank.HasVirtualPosIntegration,
+            HasCorporateCollectionIntegration = bank.HasCorporateCollectionIntegration,
+        };
+        _showForm = true;
+        StateHasChanged();
+    }
+
+    private async Task SubmitBankAsync()
+    {
+        if (_bankForm is null) return;
+        await _bankForm.Validate();
+        if (!_bankForm.IsValid) return;
+
+        if (_editingId.HasValue)
+        {
+            var result = await Mediator.Send(new UpdateBankCommand(
+                _editingId.Value,
+                _formModel.FullName,
+                _formModel.ShortName,
+                _formModel.EftCode,
+                _formModel.HasVirtualPosIntegration,
+                _formModel.HasCorporateCollectionIntegration
+            ));
+
+            if (result.IsFailure)
+            {
+                Snackbar.Add($"Güncelleme başarısız: {result.FirstError.Message}", Severity.Error);
+                return;
+            }
+
+            Snackbar.Add("Banka güncellendi", Severity.Success);
+        }
+        else
+        {
+            var result = await Mediator.Send(new CreateBankCommand(
+                _formModel.FullName,
+                _formModel.ShortName,
+                _formModel.EftCode,
+                _formModel.HasVirtualPosIntegration,
+                _formModel.HasCorporateCollectionIntegration
+            ));
+
+            if (result.IsFailure)
+            {
+                Snackbar.Add($"Ekleme başarısız: {result.FirstError.Message}", Severity.Error);
+                return;
+            }
+
+            Snackbar.Add("Banka eklendi", Severity.Success);
+        }
+
+        ResetForm();
+        _showForm = false;
+        await LoadBanksAsync();
+    }
+
+    private async Task DeleteBankAsync(BankListItem bank)
+    {
+        var confirm = await DialogService.ShowMessageBox("Banka Sil",
+            $"<b>{bank.FullName}</b> silinecek. Devam edilsin mi?",
+            yesText: "Sil", cancelText: "Vazgeç");
+        if (confirm != true) return;
+
+        var result = await Mediator.Send(new DeleteBankCommand(bank.Id));
+        if (result.IsFailure)
+        {
+            Snackbar.Add($"Silme başarısız: {result.FirstError.Message}", Severity.Error);
+            return;
+        }
+
+        Snackbar.Add("Banka silindi", Severity.Success);
+        await LoadBanksAsync();
+    }
+}

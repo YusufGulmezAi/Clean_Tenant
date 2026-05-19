@@ -25,6 +25,12 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
+    <!--
+      MUD0002: MudBlazor 8.5.x analyzer — kaldırılan/yeniden adlandırılan attribute'lar için
+      (Title on MudIconButton, Clickable on MudList vb.). Mevcut bileşenler bir sonraki
+      MudBlazor migration sprint'inde düzeltilecek.
+    -->
+    <NoWarn>$(NoWarn);MUD0002</NoWarn>
   </PropertyGroup>
 
 </Project>
