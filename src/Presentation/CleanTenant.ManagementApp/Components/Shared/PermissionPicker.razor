@@ -8,21 +8,6 @@
 @inject AuthenticationStateProvider AuthProvider
 @inject IStringLocalizer Loc
 
-@*
-    İzin seçici — chip tabanlı (oval pill) UI (v0.2.8.e).
-    Kenar rengi action'a (Read/Create/Update/Delete/Approve) göre;
-    arkaplan seçim durumuna göre değişir. Görsel davranış katmanı
-    privilege ceiling sezgisi verir; gerçek savunma backend'de (v0.2.8.c).
-
-    Filtreler:
-    - Privilege ceiling: assigner'ın sahip olmadığı izinler gizlenir
-      (System scope bypass eder).
-    - Scope ceiling: rol scope'una uyumsuz izinler gizlenir
-      (örn. Tenant role'üne System-only izin gizli).
-
-    v0.2.10.e.3 — Permissions.Picker.* anahtarlarıyla lokalize edildi.
-*@
-
 @if (_initialized && VisiblePermissions.Count == 0)
 {
     <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
@@ -31,67 +16,326 @@
 }
 else if (_initialized)
 {
-    <div class="legend">
-        <span class="legend-item"><span class="legend-dot" style="border-color:#3b82f6;background-color:#3b82f6"></span> @Loc["Permissions.Picker.Legend.Read"]</span>
-        <span class="legend-item"><span class="legend-dot" style="border-color:#10b981;background-color:#10b981"></span> @Loc["Permissions.Picker.Legend.Create"]</span>
-        <span class="legend-item"><span class="legend-dot" style="border-color:#f59e0b;background-color:#f59e0b"></span> @Loc["Permissions.Picker.Legend.Update"]</span>
-        <span class="legend-item"><span class="legend-dot" style="border-color:#ef4444;background-color:#ef4444"></span> @Loc["Permissions.Picker.Legend.Delete"]</span>
-        <span class="legend-item"><span class="legend-dot" style="border-color:#8b5cf6;background-color:#8b5cf6"></span> @Loc["Permissions.Picker.Legend.Approve"]</span>
-        <span class="legend-item"><span class="legend-dot" style="border-color:#9ca3af;background-color:#9ca3af"></span> @Loc["Permissions.Picker.Legend.Other"]</span>
-    </div>
+    <div class="perm-picker">
 
-    @foreach (var module in VisiblePermissions.GroupBy(p => p.Module).OrderBy(g => g.Key))
-    {
-        var modulePerms = module.OrderBy(p => p.Code).ToList();
-        var allSelected = modulePerms.All(p => Selection.Contains(p.Id));
+        @* ── Toolbar ──────────────────────────────────────────────── *@
+        <div class="perm-toolbar">
+            <MudButton Variant="Variant.Outlined"
+                       Color="@(AllSelected ? Color.Error : Color.Primary)"
+                       StartIcon="@(AllSelected ? Icons.Material.Filled.RemoveDone : Icons.Material.Filled.DoneAll)"
+                       Size="Size.Small"
+                       Disabled="@ReadOnly"
+                       OnClick="@(() => ToggleAll(!AllSelected))">
+                @(AllSelected ? Loc["Permissions.Picker.ClearAll"] : Loc["Permissions.Picker.SelectAll"])
+            </MudButton>
 
-        <div class="module-row">
-            <span class="module-title">@module.Key</span>
-            <MudCheckBox T="bool"
-                         Value="@allSelected"
-                         Label="@(allSelected ? Loc["Permissions.Picker.ClearAll"].Value : Loc["Permissions.Picker.SelectAll"].Value)"
-                         Dense="true"
-                         Disabled="@ReadOnly"
-                         ValueChanged="@(v => ToggleModule(modulePerms, v))" />
-        </div>
-        <div class="chip-grid">
-            @foreach (var p in modulePerms)
-            {
-                var isSelected = Selection.Contains(p.Id);
-                var actionClass = GetActionClass(p.Code);
-                var chipClass = $"perm-chip {actionClass}{(isSelected ? " selected" : "")}{(ReadOnly ? " disabled" : "")}";
-
-                <span class="@chipClass"
-                      @onclick="@(() => TogglePermission(p))"
-                      title="@($"{p.Code} — {p.Description}\n{Loc["Permissions.Picker.MinScope", p.MinimumRoleScope]}")">
-                    <MudIcon Class="perm-icon"
-                             Icon="@(isSelected ? Icons.Material.Filled.CheckCircle : Icons.Material.Outlined.RadioButtonUnchecked)"
-                             Size="Size.Small" />
-                    @p.Code
+            <div class="perm-legend">
+                <span class="perm-legend-item" style="color:#10b981">
+                    <MudIcon Icon="@Icons.Material.Filled.Add" Style="font-size:14px" />
+                    @Loc["Permissions.Picker.Legend.Create"]
                 </span>
-            }
+                <span class="perm-legend-item" style="color:#3b82f6">
+                    <MudIcon Icon="@Icons.Material.Filled.Visibility" Style="font-size:14px" />
+                    @Loc["Permissions.Picker.Legend.Read"]
+                </span>
+                <span class="perm-legend-item" style="color:#f59e0b">
+                    <MudIcon Icon="@Icons.Material.Filled.Edit" Style="font-size:14px" />
+                    @Loc["Permissions.Picker.Legend.Update"]
+                </span>
+                <span class="perm-legend-item" style="color:#ef4444">
+                    <MudIcon Icon="@Icons.Material.Filled.DeleteOutline" Style="font-size:14px" />
+                    @Loc["Permissions.Picker.Legend.Delete"]
+                </span>
+                <span class="perm-legend-item" style="color:#8b5cf6">
+                    <MudIcon Icon="@Icons.Material.Filled.MoreHoriz" Style="font-size:14px" />
+                    @Loc["Permissions.Picker.Legend.Other"]
+                </span>
+            </div>
         </div>
-    }
+
+        @* ── Modül panelleri ──────────────────────────────────────── *@
+        <MudExpansionPanels MultiExpansion="true" Elevation="0" Class="perm-modules">
+            @foreach (var module in VisiblePermissions.GroupBy(p => p.Module).OrderBy(g => g.Key))
+            {
+                var modulePerms = module.OrderBy(p => p.Code).ToList();
+                var moduleAllSelected = modulePerms.All(p => Selection.Contains(p.Id));
+                var entityGroups = modulePerms
+                    .GroupBy(p => ParseCode(p.Code).Entity, StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(g => g.Key)
+                    .ToList();
+
+                <MudExpansionPanel Expanded="true" Class="perm-module">
+                    <TitleContent>
+                        <div class="perm-module-header">
+                            <div class="d-flex align-center gap-2">
+                                <MudText Typo="Typo.subtitle1" Style="font-weight:700;letter-spacing:.02em">@module.Key</MudText>
+                                <span class="perm-module-count">@modulePerms.Count</span>
+                            </div>
+                            <MudButton Variant="Variant.Text"
+                                       Size="Size.Small"
+                                       Color="@(moduleAllSelected ? Color.Error : Color.Primary)"
+                                       StartIcon="@(moduleAllSelected ? Icons.Material.Filled.RemoveDone : Icons.Material.Filled.DoneAll)"
+                                       Disabled="@ReadOnly"
+                                       OnClick="@(() => ToggleGroup(modulePerms, !moduleAllSelected))"
+                                       OnClickStopPropagation="true">
+                                @(moduleAllSelected ? Loc["Permissions.Picker.GroupClear"] : Loc["Permissions.Picker.GroupSelect"])
+                            </MudButton>
+                        </div>
+                    </TitleContent>
+                    <ChildContent>
+                        <MudExpansionPanels MultiExpansion="true" Elevation="0" Class="perm-entities">
+                            @foreach (var entity in entityGroups)
+                            {
+                                var entityPerms = entity.ToList();
+                                var entityAllSelected = entityPerms.All(p => Selection.Contains(p.Id));
+                                var entitySelectedCount = entityPerms.Count(p => Selection.Contains(p.Id));
+                                var crudByAction = entityPerms
+                                    .Where(p => IsCrudAction(ParseCode(p.Code).Action))
+                                    .GroupBy(p => ParseCode(p.Code).Action)
+                                    .ToDictionary(g => g.Key, g => g.First());
+                                var otherPerms = entityPerms
+                                    .Where(p => !IsCrudAction(ParseCode(p.Code).Action))
+                                    .OrderBy(p => p.Code)
+                                    .ToList();
+
+                                <MudExpansionPanel Expanded="true" Class="perm-entity-panel">
+                                    <TitleContent>
+                                        <div class="perm-entity-header">
+                                            <div class="d-flex align-center gap-2">
+                                                <span class="perm-entity-name">@entity.Key</span>
+                                                <span class="perm-entity-badge @(entitySelectedCount > 0 ? "perm-entity-badge--active" : "")">
+                                                    @entitySelectedCount/@entityPerms.Count
+                                                </span>
+                                            </div>
+                                            <MudButton Variant="Variant.Text"
+                                                       Size="Size.Small"
+                                                       Color="@(entityAllSelected ? Color.Error : Color.Primary)"
+                                                       StartIcon="@(entityAllSelected ? Icons.Material.Filled.RemoveDone : Icons.Material.Filled.DoneAll)"
+                                                       Disabled="@ReadOnly"
+                                                       OnClick="@(() => ToggleGroup(entityPerms, !entityAllSelected))"
+                                                       OnClickStopPropagation="true">
+                                                @(entityAllSelected ? Loc["Permissions.Picker.GroupClear"] : Loc["Permissions.Picker.GroupSelect"])
+                                            </MudButton>
+                                        </div>
+                                    </TitleContent>
+                                    <ChildContent>
+                                        <div class="perm-entity-content">
+                                            <div class="perm-col perm-col--crud">
+                                                @foreach (var (action, color, icon) in CrudColumns)
+                                                {
+                                                    if (crudByAction.TryGetValue(action, out var perm))
+                                                    {
+                                                        var isSelected = Selection.Contains(perm.Id);
+                                                        <MudTooltip Text="@($"{perm.Code} — {perm.Description}")" Placement="Placement.Top">
+                                                            <div class="@($"perm-crud-btn{(isSelected ? " perm-crud-btn--on" : "")}{(ReadOnly ? " perm-crud-btn--ro" : "")}")"
+                                                                 style="@($"--clr:{color}")"
+                                                                 @onclick="@(async () => { if (!ReadOnly) await TogglePermission(perm); })">
+                                                                <MudIcon Icon="@(isSelected ? Icons.Material.Filled.CheckCircle : Icons.Material.Outlined.Circle)"
+                                                                         Style="@($"font-size:22px;color:{(isSelected ? "#fff" : color)};opacity:{(isSelected ? 1 : .45)}")" />
+                                                            </div>
+                                                        </MudTooltip>
+                                                    }
+                                                    else
+                                                    {
+                                                        <div class="perm-crud-btn perm-crud-btn--empty"></div>
+                                                    }
+                                                }
+                                            </div>
+
+                                            <div class="perm-col perm-col--other">
+                                                @foreach (var perm in otherPerms)
+                                                {
+                                                    var isSelected = Selection.Contains(perm.Id);
+                                                    var label = FormatOtherActionLabel(perm.Code);
+                                                    <MudTooltip Text="@($"{perm.Code} — {perm.Description}")" Placement="Placement.Top">
+                                                        <span class="@($"perm-other-chip{(isSelected ? " perm-other-chip--on" : "")}{(ReadOnly ? " perm-other-chip--ro" : "")}")"
+                                                              @onclick="@(async () => { if (!ReadOnly) await TogglePermission(perm); })">
+                                                            @label
+                                                        </span>
+                                                    </MudTooltip>
+                                                }
+                                            </div>
+                                        </div>
+                                    </ChildContent>
+                                </MudExpansionPanel>
+                            }
+                        </MudExpansionPanels>
+                    </ChildContent>
+                </MudExpansionPanel>
+            }
+        </MudExpansionPanels>
+
+    </div>
 }
 
+<style>
+    /* ── Genel kap ────────────────────────────────────────────────── */
+    .perm-picker { display: flex; flex-direction: column; gap: 10px; }
+
+    /* ── Toolbar ──────────────────────────────────────────────────── */
+    .perm-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 8px 14px;
+        background: rgba(0,0,0,0.025);
+        border: 1px solid rgba(0,0,0,0.07);
+        border-radius: 8px;
+    }
+    .perm-legend { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+    .perm-legend-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 0.78rem;
+        font-weight: 600;
+        opacity: .75;
+    }
+
+    /* ── Modül panelleri ──────────────────────────────────────────── */
+    .perm-modules .mud-expand-panel { margin-bottom: 6px !important; border-radius: 8px !important; overflow: hidden; }
+    .perm-module-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+        gap: 8px;
+    }
+    .perm-module-count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 20px;
+        height: 20px;
+        padding: 0 5px;
+        border-radius: 10px;
+        font-size: 0.72rem;
+        font-weight: 700;
+        background: rgba(0,0,0,0.08);
+        color: rgba(0,0,0,0.5);
+    }
+
+    /* ── Entity alt paneller ──────────────────────────────────────── */
+    .perm-entities { padding: 0 !important; }
+    .perm-entities .mud-expand-panel {
+        margin: 0 !important;
+        border-radius: 0 !important;
+        border-bottom: 1px solid rgba(0,0,0,0.05) !important;
+        box-shadow: none !important;
+    }
+    .perm-entities .mud-expand-panel:last-child { border-bottom: none !important; }
+    .perm-entities .mud-expand-panel-header { padding: 6px 16px !important; min-height: 40px !important; }
+    .perm-entities .mud-expand-panel-content { padding: 0 16px 10px !important; }
+
+    .perm-entity-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+        gap: 8px;
+    }
+    .perm-entity-name {
+        font-size: 0.84rem;
+        font-weight: 600;
+        color: rgba(0,0,0,0.72);
+    }
+    .perm-entity-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 32px;
+        height: 18px;
+        padding: 0 6px;
+        border-radius: 9px;
+        font-size: 0.7rem;
+        font-weight: 700;
+        background: rgba(0,0,0,0.07);
+        color: rgba(0,0,0,0.45);
+    }
+    .perm-entity-badge--active {
+        background: rgba(99,102,241,0.15);
+        color: #6366f1;
+    }
+
+    .perm-entity-content {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        padding: 4px 0;
+    }
+
+    /* ── Kolonlar ─────────────────────────────────────────────────── */
+    .perm-col--crud   { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; }
+    .perm-col--other  { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; flex: 1 1 auto; min-width: 0; }
+
+    /* ── CRUD butonları ───────────────────────────────────────────── */
+    .perm-crud-head {
+        width: 34px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .perm-crud-btn {
+        width: 34px;
+        height: 34px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        cursor: pointer;
+        transition: background 0.15s ease, transform 0.1s ease;
+    }
+    .perm-crud-btn:hover:not(.perm-crud-btn--empty):not(.perm-crud-btn--ro) {
+        background: rgba(0,0,0,0.06);
+        transform: scale(1.12);
+    }
+    .perm-crud-btn--on {
+        background: var(--clr) !important;
+    }
+    .perm-crud-btn--on:hover:not(.perm-crud-btn--ro) {
+        filter: brightness(1.1);
+        transform: scale(1.12);
+    }
+    .perm-crud-btn--empty { cursor: default; opacity: 0; pointer-events: none; }
+    .perm-crud-btn--ro { cursor: default; }
+
+    /* ── Diğer izin chip ──────────────────────────────────────────── */
+    .perm-other-chip {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 9px;
+        font-size: 0.74rem;
+        font-weight: 600;
+        border-radius: 12px;
+        border: 1.5px solid #8b5cf6;
+        color: #8b5cf6;
+        background: transparent;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: background 0.15s, color 0.15s;
+        user-select: none;
+    }
+    .perm-other-chip:hover:not(.perm-other-chip--ro) { background: rgba(139,92,246,.1); }
+    .perm-other-chip--on { background: #8b5cf6 !important; color: #fff !important; }
+    .perm-other-chip--ro { cursor: default; }
+</style>
+
 @code {
-    /// <summary>Tüm permission kataloğu (zaten yüklenmiş olarak gelir).</summary>
     [Parameter, EditorRequired]
     public IReadOnlyList<PermissionDto> Permissions { get; set; } = [];
 
-    /// <summary>Seçili permission ID'leri. Two-way binding ile parent günceller.</summary>
     [Parameter, EditorRequired]
     public HashSet<Guid> Selection { get; set; } = new();
 
-    /// <summary>Atanmakta olan rolün scope'u. Uyumlu olmayan izinler gizlenir.</summary>
     [Parameter, EditorRequired]
     public ScopeLevel RoleScope { get; set; }
 
-    /// <summary>Sadece okuma modu — tıklama devre dışı.</summary>
     [Parameter]
     public bool ReadOnly { get; set; }
 
-    /// <summary>Seçim değişince parent'a haber ver.</summary>
     [Parameter]
     public EventCallback<HashSet<Guid>> SelectionChanged { get; set; }
 
@@ -99,15 +343,22 @@ else if (_initialized)
     private HashSet<string> _assignerCodes = new(StringComparer.Ordinal);
     private bool _assignerIsSystem;
 
-    /// <summary>Picker'da görünür izinler (privilege + scope ceiling sonrası).</summary>
+    private static readonly (string Action, string Color, string Icon)[] CrudColumns =
+    [
+        ("create", "#10b981", Icons.Material.Filled.Add),
+        ("read",   "#3b82f6", Icons.Material.Filled.Visibility),
+        ("update", "#f59e0b", Icons.Material.Filled.Edit),
+        ("delete", "#ef4444", Icons.Material.Filled.DeleteOutline),
+    ];
+
     private IReadOnlyList<PermissionDto> VisiblePermissions =>
         Permissions.Where(IsVisible).ToList();
 
+    private bool AllSelected =>
+        VisiblePermissions.Count > 0 && VisiblePermissions.All(p => Selection.Contains(p.Id));
+
     protected override async Task OnInitializedAsync()
     {
-        // İki strateji birleşik (Blazor scope farklılığına karşı sağlam yedek):
-        //   1) Mediator query — SessionLoaderBehavior Redis'ten session yükler.
-        //   2) Fallback: AuthenticationStateProvider üzerinden cookie scope claim.
         try
         {
             var info = await Mediator.Send(new GetCurrentSessionInfoQuery());
@@ -119,10 +370,7 @@ else if (_initialized)
                 return;
             }
         }
-        catch
-        {
-            // Pipeline veya backend sorunu — fallback'e geç.
-        }
+        catch { }
 
         var authState = await AuthProvider.GetAuthenticationStateAsync();
         _assignerIsSystem = string.Equals(
@@ -134,62 +382,51 @@ else if (_initialized)
 
     private bool IsVisible(PermissionDto p)
     {
-        // Scope ceiling: role.Scope > permission.MinimumRoleScope ise gizle
-        // (örn. Tenant role System-only izin tutamaz).
-        // None (0) = "scope kısıtlaması yok" → her rol tutabilir; bu durumda
-        // scope ceiling'i atla (DB seed'i henüz tamamlanmamış olabilir).
         if (p.MinimumRoleScope != ScopeLevel.None
             && (int)RoleScope > (int)p.MinimumRoleScope) return false;
-
-        // Privilege ceiling: assigner kendisinde olmayan izni atayamaz.
-        // System scope bypass eder.
         if (!_assignerIsSystem && !_assignerCodes.Contains(p.Code)) return false;
-
         return true;
     }
 
-    private static string GetActionClass(string code)
+    private static (string Entity, string Action) ParseCode(string code)
     {
-        // Code formatı: <Module>.<Action>[.<Qualifier>] — büyük/küçük harf duyarsız
-        // anahtar kelime aramasıyla action'ı tespit ediyoruz (kod formatı esnek
-        // olabilir, örn. "company.info.read").
-        var lower = code.ToLowerInvariant();
-        if (lower.Contains(".read") || lower.EndsWith("read")) return "action-read";
-        if (lower.Contains(".create")) return "action-create";
-        if (lower.Contains(".delete")) return "action-delete";
-        if (lower.Contains(".approve")) return "action-approve";
-        if (lower.Contains(".update") || lower.Contains(".write") || lower.Contains(".manage") || lower.Contains(".edit"))
-            return "action-write";
-        return "action-default";
+        var parts = code.Split('.', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length < 2) return (code, "");
+        var entity = char.ToUpperInvariant(parts[0][0]) + parts[0][1..];
+        return (entity, parts[1].ToLowerInvariant());
+    }
+
+    private static bool IsCrudAction(string action) =>
+        action is "create" or "read" or "update" or "delete";
+
+    private static string FormatOtherActionLabel(string code)
+    {
+        var parts = code.Split('.', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length < 2) return code;
+        return string.Join(".", parts.Skip(1).Select(s => char.ToUpperInvariant(s[0]) + s[1..]));
     }
 
     private async Task TogglePermission(PermissionDto p)
     {
         if (ReadOnly) return;
-
-        if (Selection.Contains(p.Id))
-            Selection.Remove(p.Id);
-        else
-            Selection.Add(p.Id);
-
+        if (Selection.Contains(p.Id)) Selection.Remove(p.Id);
+        else Selection.Add(p.Id);
         await SelectionChanged.InvokeAsync(Selection);
     }
 
-    private async Task ToggleModule(IReadOnlyList<PermissionDto> modulePerms, bool selectAll)
+    private async Task ToggleGroup(IReadOnlyList<PermissionDto> perms, bool selectAll)
     {
         if (ReadOnly) return;
+        if (selectAll) foreach (var p in perms) Selection.Add(p.Id);
+        else          foreach (var p in perms) Selection.Remove(p.Id);
+        await SelectionChanged.InvokeAsync(Selection);
+    }
 
-        if (selectAll)
-        {
-            foreach (var p in modulePerms)
-                Selection.Add(p.Id);
-        }
-        else
-        {
-            foreach (var p in modulePerms)
-                Selection.Remove(p.Id);
-        }
-
+    private async Task ToggleAll(bool selectAll)
+    {
+        if (ReadOnly) return;
+        if (selectAll) foreach (var p in VisiblePermissions) Selection.Add(p.Id);
+        else          foreach (var p in VisiblePermissions) Selection.Remove(p.Id);
         await SelectionChanged.InvokeAsync(Selection);
     }
 }

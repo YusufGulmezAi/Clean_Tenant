@@ -218,6 +218,9 @@ public static class LocalizationCatalog
         new("Permissions.Picker.Legend.Delete",  "Silme",    "Delete"),
         new("Permissions.Picker.Legend.Approve", "Onay",     "Approve"),
         new("Permissions.Picker.Legend.Other",   "Diğer",    "Other"),
+        new("Permissions.Picker.GroupSelect",    "Grup Seç",       "Select Group"),
+        new("Permissions.Picker.GroupClear",     "Grup Kaldır",    "Clear Group"),
+        new("Permissions.Picker.OtherOps",       "+{0} diğer işlem",  "+{0} other ops"),
 
         // ========== Culture Switcher ==========
         new("Culture.Switcher.Label",     "Dil",         "Language"),
@@ -542,6 +545,8 @@ public static class LocalizationCatalog
 
         // ========== Company Form ==========
         new("CompanyForm.Section.Info",      "Site Bilgileri",      "Company Information"),
+        new("CompanyForm.Section.Identity",  "Kimlik",              "Identity"),
+        new("CompanyForm.Section.Contact",   "İletişim",            "Contact"),
         new("CompanyForm.Name",              "Site Adı *",          "Company Name *"),
         new("CompanyForm.LegalName",         "Yasal Ad",            "Legal Name"),
         new("CompanyForm.Vkn",               "VKN",                 "VKN"),

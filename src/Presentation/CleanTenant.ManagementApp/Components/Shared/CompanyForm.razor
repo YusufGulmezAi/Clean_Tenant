@@ -11,6 +11,8 @@
     <MudCard Elevation="0" Outlined="true">
         <MudCardContent>
             <MudGrid>
+
+                @* ── Site Bilgileri ───────────────────────────────────────── *@
                 <MudItem xs="12">
                     <MudText Typo="Typo.h6">@Loc["CompanyForm.Section.Info"]</MudText>
                 </MudItem>
@@ -34,6 +36,12 @@
                                   Immediate="true" />
                 </MudItem>
 
+                @* ── Kimlik ───────────────────────────────────────────────── *@
+                <MudItem xs="12">
+                    <MudDivider Class="my-2" />
+                    <MudText Typo="Typo.h6">@Loc["CompanyForm.Section.Identity"]</MudText>
+                </MudItem>
+
                 <MudItem xs="12" sm="6">
                     <MudTextField @bind-Value="Model.Vkn"
                                   For="@(() => Model.Vkn)"
@@ -44,6 +52,13 @@
                                   HelperText="@Loc["CompanyForm.Vkn.Help"]"
                                   Immediate="true" />
                 </MudItem>
+
+                @* ── İletişim ─────────────────────────────────────────────── *@
+                <MudItem xs="12">
+                    <MudDivider Class="my-2" />
+                    <MudText Typo="Typo.h6">@Loc["CompanyForm.Section.Contact"]</MudText>
+                </MudItem>
+
                 <MudItem xs="12" sm="6">
                     <MudTextField @bind-Value="Model.Email"
                                   For="@(() => Model.Email)"
@@ -54,7 +69,6 @@
                                   MaxLength="256"
                                   Immediate="true" />
                 </MudItem>
-
                 <MudItem xs="12" sm="6">
                     <MudTextField @bind-Value="Model.Phone"
                                   For="@(() => Model.Phone)"
@@ -64,6 +78,7 @@
                                   MaxLength="20"
                                   Immediate="true" />
                 </MudItem>
+
             </MudGrid>
         </MudCardContent>
 
