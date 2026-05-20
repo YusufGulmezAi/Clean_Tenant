@@ -40,9 +40,9 @@
                         @Loc["DataTable.Total", Items?.Count() ?? 0]
                     </MudText>
                 }
-                <MudSpacer />
-                @ToolbarRight
 
+                @* v0.2.11.c — Quick filter sol tarafta (Name kolonunun üstü).
+                   ToolbarRight + export butonları sağda kalır. *@
                 @if (ShowQuickFilter)
                 {
                     <MudTextField @bind-Value="_searchText"
@@ -55,9 +55,12 @@
                                   Variant="Variant.Outlined"
                                   Margin="Margin.Dense"
                                   Clearable="true"
-                                  Class="mt-0 ml-3"
+                                  Class="mt-0"
                                   Style="max-width: 280px;" />
                 }
+
+                <MudSpacer />
+                @ToolbarRight
 
                 @if (ShowExcelExport)
                 {

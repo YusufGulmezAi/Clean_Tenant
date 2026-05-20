@@ -32,20 +32,10 @@ else if (!_initialized)
 }
 else
 {
-    <div class="d-flex justify-between align-center mb-3">
-        <div style="min-width: 200px;">
-            <MudSelect T="int"
-                       @bind-Value="_scopeLevel"
-                       @bind-Value:after="LoadRolesAsync"
-                       Label="@Loc["Roles.List.ScopeFilter"]"
-                       Variant="Variant.Outlined"
-                       Size="Size.Small">
-                <MudSelectItem Value="1">@Loc["Scope.System"]</MudSelectItem>
-                <MudSelectItem Value="2">@Loc["Scope.Tenant"]</MudSelectItem>
-                <MudSelectItem Value="3">@Loc["Scope.Company"]</MudSelectItem>
-                <MudSelectItem Value="4">@Loc["Scope.Unit"]</MudSelectItem>
-            </MudSelect>
-        </div>
+    @* v0.2.11.c — Scope dropdown kaldırıldı (System operatörü sadece System scope
+       rolleri yönetiyor; dropdown her zaman System default'undaydı). "+ YENİ ROL"
+       butonu tablo üstünde sağda. *@
+    <div class="d-flex justify-end mb-3">
         <MudButton StartIcon="@Icons.Material.Filled.Add"
                    Color="Color.Primary"
                    Variant="Variant.Filled"
@@ -62,20 +52,6 @@ else
         <Columns>
             <PropertyColumn T="RoleListItem" TProperty="string" Property="@(r => r.Name)" Title="@Loc["Roles.List.Col.Name"].Value" />
             <PropertyColumn T="RoleListItem" TProperty="string" Property="@(r => r.Description)" Title="@Loc["Roles.List.Col.Description"].Value" />
-            <PropertyColumn T="RoleListItem" TProperty="int" Property="@(r => (int)r.Scope)" Title="@Loc["Roles.List.Col.Scope"].Value">
-                <CellTemplate>
-                    <MudText Typo="Typo.body2">
-                        @(context.Item.Scope switch
-                        {
-                            SharedKernel.Context.ScopeLevel.System => Loc["Scope.System"].Value,
-                            SharedKernel.Context.ScopeLevel.Tenant => Loc["Scope.Tenant"].Value,
-                            SharedKernel.Context.ScopeLevel.Company => Loc["Scope.Company"].Value,
-                            SharedKernel.Context.ScopeLevel.Unit => Loc["Scope.Unit"].Value,
-                            _ => "—"
-                        })
-                    </MudText>
-                </CellTemplate>
-            </PropertyColumn>
             <PropertyColumn T="RoleListItem" TProperty="int" Property="@(r => r.PermissionCount)" Title="@Loc["Roles.List.Col.PermCount"].Value" />
             <PropertyColumn T="RoleListItem" TProperty="bool" Property="@(r => r.IsBuiltIn)" Title="@Loc["Roles.List.Col.BuiltIn"].Value">
                 <CellTemplate>

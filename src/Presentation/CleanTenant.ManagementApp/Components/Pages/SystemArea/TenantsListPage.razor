@@ -112,12 +112,14 @@ else
     </div>
 
     @* ── Veri tablosu ─────────────────────────────────────────────────── *@
+    @* v0.2.11.c — RowClick kaldırıldı (Yönetimler listesinden bağlam değiştirme
+       artık AppBar Context Switcher üzerinden yapılır; satır tıklama Edit'e
+       gitmez de buton ikonları aktif kalır). *@
     <DataTable TItem="TenantListItem"
                Items="@_items"
                SearchPlaceholder="@Loc["Tenants.List.Search"]"
                SearchableFields="@(row => new[] { row.Name, row.UrlCode, row.LegalName })"
-               ExportColumns="@_exportColumns"
-               RowClick="@OnRowClick">
+               ExportColumns="@_exportColumns">
         <Columns>
             <PropertyColumn T="TenantListItem" TProperty="string" Property="@(t => t.Name)" Title="@Loc["Tenants.List.Col.Name"].Value" />
             <PropertyColumn T="TenantListItem" TProperty="string" Property="@(t => t.UrlCode)" Title="@Loc["Tenants.List.Col.UrlCode"].Value" />
@@ -181,11 +183,8 @@ else
             </PropertyColumn>
             <TemplateColumn T="TenantListItem" CellClass="d-flex justify-end" Filterable="false" Sortable="false">
                 <CellTemplate>
-                    <MudIconButton Icon="@Icons.Material.Filled.Login"
-                                   Size="Size.Small"
-                                   Color="Color.Primary"
-                                   title="@Loc["Tenants.List.Action.Switch"]"
-                                   OnClick="@(() => SwitchToTenantAsync(context.Item.Id))" />
+                    @* v0.2.11.c — Bağlam değiştirme (Login ikonu) butonu kaldırıldı;
+                       tek bağlam değişim noktası AppBar Context Switcher'dır. *@
                     <MudIconButton Icon="@Icons.Material.Filled.Edit"
                                    Size="Size.Small"
                                    Color="Color.Default"
@@ -250,19 +249,6 @@ else
             PersistentState.PersistAsJson(PersistKey, _items);
             return Task.CompletedTask;
         });
-    }
-
-    private Task OnRowClick(DataGridRowClickEventArgs<TenantListItem> args)
-        => SwitchToTenantAsync(args.Item.Id);
-
-    private async Task SwitchToTenantAsync(Guid tenantId)
-    {
-        var returnUrl = "/" + Nav.ToBaseRelativePath(Nav.Uri);
-        await JS.InvokeVoidAsync(
-            "cleantenant.submitTenantSwitch",
-            tenantId.ToString(),
-            returnUrl,
-            string.Empty);
     }
 
     private void GoToEdit(string urlCode)
