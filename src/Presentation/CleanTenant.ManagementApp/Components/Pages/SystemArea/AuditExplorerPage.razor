@@ -31,7 +31,7 @@ else
 
     @* ── Filtre Paneli ────────────────────────────────────────────── *@
     <MudExpansionPanels Class="mb-3">
-        <MudExpansionPanel Text="@Loc["Audit.Filter.Title"].Value" Icon="@Icons.Material.Filled.FilterList">
+        <MudExpansionPanel Text="@Loc["Audit.Filter.Title"].Value" Icon="@Icons.Material.Filled.FilterList" Expanded="true">
             <MudGrid>
                 <MudItem xs="12" sm="6" md="3">
                     <MudTextField @bind-Value="_filterDateFromStr"
@@ -315,10 +315,9 @@ else
     private string? _filterTenantName;
     private string? _filterCompanyName;
 
-    // AutoComplete kaynakları — her sayfa yüklendikçe birikir
-    private readonly HashSet<string> _knownUserNames = new(StringComparer.OrdinalIgnoreCase);
-    private readonly HashSet<string> _knownEntityTypes = new(StringComparer.OrdinalIgnoreCase);
-    private readonly HashSet<string> _knownTenantNames = new(StringComparer.OrdinalIgnoreCase);
+    // AutoComplete kaynakları — sayfa ilk yüklendiğinde DB'den distinct çekilir
+    // (v0.2.11.f); kullanıcının görmediği kayıtlardaki değerleri de aratabilir.
+    private AuditFilterOptions? _filterOptions;
 
     // Katalog'dan yüklenen site listesi (Id → Name)
     private IReadOnlyList<CompanyListItem> _allCompanies = [];
@@ -341,7 +340,11 @@ else
         _allCompanies = await CompanyReader.GetAllGlobalAsync();
         _companyNameMap = _allCompanies.ToDictionary(c => c.Id, c => c.Name);
 
-        await LoadPageAsync(0);
+        // v0.2.11.f — Autocomplete kaynaklarını DB'den distinct çek (tek seferlik).
+        _filterOptions = await Mediator.Send(new GetAuditFilterOptionsQuery());
+
+        // v0.2.11.f — Tablo ilk açılışta BOŞ kalır; kullanıcı filtre seçip
+        // "Ara" butonuna basınca LoadPageAsync(0) tetiklenir.
     }
 
     private async Task LoadPageAsync(int page)
@@ -369,14 +372,6 @@ else
             var result = await Mediator.Send(new GetAuditEntriesQuery(filter));
             _items = result.Items;
             _totalCount = result.TotalCount;
-
-            // AutoComplete kaynakları biriktirilir
-            foreach (var item in _items)
-            {
-                if (!string.IsNullOrEmpty(item.UserFullName)) _knownUserNames.Add(item.UserFullName);
-                if (!string.IsNullOrEmpty(item.EntityType)) _knownEntityTypes.Add(item.EntityType);
-                if (!string.IsNullOrEmpty(item.TenantName)) _knownTenantNames.Add(item.TenantName);
-            }
         }
         catch (Exception ex)
         {
@@ -409,26 +404,29 @@ else
 
     private Task<IEnumerable<string>> SearchUserNames(string value, CancellationToken ct)
     {
-        var list = _knownUserNames.AsEnumerable();
+        var list = _filterOptions?.UserFullNames ?? Array.Empty<string>();
         if (!string.IsNullOrEmpty(value))
-            list = list.Where(n => n.Contains(value, StringComparison.OrdinalIgnoreCase));
-        return Task.FromResult<IEnumerable<string>>(list.OrderBy(n => n).ToList());
+            return Task.FromResult<IEnumerable<string>>(
+                list.Where(n => n.Contains(value, StringComparison.OrdinalIgnoreCase)).ToList());
+        return Task.FromResult<IEnumerable<string>>(list);
     }
 
     private Task<IEnumerable<string>> SearchEntityTypes(string value, CancellationToken ct)
     {
-        var list = _knownEntityTypes.AsEnumerable();
+        var list = _filterOptions?.EntityTypes ?? Array.Empty<string>();
         if (!string.IsNullOrEmpty(value))
-            list = list.Where(n => n.Contains(value, StringComparison.OrdinalIgnoreCase));
-        return Task.FromResult<IEnumerable<string>>(list.OrderBy(n => n).ToList());
+            return Task.FromResult<IEnumerable<string>>(
+                list.Where(n => n.Contains(value, StringComparison.OrdinalIgnoreCase)).ToList());
+        return Task.FromResult<IEnumerable<string>>(list);
     }
 
     private Task<IEnumerable<string>> SearchTenantNames(string value, CancellationToken ct)
     {
-        var list = _knownTenantNames.AsEnumerable();
+        var list = _filterOptions?.TenantNames ?? Array.Empty<string>();
         if (!string.IsNullOrEmpty(value))
-            list = list.Where(n => n.Contains(value, StringComparison.OrdinalIgnoreCase));
-        return Task.FromResult<IEnumerable<string>>(list.OrderBy(n => n).ToList());
+            return Task.FromResult<IEnumerable<string>>(
+                list.Where(n => n.Contains(value, StringComparison.OrdinalIgnoreCase)).ToList());
+        return Task.FromResult<IEnumerable<string>>(list);
     }
 
     private Task<IEnumerable<string>> SearchCompanyNames(string value, CancellationToken ct)
