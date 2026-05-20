@@ -29,6 +29,7 @@ internal sealed class CreateBankCommandHandler : IRequestHandler<CreateBankComma
             EftCode = command.EftCode,
             HasVirtualPosIntegration = command.HasVirtualPosIntegration,
             HasCorporateCollectionIntegration = command.HasCorporateCollectionIntegration,
+            IsActive = command.IsActive,
         };
 
         _db.Banks.Add(bank);

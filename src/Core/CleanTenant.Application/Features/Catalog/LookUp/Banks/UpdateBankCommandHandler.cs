@@ -31,6 +31,7 @@ internal sealed class UpdateBankCommandHandler : IRequestHandler<UpdateBankComma
         bank.EftCode = command.EftCode;
         bank.HasVirtualPosIntegration = command.HasVirtualPosIntegration;
         bank.HasCorporateCollectionIntegration = command.HasCorporateCollectionIntegration;
+        bank.IsActive = command.IsActive;
         bank.UpdatedAt = DateTimeOffset.UtcNow;
 
         _db.Banks.Update(bank);

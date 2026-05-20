@@ -74,7 +74,15 @@ internal sealed class LookUpCatalogReader : ILookUpCatalogReader
             .AsNoTracking()
             .Where(x => !x.IsDeleted)
             .OrderBy(x => x.FullName)
-            .Select(x => new BankListItem(x.Id, x.UrlCode, x.FullName, x.ShortName))
+            .Select(x => new BankListItem(
+                x.Id,
+                x.UrlCode,
+                x.FullName,
+                x.ShortName,
+                x.EftCode,
+                x.HasVirtualPosIntegration,
+                x.HasCorporateCollectionIntegration,
+                x.IsActive))
             .ToListAsync(ct);
         return result;
     }
@@ -91,7 +99,8 @@ internal sealed class LookUpCatalogReader : ILookUpCatalogReader
                 x.ShortName,
                 x.EftCode,
                 x.HasVirtualPosIntegration,
-                x.HasCorporateCollectionIntegration))
+                x.HasCorporateCollectionIntegration,
+                x.IsActive))
             .FirstOrDefaultAsync(ct);
         return result;
     }

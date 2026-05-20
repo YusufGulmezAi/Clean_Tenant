@@ -22,4 +22,12 @@ public sealed class Bank : BaseEntity, IAggregateRoot, IHasUrlCode
 
     /// <summary>Kurumsal tahsilat entegrasyonu bulunup bulunmadığı.</summary>
     public bool HasCorporateCollectionIntegration { get; set; }
+
+    /// <summary>
+    /// Bankanın faaliyette olup olmadığı. Pasif bankalar tahsilat/eşleştirme
+    /// akışlarında varsayılan listelerden gizlenir; tarihsel kayıtlarda referans
+    /// olarak kalır (soft delete değil — banka kapanmış ama hesap geçmişi
+    /// silinmemiş senaryoları için).
+    /// </summary>
+    public bool IsActive { get; set; } = true;
 }

@@ -16,6 +16,7 @@ internal sealed class BankConfiguration : IEntityTypeConfiguration<Bank>
         builder.Property(x => x.EftCode).HasMaxLength(10).IsRequired(false);
         builder.Property(x => x.HasVirtualPosIntegration).HasDefaultValue(false);
         builder.Property(x => x.HasCorporateCollectionIntegration).HasDefaultValue(false);
+        builder.Property(x => x.IsActive).HasDefaultValue(true);
         builder.Property(x => x.CreatedAt).HasColumnType("timestamptz").IsRequired();
         builder.Property(x => x.UpdatedAt).HasColumnType("timestamptz").IsRequired(false);
         builder.Property(x => x.DeletedAt).HasColumnType("timestamptz").IsRequired(false);

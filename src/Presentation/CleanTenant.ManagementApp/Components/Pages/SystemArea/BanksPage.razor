@@ -70,6 +70,11 @@ else
                                    Label="@Loc["Banks.CorporateCollection"]"
                                    Color="Color.Primary" />
                     </MudItem>
+                    <MudItem xs="12" sm="3">
+                        <MudSwitch T="bool" @bind-Checked="_formModel.IsActive"
+                                   Label="@Loc["Banks.IsActive"]"
+                                   Color="Color.Success" />
+                    </MudItem>
                 </MudGrid>
                 <div class="d-flex gap-2 mt-4">
                     <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@SubmitBankAsync">
@@ -87,6 +92,47 @@ else
         <Columns>
             <PropertyColumn Property="@(x => x.FullName)" Title="@Loc["Banks.FullName"].Value" />
             <PropertyColumn Property="@(x => x.ShortName)" Title="@Loc["Banks.ShortName"].Value" />
+            <PropertyColumn Property="@(x => x.EftCode)" Title="@Loc["Banks.EftCode"].Value">
+                <CellTemplate>
+                    <MudText Typo="Typo.body2" Style="font-family:monospace">@(context.Item.EftCode ?? "—")</MudText>
+                </CellTemplate>
+            </PropertyColumn>
+            <PropertyColumn Property="@(x => x.HasVirtualPosIntegration)" Title="@Loc["Banks.VirtualPos"].Value">
+                <CellTemplate>
+                    @if (context.Item.HasVirtualPosIntegration)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Info">@Loc["Banks.VirtualPos"]</MudChip>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Tertiary">—</MudText>
+                    }
+                </CellTemplate>
+            </PropertyColumn>
+            <PropertyColumn Property="@(x => x.HasCorporateCollectionIntegration)" Title="@Loc["Banks.CorporateCollection"].Value">
+                <CellTemplate>
+                    @if (context.Item.HasCorporateCollectionIntegration)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Info">@Loc["Banks.CorporateCollection"]</MudChip>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Tertiary">—</MudText>
+                    }
+                </CellTemplate>
+            </PropertyColumn>
+            <PropertyColumn Property="@(x => x.IsActive)" Title="@Loc["Banks.Col.IsActive"].Value">
+                <CellTemplate>
+                    @if (context.Item.IsActive)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Success">@Loc["Banks.Active"]</MudChip>
+                    }
+                    else
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Default">@Loc["Banks.Passive"]</MudChip>
+                    }
+                </CellTemplate>
+            </PropertyColumn>
             <TemplateColumn CellClass="d-flex justify-end" Filterable="false" Sortable="false">
                 <CellTemplate>
                     <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Color="Color.Default"
@@ -107,6 +153,7 @@ else
         public string? EftCode { get; set; }
         public bool HasVirtualPosIntegration { get; set; }
         public bool HasCorporateCollectionIntegration { get; set; }
+        public bool IsActive { get; set; } = true;
     }
 
     private bool _unauthorized;
@@ -170,6 +217,7 @@ else
             EftCode = bank.EftCode,
             HasVirtualPosIntegration = bank.HasVirtualPosIntegration,
             HasCorporateCollectionIntegration = bank.HasCorporateCollectionIntegration,
+            IsActive = bank.IsActive,
         };
         _showForm = true;
         StateHasChanged();
@@ -189,7 +237,8 @@ else
                 _formModel.ShortName,
                 _formModel.EftCode,
                 _formModel.HasVirtualPosIntegration,
-                _formModel.HasCorporateCollectionIntegration
+                _formModel.HasCorporateCollectionIntegration,
+                _formModel.IsActive
             ));
 
             if (result.IsFailure)
@@ -207,7 +256,8 @@ else
                 _formModel.ShortName,
                 _formModel.EftCode,
                 _formModel.HasVirtualPosIntegration,
-                _formModel.HasCorporateCollectionIntegration
+                _formModel.HasCorporateCollectionIntegration,
+                _formModel.IsActive
             ));
 
             if (result.IsFailure)

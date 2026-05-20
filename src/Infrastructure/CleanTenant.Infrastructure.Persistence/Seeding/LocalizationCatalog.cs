@@ -579,6 +579,10 @@ public static class LocalizationCatalog
         new("Banks.UpdateSuccess",           "Banka güncellendi",   "Bank updated"),
         new("Banks.AddSuccess",              "Banka eklendi",       "Bank added"),
         new("Banks.DeleteSuccess",           "Banka silindi",       "Bank deleted"),
+        new("Banks.IsActive",                "Aktif",               "Active"),
+        new("Banks.Col.IsActive",            "Durum",               "Status"),
+        new("Banks.Active",                  "Aktif",               "Active"),
+        new("Banks.Passive",                 "Pasif",               "Passive"),
 
         // ========== LookUp Tables ==========
         new("Lookup.Title",                  "LookUp Tabloları",    "Lookup Tables"),

@@ -16,5 +16,22 @@ public sealed record DistrictListItem(Guid Id, string UrlCode, string Name, Guid
 public sealed record NeighborhoodListItem(Guid Id, string UrlCode, string Name, Guid DistrictId);
 public sealed record ResidentialTypeListItem(Guid Id, string UrlCode, string Name, string? Description);
 public sealed record BuildingTypeListItem(Guid Id, string UrlCode, string Name, string? Description);
-public sealed record BankListItem(Guid Id, string UrlCode, string FullName, string ShortName);
-public sealed record BankDetail(Guid Id, string UrlCode, string FullName, string ShortName, string? EftCode, bool HasVirtualPosIntegration, bool HasCorporateCollectionIntegration);
+public sealed record BankListItem(
+    Guid Id,
+    string UrlCode,
+    string FullName,
+    string ShortName,
+    string? EftCode,
+    bool HasVirtualPosIntegration,
+    bool HasCorporateCollectionIntegration,
+    bool IsActive);
+
+public sealed record BankDetail(
+    Guid Id,
+    string UrlCode,
+    string FullName,
+    string ShortName,
+    string? EftCode,
+    bool HasVirtualPosIntegration,
+    bool HasCorporateCollectionIntegration,
+    bool IsActive);

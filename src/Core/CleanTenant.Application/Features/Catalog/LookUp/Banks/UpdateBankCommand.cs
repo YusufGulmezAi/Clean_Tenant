@@ -4,4 +4,11 @@ using MediatR;
 namespace CleanTenant.Application.Features.Catalog.LookUp.Banks;
 
 [RequirePermission("LookUp.Manage")]
-public sealed record UpdateBankCommand(Guid Id, string FullName, string ShortName, string? EftCode = null, bool HasVirtualPosIntegration = false, bool HasCorporateCollectionIntegration = false) : IRequest<Result>;
+public sealed record UpdateBankCommand(
+    Guid Id,
+    string FullName,
+    string ShortName,
+    string? EftCode = null,
+    bool HasVirtualPosIntegration = false,
+    bool HasCorporateCollectionIntegration = false,
+    bool IsActive = true) : IRequest<Result>;
