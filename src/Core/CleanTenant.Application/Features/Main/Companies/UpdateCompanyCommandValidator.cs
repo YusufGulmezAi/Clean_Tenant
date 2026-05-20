@@ -1,37 +1,38 @@
 using FluentValidation;
+using Microsoft.Extensions.Localization;
 
 namespace CleanTenant.Application.Features.Main.Companies;
 
 /// <summary>
-/// <see cref="UpdateCompanyCommand"/> validation kuralları.
+/// <see cref="UpdateCompanyCommand"/> validation kuralları. v0.2.11.d — lokalize.
 /// </summary>
 public sealed class UpdateCompanyCommandValidator : AbstractValidator<UpdateCompanyCommand>
 {
-    /// <summary>Validation kurallarını tanımlar.</summary>
-    public UpdateCompanyCommandValidator()
+    /// <summary>DI bağımlılıklarını alır.</summary>
+    public UpdateCompanyCommandValidator(IStringLocalizer localizer)
     {
         RuleFor(x => x.CompanyId)
-            .NotEmpty().WithMessage("Site kimliği zorunlu.");
+            .NotEmpty().WithMessage(_ => localizer["Validation.Company.Id.Required"].Value);
 
         RuleFor(x => x.Name)
-            .NotEmpty().WithMessage("Site adı zorunlu.")
-            .MaximumLength(256).WithMessage("Site adı en fazla 256 karakter.");
+            .NotEmpty().WithMessage(_ => localizer["Validation.Company.Name.Required"].Value)
+            .MaximumLength(256).WithMessage(_ => localizer["Validation.Company.Name.MaxLength", 256].Value);
 
         RuleFor(x => x.LegalName)
-            .MaximumLength(512).WithMessage("Yasal ad en fazla 512 karakter.");
+            .MaximumLength(512).WithMessage(_ => localizer["Validation.Company.LegalName.MaxLength", 512].Value);
 
         RuleFor(x => x.Vkn)
             .Matches(@"^[0-9]{10}$")
                 .When(x => !string.IsNullOrWhiteSpace(x.Vkn), ApplyConditionTo.CurrentValidator)
-                .WithMessage("VKN 10 haneli rakamlardan oluşmalı.");
+                .WithMessage(_ => localizer["Validation.Company.Vkn.Format"].Value);
 
         RuleFor(x => x.Email)
             .EmailAddress()
                 .When(x => !string.IsNullOrWhiteSpace(x.Email), ApplyConditionTo.CurrentValidator)
-                .WithMessage("Geçerli bir e-posta adresi girin.")
+                .WithMessage(_ => localizer["Validation.Company.Email.Invalid"].Value)
             .MaximumLength(256);
 
         RuleFor(x => x.Phone)
-            .MaximumLength(20).WithMessage("Telefon numarası en fazla 20 karakter.");
+            .MaximumLength(20).WithMessage(_ => localizer["Validation.Company.Phone.MaxLength", 20].Value);
     }
 }

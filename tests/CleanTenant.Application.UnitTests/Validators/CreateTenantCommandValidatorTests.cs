@@ -1,4 +1,5 @@
 using CleanTenant.Application.Features.Catalog.Tenants;
+using CleanTenant.Application.UnitTests.Common;
 using CleanTenant.Domain.Identity.Tenants;
 
 namespace CleanTenant.Application.UnitTests.Validators;
@@ -6,11 +7,12 @@ namespace CleanTenant.Application.UnitTests.Validators;
 /// <summary>
 /// <see cref="CreateTenantCommandValidator"/> testleri — VKN/TCKN/YKN
 /// koşullu format kuralları, Sorumlu Yönetici alanları, telefon mask
-/// validasyonu kapsanır.
+/// validasyonu kapsanır. v0.2.11.d — lokalize validator için
+/// <see cref="NullStringLocalizer"/> stub kullanılır.
 /// </summary>
 public sealed class CreateTenantCommandValidatorTests
 {
-    private readonly CreateTenantCommandValidator _validator = new();
+    private readonly CreateTenantCommandValidator _validator = new(NullStringLocalizer.Instance);
 
     private static CreateTenantCommand ValidVknCommand() => new(
         Name: "Acme Sites Ltd.",

@@ -1,3 +1,4 @@
+using CleanTenant.Application.Features.Catalog.Readers;
 using CleanTenant.Domain.Identity.Tenants;
 using FluentValidation;
 using Microsoft.AspNetCore.Components;
@@ -13,13 +14,8 @@ namespace CleanTenant.ManagementApp.Components.Shared;
 /// göre alanlar görünür / read-only / gizli render edilir.
 /// </para>
 /// <para>
-/// <b>Validation:</b> <see cref="TenantFormValidator"/> mode-aware kuralları
-/// FluentValidation üzerinden uygular; MudForm property-level error mesajını
-/// <c>For</c> expression'ı sayesinde input altında gösterir.
-/// </para>
-/// <para>
-/// <b>Submit:</b> <see cref="OnValidSubmit"/> yalnızca form valid ise tetiklenir.
-/// Sayfa (Create/Edit/Settings) commande dönüştürüp Mediator'a gönderir.
+/// v0.2.11.d — Tab'lı yapıya geçti (Genel / İletişim / Sözleşme / Paket ve Limitler);
+/// adres alanları (Province/District/Neighborhood) Genel tab'ında cascade dropdown.
 /// </para>
 /// </summary>
 public sealed partial class TenantForm : ComponentBase
@@ -46,9 +42,14 @@ public sealed partial class TenantForm : ComponentBase
     [Parameter] public string? CancelHref { get; set; }
 
     [Inject] private IStringLocalizer Loc { get; set; } = default!;
+    [Inject] private ILookUpCatalogReader LookUpReader { get; set; } = default!;
 
     private MudForm _form = default!;
-    private TenantFormValidator _validator = new(TenantFormMode.Create);
+    private TenantFormValidator? _validator;
+
+    private IReadOnlyList<ProvinceListItem> _provinces = [];
+    private IReadOnlyList<DistrictListItem> _districts = [];
+    private IReadOnlyList<NeighborhoodListItem> _neighborhoods = [];
 
     /// <summary>SubmitButtonText parameter null/boş ise lokalize default'a düşer.</summary>
     private string ResolvedSubmitButtonText => string.IsNullOrWhiteSpace(SubmitButtonText)
@@ -65,13 +66,29 @@ public sealed partial class TenantForm : ComponentBase
     }
 
     /// <inheritdoc />
+    protected override async Task OnInitializedAsync()
+    {
+        _provinces = await LookUpReader.GetProvincesAsync();
+
+        if (Model.ProvinceId is { } provinceId)
+        {
+            _districts = await LookUpReader.GetDistrictsByProvinceAsync(provinceId);
+        }
+        if (Model.DistrictId is { } districtId)
+        {
+            _neighborhoods = await LookUpReader.GetNeighborhoodsByDistrictAsync(districtId);
+        }
+    }
+
+    /// <inheritdoc />
     protected override void OnParametersSet()
     {
-        _validator = new TenantFormValidator(Mode);
+        _validator = new TenantFormValidator(Mode, Loc);
     }
 
     private async Task<IEnumerable<string>> ValidateValueAsync(object? value, string propertyName)
     {
+        if (_validator is null) return Array.Empty<string>();
         var context = ValidationContext<TenantFormModel>.CreateWithOptions(
             Model, x => x.IncludeProperties(propertyName));
         var result = await _validator.ValidateAsync(context);
@@ -86,6 +103,25 @@ public sealed partial class TenantForm : ComponentBase
         {
             await OnValidSubmit.InvokeAsync();
         }
+    }
+
+    private async Task OnProvinceChangedAsync()
+    {
+        // İl değiştiğinde alt seçimleri temizle ve ilçe listesini yeniden yükle.
+        Model.DistrictId = null;
+        Model.NeighborhoodId = null;
+        _neighborhoods = [];
+        _districts = Model.ProvinceId is { } pid
+            ? await LookUpReader.GetDistrictsByProvinceAsync(pid)
+            : [];
+    }
+
+    private async Task OnDistrictChangedAsync()
+    {
+        Model.NeighborhoodId = null;
+        _neighborhoods = Model.DistrictId is { } did
+            ? await LookUpReader.GetNeighborhoodsByDistrictAsync(did)
+            : [];
     }
 
     private bool IdentityReadOnly => Mode == TenantFormMode.Settings;

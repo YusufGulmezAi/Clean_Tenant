@@ -42,7 +42,7 @@ public sealed partial class CompanyForm : ComponentBase
     [Inject] private IStringLocalizer Loc { get; set; } = default!;
 
     private MudForm _form = default!;
-    private CompanyFormValidator _validator = new(CompanyFormMode.Create);
+    private CompanyFormValidator? _validator;
 
     /// <summary>SubmitButtonText parameter null/boş ise lokalize default'a düşer.</summary>
     private string ResolvedSubmitButtonText => string.IsNullOrWhiteSpace(SubmitButtonText)
@@ -61,11 +61,12 @@ public sealed partial class CompanyForm : ComponentBase
     /// <inheritdoc />
     protected override void OnParametersSet()
     {
-        _validator = new CompanyFormValidator(Mode);
+        _validator = new CompanyFormValidator(Mode, Loc);
     }
 
     private async Task<IEnumerable<string>> ValidateValueAsync(object? value, string propertyName)
     {
+        if (_validator is null) return Array.Empty<string>();
         var context = ValidationContext<CompanyFormModel>.CreateWithOptions(
             Model, x => x.IncludeProperties(propertyName));
         var result = await _validator.ValidateAsync(context);

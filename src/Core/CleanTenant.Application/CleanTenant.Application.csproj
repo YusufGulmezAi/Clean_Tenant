@@ -18,6 +18,8 @@
     <!-- AddApplicationServices() extension'ı için (composition root tek satırla çağırır) -->
     <PackageReference Include="MediatR.Extensions.Microsoft.DependencyInjection" />
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
+    <!-- v0.2.11.d — FluentValidation mesajları için IStringLocalizer (DbStringLocalizer impl). -->
+    <PackageReference Include="Microsoft.Extensions.Localization.Abstractions" />
   </ItemGroup>
 
   <PropertyGroup>

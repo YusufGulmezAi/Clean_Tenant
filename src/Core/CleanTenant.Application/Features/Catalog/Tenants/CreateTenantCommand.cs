@@ -31,6 +31,15 @@ namespace CleanTenant.Application.Features.Catalog.Tenants;
 /// <param name="AdminLastName">Sorumlu Yönetici soyadı.</param>
 /// <param name="AdminEmail">Sorumlu Yönetici e-postası (tekil).</param>
 /// <param name="AdminPhone">Sorumlu Yönetici telefonu — format <c>0(5XX) XXX-XX-XX</c>.</param>
+/// <param name="ProvinceId">Adres: bağlı il (LookUp.Provinces FK, opsiyonel). v0.2.11.b.</param>
+/// <param name="DistrictId">Adres: bağlı ilçe (LookUp.Districts FK, opsiyonel).</param>
+/// <param name="NeighborhoodId">Adres: bağlı mahalle (LookUp.Neighborhoods FK, opsiyonel).</param>
+/// <param name="ContactPerson">İletişim kişisi adı-soyadı (opsiyonel, max 200).</param>
+/// <param name="ContactEmail">İletişim e-postası (opsiyonel, max 256).</param>
+/// <param name="ContactPhone">İletişim telefonu (opsiyonel, max 32).</param>
+/// <param name="ContractStartDate">Sözleşme başlangıç tarihi (opsiyonel, gün hassasiyetli).</param>
+/// <param name="ContractEndDate">Sözleşme bitiş tarihi (opsiyonel).</param>
+/// <param name="TransitionGraceDays">Devir için verilen ek süre (gün, opsiyonel).</param>
 [RequirePermission("Tenant.Create")]
 [TenantWriteOperation]
 public sealed record CreateTenantCommand(
@@ -44,7 +53,16 @@ public sealed record CreateTenantCommand(
     string AdminFirstName,
     string AdminLastName,
     string AdminEmail,
-    string AdminPhone) : IRequest<Result<CreateTenantResult>>;
+    string AdminPhone,
+    Guid? ProvinceId = null,
+    Guid? DistrictId = null,
+    Guid? NeighborhoodId = null,
+    string? ContactPerson = null,
+    string? ContactEmail = null,
+    string? ContactPhone = null,
+    DateOnly? ContractStartDate = null,
+    DateOnly? ContractEndDate = null,
+    int? TransitionGraceDays = null) : IRequest<Result<CreateTenantResult>>;
 
 /// <summary>
 /// <see cref="CreateTenantCommand"/> sonucu. UI yeni Yönetim'in kart sayfasına

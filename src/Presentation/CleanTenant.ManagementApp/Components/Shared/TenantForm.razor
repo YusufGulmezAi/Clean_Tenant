@@ -2,162 +2,296 @@
 @using MudBlazor
 
 @*
-    v0.2.4.b.3 — Yönetim CRUD paylaşımlı form bileşeni. Üç modda da aynı
-    markup; alanların görünür/read-only/gizli durumları code-behind property'leri
-    üzerinden kontrol edilir.
-
-    v0.2.10.e.3 — TenantForm.* anahtarları ile lokalize edildi. Phone placeholder
-    "0(5XX) XXX-XX-XX" raw bırakıldı (format mask, locale-bağımsız).
+    v0.2.11.d — Tab'lı Yönetim formu. 4 tab: Genel / İletişim / Sözleşme /
+    Paket ve Limitler. Adres alanları Genel tab'ında cascade dropdown
+    (İl → İlçe → Mahalle). Create modunda Genel tab'ının altında Sorumlu
+    Yönetici bloğu görünür.
 *@
 
 <MudForm @ref="_form" Model="@Model" Validation="@ValidateValue" ValidationDelay="0">
     <MudCard Elevation="0" Outlined="true">
         <MudCardContent>
-            <MudGrid>
-                <MudItem xs="12">
-                    <MudText Typo="Typo.h6">@Loc["TenantForm.Section.Tenant"]</MudText>
-                </MudItem>
+            <MudTabs Elevation="0" Rounded="true" Color="Color.Primary" PanelClass="pa-4">
 
-                <MudItem xs="12" sm="6">
-                    <MudTextField @bind-Value="Model.Name"
-                                  For="@(() => Model.Name)"
-                                  Label="@Loc["TenantForm.Name"]"
-                                  Variant="Variant.Outlined"
-                                  Margin="Margin.Dense"
-                                  MaxLength="256"
-                                  Immediate="true" />
-                </MudItem>
-                <MudItem xs="12" sm="6">
-                    <MudTextField @bind-Value="Model.LegalName"
-                                  For="@(() => Model.LegalName)"
-                                  Label="@Loc["TenantForm.LegalName"]"
-                                  Variant="Variant.Outlined"
-                                  Margin="Margin.Dense"
-                                  MaxLength="512"
-                                  Immediate="true" />
-                </MudItem>
+                @* ── Genel Tab ───────────────────────────────────────────── *@
+                <MudTabPanel Text="@Loc["TenantForm.Tab.General"].Value" Icon="@Icons.Material.Filled.Business">
+                    <MudGrid>
+                        <MudItem xs="12">
+                            <MudText Typo="Typo.h6">@Loc["TenantForm.Section.Tenant"]</MudText>
+                        </MudItem>
 
-                <MudItem xs="12" sm="4">
-                    <MudSelect T="LegalIdentityType"
-                               @bind-Value="Model.LegalIdentityType"
-                               Label="@Loc["TenantForm.LegalIdentityType"]"
-                               Variant="Variant.Outlined"
-                               Margin="Margin.Dense"
-                               ReadOnly="@IdentityReadOnly">
-                        <MudSelectItem Value="@LegalIdentityType.Vkn">@Loc["TenantForm.IdentityType.Vkn"]</MudSelectItem>
-                        <MudSelectItem Value="@LegalIdentityType.Tckn">@Loc["TenantForm.IdentityType.Tckn"]</MudSelectItem>
-                        <MudSelectItem Value="@LegalIdentityType.Ykn">@Loc["TenantForm.IdentityType.Ykn"]</MudSelectItem>
-                    </MudSelect>
-                </MudItem>
-                <MudItem xs="12" sm="8">
-                    <MudTextField @bind-Value="Model.LegalIdentityNumber"
-                                  For="@(() => Model.LegalIdentityNumber)"
-                                  Label="@IdentityNumberLabel"
-                                  HelperText="@IdentityNumberHelperText"
-                                  Variant="Variant.Outlined"
-                                  Margin="Margin.Dense"
-                                  MaxLength="11"
-                                  ReadOnly="@IdentityReadOnly"
-                                  Immediate="true" />
-                </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudTextField @bind-Value="Model.Name"
+                                          For="@(() => Model.Name)"
+                                          Label="@Loc["TenantForm.Name"]"
+                                          Variant="Variant.Outlined"
+                                          Margin="Margin.Dense"
+                                          MaxLength="256"
+                                          Immediate="true" />
+                        </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudTextField @bind-Value="Model.LegalName"
+                                          For="@(() => Model.LegalName)"
+                                          Label="@Loc["TenantForm.LegalName"]"
+                                          Variant="Variant.Outlined"
+                                          Margin="Margin.Dense"
+                                          MaxLength="512"
+                                          Immediate="true" />
+                        </MudItem>
 
-                <MudItem xs="12">
-                    <MudTextField @bind-Value="Model.Address"
-                                  For="@(() => Model.Address)"
-                                  Label="@Loc["TenantForm.Address"]"
-                                  Variant="Variant.Outlined"
-                                  Margin="Margin.Dense"
-                                  Lines="2"
-                                  MaxLength="512"
-                                  Immediate="true" />
-                </MudItem>
+                        <MudItem xs="12" sm="4">
+                            <MudSelect T="LegalIdentityType"
+                                       @bind-Value="Model.LegalIdentityType"
+                                       Label="@Loc["TenantForm.LegalIdentityType"]"
+                                       Variant="Variant.Outlined"
+                                       Margin="Margin.Dense"
+                                       ReadOnly="@IdentityReadOnly">
+                                <MudSelectItem Value="@LegalIdentityType.Vkn">@Loc["TenantForm.IdentityType.Vkn"]</MudSelectItem>
+                                <MudSelectItem Value="@LegalIdentityType.Tckn">@Loc["TenantForm.IdentityType.Tckn"]</MudSelectItem>
+                                <MudSelectItem Value="@LegalIdentityType.Ykn">@Loc["TenantForm.IdentityType.Ykn"]</MudSelectItem>
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="12" sm="8">
+                            <MudTextField @bind-Value="Model.LegalIdentityNumber"
+                                          For="@(() => Model.LegalIdentityNumber)"
+                                          Label="@IdentityNumberLabel"
+                                          HelperText="@IdentityNumberHelperText"
+                                          Variant="Variant.Outlined"
+                                          Margin="Margin.Dense"
+                                          MaxLength="11"
+                                          ReadOnly="@IdentityReadOnly"
+                                          Immediate="true" />
+                        </MudItem>
 
-                <MudItem xs="12" sm="6">
-                    <MudSelect T="BillingTier"
-                               @bind-Value="Model.BillingTier"
-                               Label="@Loc["TenantForm.BillingTier"]"
-                               Variant="Variant.Outlined"
-                               Margin="Margin.Dense"
-                               ReadOnly="@BillingReadOnly">
-                        <MudSelectItem Value="@BillingTier.Free">@Loc["TenantForm.Tier.Free"]</MudSelectItem>
-                        <MudSelectItem Value="@BillingTier.Standard">@Loc["TenantForm.Tier.Standard"]</MudSelectItem>
-                        <MudSelectItem Value="@BillingTier.Enterprise">@Loc["TenantForm.Tier.Enterprise"]</MudSelectItem>
-                    </MudSelect>
-                </MudItem>
-                <MudItem xs="12" sm="6" Class="d-flex align-center">
-                    <MudSwitch T="bool"
-                               @bind-Value="Model.HasDedicatedDatabase"
-                               Color="Color.Primary"
-                               Label="@Loc["TenantForm.DedicatedDb"]"
-                               ReadOnly="@DedicatedDbReadOnly" />
-                </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudSelect T="BillingTier"
+                                       @bind-Value="Model.BillingTier"
+                                       Label="@Loc["TenantForm.BillingTier"]"
+                                       Variant="Variant.Outlined"
+                                       Margin="Margin.Dense"
+                                       ReadOnly="@BillingReadOnly">
+                                <MudSelectItem Value="@BillingTier.Free">@Loc["TenantForm.Tier.Free"]</MudSelectItem>
+                                <MudSelectItem Value="@BillingTier.Standard">@Loc["TenantForm.Tier.Standard"]</MudSelectItem>
+                                <MudSelectItem Value="@BillingTier.Enterprise">@Loc["TenantForm.Tier.Enterprise"]</MudSelectItem>
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="12" sm="6" Class="d-flex align-center">
+                            <MudSwitch T="bool"
+                                       @bind-Value="Model.HasDedicatedDatabase"
+                                       Color="Color.Primary"
+                                       Label="@Loc["TenantForm.DedicatedDb"]"
+                                       ReadOnly="@DedicatedDbReadOnly" />
+                        </MudItem>
 
-                @if (ShowSystemWriteAccess)
-                {
-                    <MudItem xs="12">
-                        <MudSwitch T="bool"
-                                   @bind-Value="Model.AllowSystemWriteAccess"
-                                   Color="Color.Primary"
-                                   Label="@Loc["TenantForm.AllowSystemWrite"]" />
-                        <MudText Typo="Typo.caption" Color="Color.Default" Class="ml-12">
-                            @Loc["TenantForm.AllowSystemWrite.Help"]
-                        </MudText>
-                    </MudItem>
-                }
+                        @if (ShowSystemWriteAccess)
+                        {
+                            <MudItem xs="12">
+                                <MudSwitch T="bool"
+                                           @bind-Value="Model.AllowSystemWriteAccess"
+                                           Color="Color.Primary"
+                                           Label="@Loc["TenantForm.AllowSystemWrite"]" />
+                                <MudText Typo="Typo.caption" Color="Color.Default" Class="ml-12">
+                                    @Loc["TenantForm.AllowSystemWrite.Help"]
+                                </MudText>
+                            </MudItem>
+                        }
 
-                @if (ShowAdminBlock)
-                {
-                    <MudItem xs="12">
-                        <MudDivider Class="my-2" />
-                        <MudText Typo="Typo.h6">@Loc["TenantForm.Section.Admin"]</MudText>
-                        <MudText Typo="Typo.caption" Color="Color.Default">
-                            @Loc["TenantForm.Admin.Caption"]
-                        </MudText>
-                    </MudItem>
+                        @* ── Adres bölümü (cascade dropdown) ─────────────── *@
+                        <MudItem xs="12">
+                            <MudDivider Class="my-2" />
+                            <MudText Typo="Typo.h6">@Loc["TenantForm.Section.Address"]</MudText>
+                        </MudItem>
 
-                    <MudItem xs="12" sm="6">
-                        <MudTextField @bind-Value="Model.AdminFirstName"
-                                      For="@(() => Model.AdminFirstName)"
-                                      Label="@Loc["TenantForm.Admin.FirstName"]"
-                                      Variant="Variant.Outlined"
-                                      Margin="Margin.Dense"
-                                      MaxLength="100"
-                                      Immediate="true" />
-                    </MudItem>
-                    <MudItem xs="12" sm="6">
-                        <MudTextField @bind-Value="Model.AdminLastName"
-                                      For="@(() => Model.AdminLastName)"
-                                      Label="@Loc["TenantForm.Admin.LastName"]"
-                                      Variant="Variant.Outlined"
-                                      Margin="Margin.Dense"
-                                      MaxLength="100"
-                                      Immediate="true" />
-                    </MudItem>
-                    <MudItem xs="12" sm="6">
-                        <MudTextField @bind-Value="Model.AdminEmail"
-                                      For="@(() => Model.AdminEmail)"
-                                      Label="@Loc["TenantForm.Admin.Email"]"
-                                      InputType="InputType.Email"
-                                      Variant="Variant.Outlined"
-                                      Margin="Margin.Dense"
-                                      MaxLength="256"
-                                      Immediate="true" />
-                    </MudItem>
-                    <MudItem xs="12" sm="6">
-                        <MudTextField @bind-Value="Model.AdminPhone"
-                                      @bind-Value:after="FormatAdminPhone"
-                                      For="@(() => Model.AdminPhone)"
-                                      Label="@Loc["TenantForm.Admin.Phone"]"
-                                      Placeholder="0(5XX) XXX-XX-XX"
-                                      MaxLength="17"
-                                      InputMode="InputMode.tel"
-                                      Variant="Variant.Outlined"
-                                      Margin="Margin.Dense"
-                                      HelperText="@Loc["TenantForm.Admin.PhoneFormat"]"
-                                      Immediate="true" />
-                    </MudItem>
-                }
-            </MudGrid>
+                        <MudItem xs="12" sm="4">
+                            <MudSelect T="Guid?"
+                                       Value="Model.ProvinceId"
+                                       ValueChanged="@(async (Guid? v) => { Model.ProvinceId = v; await OnProvinceChangedAsync(); })"
+                                       Label="@Loc["TenantForm.Province"]"
+                                       Variant="Variant.Outlined"
+                                       Margin="Margin.Dense"
+                                       Clearable="true">
+                                @foreach (var p in _provinces)
+                                {
+                                    <MudSelectItem T="Guid?" Value="@((Guid?)p.Id)">@p.Name</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="12" sm="4">
+                            <MudSelect T="Guid?"
+                                       Value="Model.DistrictId"
+                                       ValueChanged="@(async (Guid? v) => { Model.DistrictId = v; await OnDistrictChangedAsync(); })"
+                                       Label="@Loc["TenantForm.District"]"
+                                       Variant="Variant.Outlined"
+                                       Margin="Margin.Dense"
+                                       Clearable="true"
+                                       Disabled="@(Model.ProvinceId is null)">
+                                @foreach (var d in _districts)
+                                {
+                                    <MudSelectItem T="Guid?" Value="@((Guid?)d.Id)">@d.Name</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="12" sm="4">
+                            <MudSelect T="Guid?"
+                                       @bind-Value="Model.NeighborhoodId"
+                                       Label="@Loc["TenantForm.Neighborhood"]"
+                                       Variant="Variant.Outlined"
+                                       Margin="Margin.Dense"
+                                       Clearable="true"
+                                       Disabled="@(Model.DistrictId is null)">
+                                @foreach (var n in _neighborhoods)
+                                {
+                                    <MudSelectItem T="Guid?" Value="@((Guid?)n.Id)">@n.Name</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+
+                        <MudItem xs="12">
+                            <MudTextField @bind-Value="Model.Address"
+                                          For="@(() => Model.Address)"
+                                          Label="@Loc["TenantForm.Address"]"
+                                          Variant="Variant.Outlined"
+                                          Margin="Margin.Dense"
+                                          Lines="2"
+                                          MaxLength="512"
+                                          Immediate="true" />
+                        </MudItem>
+
+                        @if (ShowAdminBlock)
+                        {
+                            <MudItem xs="12">
+                                <MudDivider Class="my-2" />
+                                <MudText Typo="Typo.h6">@Loc["TenantForm.Section.Admin"]</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Default">
+                                    @Loc["TenantForm.Admin.Caption"]
+                                </MudText>
+                            </MudItem>
+
+                            <MudItem xs="12" sm="6">
+                                <MudTextField @bind-Value="Model.AdminFirstName"
+                                              For="@(() => Model.AdminFirstName)"
+                                              Label="@Loc["TenantForm.Admin.FirstName"]"
+                                              Variant="Variant.Outlined"
+                                              Margin="Margin.Dense"
+                                              MaxLength="100"
+                                              Immediate="true" />
+                            </MudItem>
+                            <MudItem xs="12" sm="6">
+                                <MudTextField @bind-Value="Model.AdminLastName"
+                                              For="@(() => Model.AdminLastName)"
+                                              Label="@Loc["TenantForm.Admin.LastName"]"
+                                              Variant="Variant.Outlined"
+                                              Margin="Margin.Dense"
+                                              MaxLength="100"
+                                              Immediate="true" />
+                            </MudItem>
+                            <MudItem xs="12" sm="6">
+                                <MudTextField @bind-Value="Model.AdminEmail"
+                                              For="@(() => Model.AdminEmail)"
+                                              Label="@Loc["TenantForm.Admin.Email"]"
+                                              InputType="InputType.Email"
+                                              Variant="Variant.Outlined"
+                                              Margin="Margin.Dense"
+                                              MaxLength="256"
+                                              Immediate="true" />
+                            </MudItem>
+                            <MudItem xs="12" sm="6">
+                                <MudTextField @bind-Value="Model.AdminPhone"
+                                              @bind-Value:after="FormatAdminPhone"
+                                              For="@(() => Model.AdminPhone)"
+                                              Label="@Loc["TenantForm.Admin.Phone"]"
+                                              Placeholder="0(5XX) XXX-XX-XX"
+                                              MaxLength="17"
+                                              InputMode="InputMode.tel"
+                                              Variant="Variant.Outlined"
+                                              Margin="Margin.Dense"
+                                              HelperText="@Loc["TenantForm.Admin.PhoneFormat"]"
+                                              Immediate="true" />
+                            </MudItem>
+                        }
+                    </MudGrid>
+                </MudTabPanel>
+
+                @* ── İletişim Tab ────────────────────────────────────────── *@
+                <MudTabPanel Text="@Loc["TenantForm.Tab.Contact"].Value" Icon="@Icons.Material.Filled.ContactPhone">
+                    <MudGrid>
+                        <MudItem xs="12">
+                            <MudTextField @bind-Value="Model.ContactPerson"
+                                          For="@(() => Model.ContactPerson)"
+                                          Label="@Loc["TenantForm.ContactPerson"]"
+                                          Variant="Variant.Outlined"
+                                          Margin="Margin.Dense"
+                                          MaxLength="200"
+                                          Immediate="true" />
+                        </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudTextField @bind-Value="Model.ContactEmail"
+                                          For="@(() => Model.ContactEmail)"
+                                          Label="@Loc["TenantForm.ContactEmail"]"
+                                          InputType="InputType.Email"
+                                          Variant="Variant.Outlined"
+                                          Margin="Margin.Dense"
+                                          MaxLength="256"
+                                          Immediate="true" />
+                        </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudTextField @bind-Value="Model.ContactPhone"
+                                          For="@(() => Model.ContactPhone)"
+                                          Label="@Loc["TenantForm.ContactPhone"]"
+                                          Variant="Variant.Outlined"
+                                          Margin="Margin.Dense"
+                                          MaxLength="32"
+                                          Immediate="true" />
+                        </MudItem>
+                    </MudGrid>
+                </MudTabPanel>
+
+                @* ── Sözleşme Tab ────────────────────────────────────────── *@
+                <MudTabPanel Text="@Loc["TenantForm.Tab.Contract"].Value" Icon="@Icons.Material.Filled.Description">
+                    <MudGrid>
+                        <MudItem xs="12" sm="6">
+                            <MudDatePicker @bind-Date="_contractStartDate"
+                                           Label="@Loc["TenantForm.ContractStartDate"]"
+                                           DateFormat="dd.MM.yyyy"
+                                           Editable="true"
+                                           Placeholder="gg.aa.yyyy"
+                                           Variant="Variant.Outlined"
+                                           Margin="Margin.Dense"
+                                           Clearable="true" />
+                        </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudDatePicker @bind-Date="_contractEndDate"
+                                           Label="@Loc["TenantForm.ContractEndDate"]"
+                                           DateFormat="dd.MM.yyyy"
+                                           Editable="true"
+                                           Placeholder="gg.aa.yyyy"
+                                           Variant="Variant.Outlined"
+                                           Margin="Margin.Dense"
+                                           Clearable="true" />
+                        </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudNumericField @bind-Value="Model.TransitionGraceDays"
+                                             For="@(() => Model.TransitionGraceDays)"
+                                             Label="@Loc["TenantForm.TransitionGraceDays"]"
+                                             HelperText="@Loc["TenantForm.TransitionGraceDays.Help"]"
+                                             Variant="Variant.Outlined"
+                                             Margin="Margin.Dense"
+                                             Min="0"
+                                             Max="3650" />
+                        </MudItem>
+                    </MudGrid>
+                </MudTabPanel>
+
+                @* ── Paket ve Limitler Tab (placeholder) ──────────────────── *@
+                <MudTabPanel Text="@Loc["TenantForm.Tab.Plan"].Value" Icon="@Icons.Material.Filled.Workspaces">
+                    <div class="d-flex flex-column align-center justify-center pa-8">
+                        <MudIcon Icon="@Icons.Material.Filled.HourglassEmpty" Size="Size.Large" Color="Color.Default" />
+                        <MudText Typo="Typo.h6" Class="mt-3">@Loc["TenantForm.Plan.ComingSoon"]</MudText>
+                        <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="mt-2">Faz 1.7</MudChip>
+                    </div>
+                </MudTabPanel>
+
+            </MudTabs>
         </MudCardContent>
 
         <MudCardActions Class="d-flex justify-end pa-4">
@@ -188,3 +322,19 @@
         </MudCardActions>
     </MudCard>
 </MudForm>
+
+@code {
+    // MudDatePicker DateTime? binding'i ister; Model DateOnly? — köprü field'lar
+    // ile iki yönlü çeviri yapılır.
+    private DateTime? _contractStartDate
+    {
+        get => Model.ContractStartDate?.ToDateTime(TimeOnly.MinValue);
+        set => Model.ContractStartDate = value is null ? null : DateOnly.FromDateTime(value.Value);
+    }
+
+    private DateTime? _contractEndDate
+    {
+        get => Model.ContractEndDate?.ToDateTime(TimeOnly.MinValue);
+        set => Model.ContractEndDate = value is null ? null : DateOnly.FromDateTime(value.Value);
+    }
+}

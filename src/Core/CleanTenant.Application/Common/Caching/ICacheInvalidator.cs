@@ -32,4 +32,11 @@ public interface ICacheInvalidator
 
     /// <summary>Permission cache'ini temizler (create/update/delete işlemlerinden sonra).</summary>
     Task InvalidatePermissionsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Tüm UserContexts cache'ini temizler. Yeni Tenant veya Company
+    /// oluşturulduğunda çağrılır — AppBar Context Switcher'ın cache'lenmiş
+    /// listesi (5 dk TTL) hemen tazelensin diye.
+    /// </summary>
+    Task InvalidateAllUserContextsAsync(CancellationToken cancellationToken = default);
 }

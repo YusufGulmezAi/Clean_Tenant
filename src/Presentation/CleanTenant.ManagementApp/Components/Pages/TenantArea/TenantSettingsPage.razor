@@ -106,6 +106,15 @@
         BillingTier = d.BillingTier,
         HasDedicatedDatabase = d.HasDedicatedDatabase,
         AllowSystemWriteAccess = d.AllowSystemWriteAccess,
+        ProvinceId = d.ProvinceId,
+        DistrictId = d.DistrictId,
+        NeighborhoodId = d.NeighborhoodId,
+        ContactPerson = d.ContactPerson,
+        ContactEmail = d.ContactEmail,
+        ContactPhone = d.ContactPhone,
+        ContractStartDate = d.ContractStartDate,
+        ContractEndDate = d.ContractEndDate,
+        TransitionGraceDays = d.TransitionGraceDays,
     };
 
     private async Task SubmitAsync()
@@ -124,7 +133,16 @@
                 Address: string.IsNullOrWhiteSpace(_model.Address) ? null : _model.Address,
                 BillingTier: _model.BillingTier,
                 HasDedicatedDatabase: _model.HasDedicatedDatabase,
-                AllowSystemWriteAccess: _model.AllowSystemWriteAccess);
+                AllowSystemWriteAccess: _model.AllowSystemWriteAccess,
+                ProvinceId: _model.ProvinceId,
+                DistrictId: _model.DistrictId,
+                NeighborhoodId: _model.NeighborhoodId,
+                ContactPerson: string.IsNullOrWhiteSpace(_model.ContactPerson) ? null : _model.ContactPerson,
+                ContactEmail: string.IsNullOrWhiteSpace(_model.ContactEmail) ? null : _model.ContactEmail,
+                ContactPhone: string.IsNullOrWhiteSpace(_model.ContactPhone) ? null : _model.ContactPhone,
+                ContractStartDate: _model.ContractStartDate,
+                ContractEndDate: _model.ContractEndDate,
+                TransitionGraceDays: _model.TransitionGraceDays);
 
             var result = await Mediator.Send(command);
             if (result.IsFailure)

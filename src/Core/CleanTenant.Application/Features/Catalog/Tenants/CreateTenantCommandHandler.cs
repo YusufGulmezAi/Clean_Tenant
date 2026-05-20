@@ -123,6 +123,15 @@ public sealed class CreateTenantCommandHandler : IRequestHandler<CreateTenantCom
             BillingTier = command.BillingTier,
             HasDedicatedDatabase = command.HasDedicatedDatabase,
             AllowSystemWriteAccess = true,
+            ProvinceId = command.ProvinceId,
+            DistrictId = command.DistrictId,
+            NeighborhoodId = command.NeighborhoodId,
+            ContactPerson = command.ContactPerson,
+            ContactEmail = command.ContactEmail,
+            ContactPhone = command.ContactPhone,
+            ContractStartDate = command.ContractStartDate,
+            ContractEndDate = command.ContractEndDate,
+            TransitionGraceDays = command.TransitionGraceDays,
         };
         _db.Tenants.Add(tenant);
 
@@ -201,8 +210,9 @@ public sealed class CreateTenantCommandHandler : IRequestHandler<CreateTenantCom
                 tenant.Id, user.Id);
         }
 
-        // 8. Cache invalidate (list cache + global companies)
+        // 8. Cache invalidate (list cache + global companies + AppBar Context Switcher)
         await _cacheInvalidator.InvalidateAllTenantsAsync(cancellationToken);
+        await _cacheInvalidator.InvalidateAllUserContextsAsync(cancellationToken);
 
         _logger.LogInformation(
             "Yeni Yönetim oluşturuldu: {TenantName} (Id={TenantId}, UrlCode={UrlCode}) — Admin {AdminEmail}",

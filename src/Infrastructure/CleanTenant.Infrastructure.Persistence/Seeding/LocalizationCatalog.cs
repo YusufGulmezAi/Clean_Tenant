@@ -428,6 +428,68 @@ public static class LocalizationCatalog
             "Açık: Sistem destek kullanıcıları bu Yönetim'de yazma yapabilir. Kapalı: yalnız okuma.",
             "On: System support users can write in this Tenant. Off: read-only."),
         new("TenantForm.Section.Admin",      "Sorumlu Yönetici (TenantAdmin)", "Responsible Admin (TenantAdmin)"),
+
+        // ========== v0.2.11.d — Tab başlıkları + Adres/İletişim/Sözleşme alanları ==========
+        new("TenantForm.Tab.General",          "Genel",                                  "General"),
+        new("TenantForm.Tab.Contact",          "İletişim",                               "Contact"),
+        new("TenantForm.Tab.Contract",         "Sözleşme",                               "Contract"),
+        new("TenantForm.Tab.Plan",             "Paket ve Limitler",                      "Plan & Limits"),
+
+        new("TenantForm.Section.Address",      "Adres",                                  "Address"),
+        new("TenantForm.Province",             "İl",                                     "Province"),
+        new("TenantForm.District",             "İlçe",                                   "District"),
+        new("TenantForm.Neighborhood",         "Mahalle",                                "Neighborhood"),
+
+        new("TenantForm.ContactPerson",        "İletişim Kişisi",                        "Contact Person"),
+        new("TenantForm.ContactEmail",         "İletişim E-postası",                     "Contact Email"),
+        new("TenantForm.ContactPhone",         "İletişim Telefonu",                      "Contact Phone"),
+
+        new("TenantForm.ContractStartDate",    "Sözleşme Başlangıç Tarihi",              "Contract Start Date"),
+        new("TenantForm.ContractEndDate",      "Sözleşme Bitiş Tarihi",                  "Contract End Date"),
+        new("TenantForm.TransitionGraceDays",  "Devir Ek Süresi (gün)",                  "Transition Grace (days)"),
+        new("TenantForm.TransitionGraceDays.Help",
+            "Sözleşme bitişi sonrası veri taşıma ve son fatura için verilen ek süre.",
+            "Extra time after contract end for data transition and final billing."),
+
+        new("TenantForm.Plan.ComingSoon",      "Paket ve Limitler özellikleri yakında geliyor.", "Plan & Limits features coming soon."),
+
+        // ========== v0.2.11.d — FluentValidation lokalize mesajları ==========
+        // Tenant + Company + Role validator'larında kullanılan mesajlar
+        new("Validation.Tenant.Name.Required",          "Yönetim adı zorunlu.",                           "Tenant name is required."),
+        new("Validation.Tenant.Name.MaxLength",         "Yönetim adı en fazla {0} karakter.",             "Tenant name max {0} characters."),
+        new("Validation.Tenant.LegalName.MaxLength",    "Yasal ad en fazla {0} karakter.",                "Legal name max {0} characters."),
+        new("Validation.Tenant.Address.MaxLength",      "Adres en fazla {0} karakter.",                   "Address max {0} characters."),
+        new("Validation.Tenant.Id.Required",            "Yönetim id zorunlu.",                            "Tenant id is required."),
+        new("Validation.Tenant.IdentityType.Invalid",   "Geçerli bir kimlik tipi seçin (VKN/TCKN/YKN).", "Select a valid identity type (VKN/TCKN/YKN)."),
+        new("Validation.Tenant.IdentityNumber.Required","Kimlik numarası zorunlu.",                       "Identity number is required."),
+        new("Validation.Tenant.Vkn.Format",             "VKN 10 haneli rakamlardan oluşmalı.",            "VKN must be 10 digits."),
+        new("Validation.Tenant.Tckn.Format",            "TCKN 11 haneli, ilk hane 1-9 arasında olmalı.", "TCKN must be 11 digits, first digit 1-9."),
+        new("Validation.Tenant.Ykn.Format",             "YKN 11 haneli, '99' ile başlamalı.",             "YKN must be 11 digits, start with '99'."),
+        new("Validation.Tenant.BillingTier.Invalid",    "Geçerli bir katman seçin.",                      "Select a valid billing tier."),
+
+        new("Validation.TenantAdmin.FirstName.Required","Sorumlu Yönetici adı zorunlu.",                  "Responsible Admin first name required."),
+        new("Validation.TenantAdmin.LastName.Required", "Sorumlu Yönetici soyadı zorunlu.",               "Responsible Admin last name required."),
+        new("Validation.TenantAdmin.Email.Required",    "Sorumlu Yönetici e-postası zorunlu.",            "Responsible Admin email required."),
+        new("Validation.TenantAdmin.Phone.Required",    "Sorumlu Yönetici cep telefonu zorunlu.",         "Responsible Admin phone required."),
+        new("Validation.TenantAdmin.Phone.Format",      "Cep telefonu formatı: 0(5XX) XXX-XX-XX",         "Phone format: 0(5XX) XXX-XX-XX"),
+
+        new("Validation.Tenant.Contact.Email.Invalid",  "Geçerli bir e-posta adresi girin.",              "Enter a valid email address."),
+        new("Validation.Tenant.ContractEnd.AfterStart", "Sözleşme bitiş tarihi başlangıçtan önce olamaz.","Contract end date cannot be before start date."),
+        new("Validation.Tenant.GraceDays.NonNegative",  "Devir ek süresi negatif olamaz.",                "Transition grace days cannot be negative."),
+
+        new("Validation.Company.TenantId.Required",     "Yönetim (Tenant) kimliği zorunlu.",              "Tenant ID is required."),
+        new("Validation.Company.Id.Required",           "Site kimliği zorunlu.",                          "Company ID is required."),
+        new("Validation.Company.Name.Required",         "Site adı zorunlu.",                              "Company name is required."),
+        new("Validation.Company.Name.MaxLength",        "Site adı en fazla {0} karakter.",                "Company name max {0} characters."),
+        new("Validation.Company.LegalName.MaxLength",   "Yasal ad en fazla {0} karakter.",                "Legal name max {0} characters."),
+        new("Validation.Company.Vkn.Format",            "VKN 10 haneli rakamlardan oluşmalı.",            "VKN must be 10 digits."),
+        new("Validation.Company.Email.Invalid",         "Geçerli bir e-posta adresi girin.",              "Enter a valid email address."),
+        new("Validation.Company.Phone.MaxLength",       "Telefon numarası en fazla {0} karakter.",        "Phone max {0} characters."),
+
+        new("Validation.Role.Name.Required",            "Rol adı zorunludur.",                            "Role name is required."),
+        new("Validation.Role.Name.MaxLength",           "Rol adı {0} karakteri aşamaz.",                  "Role name cannot exceed {0} characters."),
+        new("Validation.Role.Scope.Invalid",            "Geçersiz scope seviyesi.",                       "Invalid scope level."),
+        new("Validation.Role.Description.MaxLength",    "Açıklama {0} karakteri aşamaz.",                 "Description cannot exceed {0} characters."),
         new("TenantForm.Admin.Caption",
             "İlk admin kullanıcı otomatik oluşturulur. Welcome e-posta + şifre belirleme bağlantısı gönderilir.",
             "The initial admin user is created automatically. A welcome email + password setup link is sent."),

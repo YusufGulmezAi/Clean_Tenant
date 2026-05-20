@@ -80,7 +80,16 @@
                 AdminFirstName: _model.AdminFirstName,
                 AdminLastName: _model.AdminLastName,
                 AdminEmail: _model.AdminEmail,
-                AdminPhone: _model.AdminPhone);
+                AdminPhone: _model.AdminPhone,
+                ProvinceId: _model.ProvinceId,
+                DistrictId: _model.DistrictId,
+                NeighborhoodId: _model.NeighborhoodId,
+                ContactPerson: string.IsNullOrWhiteSpace(_model.ContactPerson) ? null : _model.ContactPerson,
+                ContactEmail: string.IsNullOrWhiteSpace(_model.ContactEmail) ? null : _model.ContactEmail,
+                ContactPhone: string.IsNullOrWhiteSpace(_model.ContactPhone) ? null : _model.ContactPhone,
+                ContractStartDate: _model.ContractStartDate,
+                ContractEndDate: _model.ContractEndDate,
+                TransitionGraceDays: _model.TransitionGraceDays);
 
             var result = await Mediator.Send(command);
             if (result.IsFailure)

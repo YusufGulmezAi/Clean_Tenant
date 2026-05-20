@@ -1,4 +1,5 @@
 using CleanTenant.Application.Features.Catalog.Tenants;
+using CleanTenant.Application.UnitTests.Common;
 using CleanTenant.Domain.Identity.Tenants;
 
 namespace CleanTenant.Application.UnitTests.Validators;
@@ -6,10 +7,11 @@ namespace CleanTenant.Application.UnitTests.Validators;
 /// <summary>
 /// <see cref="UpdateTenantCommandValidator"/> testleri — Create ile aynı format
 /// kuralları + Sorumlu Yönetici alanlarının olmaması, TenantId zorunluluğu.
+/// v0.2.11.d — lokalize validator için <see cref="NullStringLocalizer"/> stub.
 /// </summary>
 public sealed class UpdateTenantCommandValidatorTests
 {
-    private readonly UpdateTenantCommandValidator _validator = new();
+    private readonly UpdateTenantCommandValidator _validator = new(NullStringLocalizer.Instance);
 
     private static UpdateTenantCommand ValidCommand() => new(
         TenantId: Guid.NewGuid(),

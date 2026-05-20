@@ -53,4 +53,33 @@ public sealed class TenantFormModel
 
     /// <summary>Sorumlu Yönetici telefonu — format <c>0(5XX) XXX-XX-XX</c> (yalnız Create).</summary>
     public string AdminPhone { get; set; } = string.Empty;
+
+    // ── v0.2.11.d — Adres (LookUp FK'ları), İletişim, Sözleşme ──
+
+    /// <summary>Adres: bağlı il (LookUp.Provinces).</summary>
+    public Guid? ProvinceId { get; set; }
+
+    /// <summary>Adres: bağlı ilçe (LookUp.Districts).</summary>
+    public Guid? DistrictId { get; set; }
+
+    /// <summary>Adres: bağlı mahalle (LookUp.Neighborhoods).</summary>
+    public Guid? NeighborhoodId { get; set; }
+
+    /// <summary>İletişim kişisi adı-soyadı.</summary>
+    public string? ContactPerson { get; set; }
+
+    /// <summary>İletişim e-postası.</summary>
+    public string? ContactEmail { get; set; }
+
+    /// <summary>İletişim telefonu.</summary>
+    public string? ContactPhone { get; set; }
+
+    /// <summary>Sözleşme başlangıç tarihi.</summary>
+    public DateOnly? ContractStartDate { get; set; }
+
+    /// <summary>Sözleşme bitiş tarihi.</summary>
+    public DateOnly? ContractEndDate { get; set; }
+
+    /// <summary>Devir için verilen ek süre (gün).</summary>
+    public int? TransitionGraceDays { get; set; }
 }

@@ -77,4 +77,8 @@ public sealed class CacheInvalidator : ICacheInvalidator
         await _cache.RemoveByPrefixAsync(CacheKeys.Role.Prefix, cancellationToken);
         await _cache.RemoveByPrefixAsync(CacheKeys.Authorization.Prefix, cancellationToken);
     }
+
+    /// <inheritdoc />
+    public Task InvalidateAllUserContextsAsync(CancellationToken cancellationToken = default)
+        => _cache.RemoveByPrefixAsync(CacheKeys.User.Prefix, cancellationToken);
 }

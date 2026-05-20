@@ -127,6 +127,17 @@ public sealed class UpdateTenantCommandHandler : IRequestHandler<UpdateTenantCom
         tenant.Address = command.Address;
         tenant.AllowSystemWriteAccess = command.AllowSystemWriteAccess;
 
+        // v0.2.11.d — Adres FK'ları, iletişim ve sözleşme alanları her iki scope için açık
+        tenant.ProvinceId = command.ProvinceId;
+        tenant.DistrictId = command.DistrictId;
+        tenant.NeighborhoodId = command.NeighborhoodId;
+        tenant.ContactPerson = command.ContactPerson;
+        tenant.ContactEmail = command.ContactEmail;
+        tenant.ContactPhone = command.ContactPhone;
+        tenant.ContractStartDate = command.ContractStartDate;
+        tenant.ContractEndDate = command.ContractEndDate;
+        tenant.TransitionGraceDays = command.TransitionGraceDays;
+
         if (isSystem)
         {
             tenant.LegalIdentityType = command.LegalIdentityType;

@@ -8,7 +8,7 @@ namespace CleanTenant.ManagementApp.Components.Shared;
 public sealed partial class RoleForm
 {
     private MudForm? _form;
-    private readonly RoleFormValidator _validator = new();
+    private RoleFormValidator? _validator;
 
     [Parameter]
     public RoleFormModel Model { get; set; } = new();
@@ -53,8 +53,14 @@ public sealed partial class RoleForm
         ValidateValue = ValidateValueAsync;
     }
 
+    protected override void OnInitialized()
+    {
+        _validator = new RoleFormValidator(Loc);
+    }
+
     private async Task<IEnumerable<string>> ValidateValueAsync(object? value, string propertyName)
     {
+        if (_validator is null) return Array.Empty<string>();
         var context = ValidationContext<RoleFormModel>.CreateWithOptions(
             Model, x => x.IncludeProperties(propertyName));
         var result = await _validator.ValidateAsync(context);

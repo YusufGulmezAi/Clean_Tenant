@@ -30,4 +30,13 @@ public sealed record UpdateTenantCommand(
     string? Address,
     BillingTier BillingTier,
     bool HasDedicatedDatabase,
-    bool AllowSystemWriteAccess) : IRequest<Result>;
+    bool AllowSystemWriteAccess,
+    Guid? ProvinceId = null,
+    Guid? DistrictId = null,
+    Guid? NeighborhoodId = null,
+    string? ContactPerson = null,
+    string? ContactEmail = null,
+    string? ContactPhone = null,
+    DateOnly? ContractStartDate = null,
+    DateOnly? ContractEndDate = null,
+    int? TransitionGraceDays = null) : IRequest<Result>;

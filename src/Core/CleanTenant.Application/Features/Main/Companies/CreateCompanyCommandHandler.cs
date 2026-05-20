@@ -54,8 +54,9 @@ public sealed class CreateCompanyCommandHandler : IRequestHandler<CreateCompanyC
         _db.Companies.Add(company);
         await _db.SaveChangesAsync(cancellationToken);
 
-        // Cache'i invalidate et
+        // Cache'i invalidate et — yeni site Context Switcher'da görünmeli (v0.2.11.d)
         await _cacheInvalidator.InvalidateCompanyAsync(company.Id, company.TenantId, cancellationToken);
+        await _cacheInvalidator.InvalidateAllUserContextsAsync(cancellationToken);
 
         return Result<CompanyDetail>.Success(new CompanyDetail(
             company.Id,
