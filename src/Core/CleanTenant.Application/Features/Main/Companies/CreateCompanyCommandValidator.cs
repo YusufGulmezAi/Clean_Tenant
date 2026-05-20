@@ -23,9 +23,9 @@ public sealed class CreateCompanyCommandValidator : AbstractValidator<CreateComp
             .MaximumLength(512).WithMessage("Yasal ad en fazla 512 karakter.");
 
         RuleFor(x => x.Vkn)
-            .Matches(@"^[1-9][0-9]{9}$")
+            .Matches(@"^[0-9]{10}$")
                 .When(x => !string.IsNullOrWhiteSpace(x.Vkn), ApplyConditionTo.CurrentValidator)
-                .WithMessage("VKN 10 haneli, ilk hane 1-9 arasında olmalı.");
+                .WithMessage("VKN 10 haneli rakamlardan oluşmalı.");
 
         RuleFor(x => x.Email)
             .EmailAddress()

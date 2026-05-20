@@ -65,7 +65,10 @@ builder.Services.AddRazorComponents()
 // v0.2.4.b.4 — Localizer AddMudServices'den ÖNCE kayıt edilmeli: AddMudServices içindeki
 // TryAddTransient<MudLocalizer> zaten kayıtlı gördüğünde skip eder → tek kayıt kalır.
 // Sonra kayıt edilirse iki descriptor oluşur; bazı sürümlerde ilk descriptor kazanır → TR çalışmaz.
-builder.Services.AddTransient<MudBlazor.MudLocalizer, CleanTenantMudLocalizer>();
+// v0.2.11.a — Scoped (önceden Transient): CleanTenantMudLocalizer artık scoped
+// IStringLocalizer (DbStringLocalizer) inject ediyor; transient olarak kalsaydı
+// captive dependency uyarısı çıkar ve scope mismatch'leri tetiklerdi.
+builder.Services.AddScoped<MudBlazor.MudLocalizer, CleanTenantMudLocalizer>();
 builder.Services.AddMudServices();
 // v0.2.4.a — Excel (ClosedXML) + PDF (QuestPDF Community) export servisleri.
 builder.Services.AddCleanTenantExport();

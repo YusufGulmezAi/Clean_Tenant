@@ -39,7 +39,6 @@
                        EndIcon="@Icons.Material.Filled.ArrowDropDown"
                        Class="text-transform-none">
                 <span style="white-space: nowrap; display: inline-flex; align-items: baseline;">
-                    <MudText Typo="Typo.caption" Style="opacity:.75; margin-right:6px;">Aktif Bağlam:</MudText>
                     <MudText Typo="Typo.body2"><b>@CurrentLabel</b></MudText>
                 </span>
             </MudButton>
@@ -101,8 +100,6 @@
                                  OnClick="@(() => SubmitSwitchAsync(ctx.TenantId, null))">
                         <span style="white-space: nowrap;">
                             <b>@ctx.Name</b>
-                            <MudText Typo="Typo.caption" Color="Color.Default"
-                                     Style="font-family: monospace; margin-left: 8px;">@ctx.UrlCode</MudText>
                             @if (tenantActive)
                             {
                                 <MudText Typo="Typo.caption" Color="Color.Success" Class="ml-2">aktif</MudText>
@@ -124,8 +121,6 @@
                                      OnClick="@(() => SubmitSwitchAsync(ctx.TenantId, company.CompanyId))">
                             <span style="white-space: nowrap;">
                                 @company.Name
-                                <MudText Typo="Typo.caption" Color="Color.Default"
-                                         Style="font-family: monospace; margin-left: 8px;">@company.UrlCode</MudText>
                                 @if (companyActive)
                                 {
                                     <MudText Typo="Typo.caption" Color="Color.Success" Class="ml-2">aktif</MudText>

@@ -15,7 +15,7 @@ public sealed class CompanyFormModel
     /// <summary>Yasal ad. Opsiyonel, max 512 karakter.</summary>
     public string? LegalName { get; set; }
 
-    /// <summary>VKN (Vergi Kimlik Numarası). Opsiyonel, format ^[1-9][0-9]{9}$.</summary>
+    /// <summary>VKN (Vergi Kimlik Numarası). Opsiyonel, format ^[0-9]{10}$.</summary>
     public string? Vkn { get; set; }
 
     /// <summary>E-posta adresi. Opsiyonel, geçerli format.</summary>

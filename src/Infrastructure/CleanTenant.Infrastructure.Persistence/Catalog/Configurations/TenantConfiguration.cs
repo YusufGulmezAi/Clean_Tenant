@@ -65,7 +65,7 @@ public sealed class TenantConfiguration : IEntityTypeConfiguration<Tenant>
         // Format CHECK constraint: tipe göre regex
         builder.ToTable(tb => tb.HasCheckConstraint(
             "ck_tenant_legal_identity_format",
-            "(legal_identity_type = 1 AND legal_identity_number ~ '^[1-9][0-9]{9}$') OR " +
+            "(legal_identity_type = 1 AND legal_identity_number ~ '^[0-9]{10}$') OR " +
             "(legal_identity_type = 2 AND legal_identity_number ~ '^[1-9][0-9]{10}$') OR " +
             "(legal_identity_type = 3 AND legal_identity_number ~ '^99[0-9]{9}$')"));
 

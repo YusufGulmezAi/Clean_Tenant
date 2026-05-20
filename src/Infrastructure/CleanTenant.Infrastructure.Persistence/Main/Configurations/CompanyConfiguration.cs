@@ -16,7 +16,7 @@ internal sealed class CompanyConfiguration : IEntityTypeConfiguration<Company>
         builder.ToTable("companies", t =>
         {
             t.HasCheckConstraint("ck_company_vkn_format",
-                "vkn IS NULL OR vkn ~ '^[1-9][0-9]{9}$'");
+                "vkn IS NULL OR vkn ~ '^[0-9]{10}$'");
         });
 
         builder.HasKey(c => c.Id);

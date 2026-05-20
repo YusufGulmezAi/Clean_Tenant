@@ -41,9 +41,9 @@ public sealed class TenantFormValidator : AbstractValidator<TenantFormModel>
 
             RuleFor(x => x.LegalIdentityNumber)
                 .NotEmpty().WithMessage("Kimlik numarası zorunlu.")
-                .Matches(@"^[1-9][0-9]{9}$")
+                .Matches(@"^[0-9]{10}$")
                     .When(x => x.LegalIdentityType == LegalIdentityType.Vkn, ApplyConditionTo.CurrentValidator)
-                    .WithMessage("VKN 10 haneli, ilk hane 1-9 arasında olmalı.")
+                    .WithMessage("VKN 10 haneli rakamlardan oluşmalı.")
                 .Matches(@"^[1-9][0-9]{10}$")
                     .When(x => x.LegalIdentityType == LegalIdentityType.Tckn, ApplyConditionTo.CurrentValidator)
                     .WithMessage("TCKN 11 haneli, ilk hane 1-9 arasında olmalı.")

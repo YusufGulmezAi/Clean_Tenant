@@ -1,4 +1,3 @@
-using System.Globalization;
 using Microsoft.Extensions.Localization;
 using MudBlazor;
 
@@ -6,131 +5,45 @@ namespace CleanTenant.ManagementApp.Services;
 
 /// <summary>
 /// <para>
-/// MudBlazor'ın default İngilizce resource'larını aktif UI kültürüne göre override eder.
-/// Türkçe (tr) kültüründe Türkçe karşılıklar döner; diğer dillerde
-/// <c>resourceNotFound: true</c> dönerek MudBlazor'ın kendi İngilizce fallback'ine düşer.
+/// MudBlazor'ın default İngilizce resource'larını DB-tabanlı
+/// <see cref="IStringLocalizer"/> üzerinden 5 dilli (TR/EN/AR/RU/DE) çevirilere
+/// bağlar. Anahtarlar <c>LocalizationCatalog</c>'da <c>MudDataGrid.*</c>,
+/// <c>MudTable.*</c>, <c>MudDialog.*</c> vb. olarak seed edilir.
 /// </para>
 /// <para>
-/// Program.cs'de <c>AddMudServices()</c>'den ÖNCE kayıt edilmeli — aksi takdirde
-/// MudBlazor'ın <c>TryAddTransient</c>'i bizimkini geçersiz kılabilir.
+/// Anahtar DB'de yoksa <c>resourceNotFound: true</c> dönülür ve MudBlazor
+/// kendi İngilizce fallback'ine düşer — yeni MudBlazor sürümleriyle gelen
+/// ek anahtarlar projeyi kırmaz.
+/// </para>
+/// <para>
+/// Program.cs'de <c>AddMudServices()</c>'den ÖNCE kayıt edilmeli; aksi
+/// takdirde MudBlazor'ın <c>TryAddTransient&lt;MudLocalizer&gt;</c>'i bizimkini
+/// geçersiz kılabilir.
 /// </para>
 /// </summary>
 public sealed class CleanTenantMudLocalizer : MudLocalizer
 {
+    private readonly IStringLocalizer _localizer;
+
+    /// <summary>DI bağımlılıklarını alır.</summary>
+    public CleanTenantMudLocalizer(IStringLocalizer localizer)
+    {
+        _localizer = localizer;
+    }
+
     /// <inheritdoc />
     public override LocalizedString this[string key]
     {
         get
         {
-            // Türkçe dışındaki kültürlerde MudBlazor'ın kendi İngilizce metnine düş.
-            if (!CultureInfo.CurrentUICulture.TwoLetterISOLanguageName
-                    .Equals("tr", StringComparison.OrdinalIgnoreCase))
+            var resolved = _localizer[key];
+            if (!resolved.ResourceNotFound)
             {
-                return new LocalizedString(key, key, resourceNotFound: true);
+                return new LocalizedString(key, resolved.Value, resourceNotFound: false);
             }
 
-            return key switch
-            {
-        // ─── MudDataGrid — Filter / Sort / Group / Loading ────────────────
-        "MudDataGrid.AddFilter" => Tr(key, "Filtre Ekle"),
-        "MudDataGrid.Apply" => Tr(key, "Uygula"),
-        "MudDataGrid.CancelButton" => Tr(key, "İptal"),
-        "MudDataGrid.Cancel" => Tr(key, "İptal"),
-        "MudDataGrid.Clear" => Tr(key, "Temizle"),
-        "MudDataGrid.ClearFilter" => Tr(key, "Filtreyi Temizle"),
-        "MudDataGrid.CollapseAllGroups" => Tr(key, "Tüm Grupları Daralt"),
-        "MudDataGrid.Columns" => Tr(key, "Sütunlar"),
-        "MudDataGrid.Contains" => Tr(key, "İçerir"),
-        "MudDataGrid.DoesNotContain" => Tr(key, "İçermez"),
-        "MudDataGrid.DragHeaderHere" => Tr(key, "Gruplamak için başlığı buraya sürükleyin"),
-        "MudDataGrid.EndsWith" => Tr(key, "İle Biter"),
-        "MudDataGrid.Equal" => Tr(key, "Eşittir"),
-        "MudDataGrid.Equals" => Tr(key, "Eşittir"),
-        "MudDataGrid.ExpandAllGroups" => Tr(key, "Tüm Grupları Genişlet"),
-        "MudDataGrid.False" => Tr(key, "Hayır"),
-        "MudDataGrid.Filter" => Tr(key, "Filtrele"),
-        "MudDataGrid.FilterValue" => Tr(key, "Filtre Değeri"),
-        "MudDataGrid.GreaterThan" => Tr(key, "Büyüktür"),
-        "MudDataGrid.GreaterThanOrEqual" => Tr(key, "Büyük Eşit"),
-        "MudDataGrid.Group" => Tr(key, "Grupla"),
-        "MudDataGrid.Hide" => Tr(key, "Gizle"),
-        "MudDataGrid.HideAll" => Tr(key, "Tümünü Gizle"),
-        "MudDataGrid.HideAllGroupings" => Tr(key, "Tüm Gruplamaları Gizle"),
-        "MudDataGrid.IsEmpty" => Tr(key, "Boş"),
-        "MudDataGrid.IsNotEmpty" => Tr(key, "Boş Değil"),
-        "MudDataGrid.LessThan" => Tr(key, "Küçüktür"),
-        "MudDataGrid.LessThanOrEqual" => Tr(key, "Küçük Eşit"),
-        "MudDataGrid.Loading" => Tr(key, "Yükleniyor…"),
-        "MudDataGrid.NoRecords" => Tr(key, "Kayıt bulunamadı"),
-        "MudDataGrid.NoRecordsContent" => Tr(key, "Kayıt bulunamadı"),
-        "MudDataGrid.NotEqual" => Tr(key, "Eşit Değil"),
-        "MudDataGrid.Operator" => Tr(key, "Operatör"),
-        "MudDataGrid.RefreshData" => Tr(key, "Verileri Yenile"),
-        "MudDataGrid.Save" => Tr(key, "Kaydet"),
-        "MudDataGrid.Show" => Tr(key, "Göster"),
-        "MudDataGrid.ShowAll" => Tr(key, "Tümünü Göster"),
-        "MudDataGrid.ShowAllGroupings" => Tr(key, "Tüm Gruplamaları Göster"),
-        "MudDataGrid.Sort" => Tr(key, "Sırala"),
-        "MudDataGrid.SortAscending" => Tr(key, "Artan Sırala"),
-        "MudDataGrid.SortDescending" => Tr(key, "Azalan Sırala"),
-        "MudDataGrid.StartsWith" => Tr(key, "İle Başlar"),
-        "MudDataGrid.True" => Tr(key, "Evet"),
-        "MudDataGrid.Ungroup" => Tr(key, "Grubu Kaldır"),
-        "MudDataGrid.Unsort" => Tr(key, "Sıralamayı Kaldır"),
-        "MudDataGrid.Value" => Tr(key, "Değer"),
-
-        // ─── Aggregate / Footer ────────────────────────────────────
-        "MudDataGrid.Sum" => Tr(key, "Toplam"),
-        "MudDataGrid.Average" => Tr(key, "Ortalama"),
-        "MudDataGrid.Min" => Tr(key, "En Küçük"),
-        "MudDataGrid.Max" => Tr(key, "En Büyük"),
-        "MudDataGrid.Count" => Tr(key, "Adet"),
-        "MudDataGrid.None" => Tr(key, "Yok"),
-        "MudDataGrid.Custom" => Tr(key, "Özel"),
-
-        // ─── MudTable / Pagination ─────────────────────────────────
-        "MudTable.Loading" => Tr(key, "Yükleniyor…"),
-        "MudTable.NoRecords" => Tr(key, "Kayıt bulunamadı"),
-        "MudDataGrid.RowsPerPage" => Tr(key, "Sayfa başına kayıt:"),
-        "MudTable.RowsPerPage" => Tr(key, "Sayfa başına kayıt:"),
-        "MudDataGrid.PageInfo" => Tr(key, "{0}-{1} / {2}"),
-        "MudTable.PageInfo" => Tr(key, "{0}-{1} / {2}"),
-        "MudDataGrid.FirstPage" => Tr(key, "İlk sayfa"),
-        "MudDataGrid.LastPage" => Tr(key, "Son sayfa"),
-        "MudDataGrid.PreviousPage" => Tr(key, "Önceki sayfa"),
-        "MudDataGrid.NextPage" => Tr(key, "Sonraki sayfa"),
-
-        // ─── MudInput / MudSelect / MudFileUpload ─────────────────
-        "MudInput.OK" => Tr(key, "Tamam"),
-        "MudInput.Cancel" => Tr(key, "İptal"),
-        "MudInput.Clear" => Tr(key, "Temizle"),
-        "MudSelect.Clear" => Tr(key, "Temizle"),
-        "MudFileUpload.DefaultDragAndDropTitle" => Tr(key, "Dosyaları buraya sürükleyip bırakın veya gözat"),
-
-        // ─── MudDateRangePicker / MudDatePicker ───────────────────
-        "MudDateRangePicker.StartDate" => Tr(key, "Başlangıç tarihi"),
-        "MudDateRangePicker.EndDate" => Tr(key, "Bitiş tarihi"),
-        "MudDatePicker.Today" => Tr(key, "Bugün"),
-        "MudDatePicker.Clear" => Tr(key, "Temizle"),
-
-        // ─── MudDialog ────────────────────────────────────────────
-        "MudDialog.Ok" => Tr(key, "Tamam"),
-        "MudDialog.Cancel" => Tr(key, "İptal"),
-        "MudDialog.Yes" => Tr(key, "Evet"),
-        "MudDialog.No" => Tr(key, "Hayır"),
-
-        // ─── MudMessageBox ────────────────────────────────────────
-        "MudMessageBox.OK" => Tr(key, "Tamam"),
-        "MudMessageBox.Cancel" => Tr(key, "İptal"),
-        "MudMessageBox.Yes" => Tr(key, "Evet"),
-        "MudMessageBox.No" => Tr(key, "Hayır"),
-
-                // Eşleştirme yok → resourceNotFound:true → MudBlazor default'a düşer
-                _ => new LocalizedString(key, key, resourceNotFound: true),
-            };
+            // DB'de yoksa MudBlazor default'una (İngilizce) düş.
+            return new LocalizedString(key, key, resourceNotFound: true);
         }
     }
-
-    private static LocalizedString Tr(string key, string value)
-        => new(key, value, resourceNotFound: false);
 }

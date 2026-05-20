@@ -55,7 +55,7 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.ToTable(t =>
         {
             t.HasCheckConstraint("ck_user_tckn_format", "tckn IS NULL OR tckn ~ '^[0-9]{11}$'");
-            t.HasCheckConstraint("ck_user_vkn_format", "vkn IS NULL OR vkn ~ '^[1-9][0-9]{9}$'");
+            t.HasCheckConstraint("ck_user_vkn_format", "vkn IS NULL OR vkn ~ '^[0-9]{10}$'");
         });
 
         builder.Property(u => u.LastLoginIp).HasMaxLength(45); // IPv6 max
