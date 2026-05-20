@@ -7,6 +7,41 @@ Bu dosya, Faz 1 (UI başlangıç + ManagementApp) kapsamında yapılan tüm alt-
 
 ---
 
+## v0.2.11 — 2026-05-20 — UX & Form İyileştirmeleri
+
+**Tag**: `v0.2.11` · **Mimari harita**: [v0.2.11-FINAL-ARCHITECTURE-MAP.md](v0.2.11-FINAL-ARCHITECTURE-MAP.md)
+
+### Kapsam
+TenantForm tab yapısı, Türkiye coğrafya verisi bootstrap, Audit Explorer filtre yenileme, Banks modülü genişletme, FluentValidator i18n, PermissionPicker 2 kademeli akordiyon yeniden tasarımı, CompanyForm bölüm grupları.
+
+### Alt-faz Değişiklik Özeti
+
+| Alt-faz | Özet |
+|---|---|
+| **a** | VKN regex fix + LookUp permission + MudBlazor i18n + genel UX |
+| **b** | Tenant genişletme (İletişim/Sözleşme alanları) + Province/District/Neighborhood entity + CSV bootstrap (81 il, 973 ilçe) + LookUp UX |
+| **c** | UI cleanup: Tenants bağlam butonu kaldır, Roles Scope kolonu kaldır, Search sol-üst taşı |
+| **d** | TenantForm → 4 tab (Genel/İletişim/Sözleşme/Paket) + adres cascade dropdown + Context Switcher token refresh + Validator i18n |
+| **e** | Banks: `IsActive`, `SupportsEft`/`SupportsPos`/`SupportsTahsilat` + tablo kolonları |
+| **f** | Audit Explorer: DB-distinct dropdown filtreler + ilk yüklemede boş tablo (performans) |
+| **g** | PermissionPicker: 2 kademeli akordiyon (Modül→Entity), CRUD ikon butonları, seçili badge; CompanyForm: Site Bilgileri/Kimlik/İletişim bölüm grupları; 2 yeni lokalizasyon anahtarı |
+
+### Mimari Karar: PermissionPicker 2 Kademeli Akordiyon
+
+- Modül seviyesi MudExpansionPanel (eskiden de vardı) altına **entity seviyesi** MudExpansionPanel eklendi
+- Her entity paneli başlığı: entity adı + `seçili/toplam` badge (mor renk — seçim varsa aktif)
+- CRUD butonları: single-letter `MudButton` → `div + MudIcon` (CheckCircle/Circle, CSS `--clr` custom property)
+- Kullanıcı entity gruplarını tek tek açıp kapatabilir; modül seviyesinde grup seç/kaldır korundu
+
+### Mimari Karar: TenantForm Tab Yapısı
+
+- `TenantFormMode` enum üzerinden read-only / gizli alan kontrolü korundu
+- Adres cascade: `Province → District → Neighborhood` — her seçim bir alt listeyi sıfırlayıp yeniden yükler
+- `ILookUpCatalogReader` inject (Infrastructure DI) — Blazor component'te doğrudan reader çağrısı
+- `MudDatePicker` ↔ `DateOnly?` köprüsü: component `DateTime?` ister, model `DateOnly?` tutar; private bridge property
+
+---
+
 ## v0.2.10 — 2026-05-19 — Lokalizasyon (TR/EN/AR/RU/DE + RTL + DB-tabanlı + Admin)
 
 **Tag**: `v0.2.10` · **Mimari harita**: [v0.2.10-FINAL-ARCHITECTURE-MAP.md](v0.2.10-FINAL-ARCHITECTURE-MAP.md)
