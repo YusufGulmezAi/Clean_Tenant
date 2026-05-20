@@ -16,6 +16,10 @@ namespace CleanTenant.Infrastructure.Caching.Readers;
 /// <b>v0.2.9 — IDbContextFactory'ye geçiş:</b> Blazor Server circuit'inde
 /// paralel reader çağrılarında scoped DbContext concurrency hatası veriyordu.
 /// </para>
+/// <para>
+/// <b>v0.2.11.b — Adres denormalize:</b> Province/District/Neighborhood Name'leri
+/// sub-query ile LEFT JOIN olarak çekilir (DB tarafında); UI ek tur atmaz.
+/// </para>
 /// </summary>
 public sealed class TenantCatalogReader : ITenantCatalogReader
 {
@@ -45,9 +49,17 @@ public sealed class TenantCatalogReader : ITenantCatalogReader
                         t.UrlCode,
                         t.Name,
                         t.LegalName,
+                        t.LegalIdentityType,
+                        t.LegalIdentityNumber,
                         t.Status,
                         t.BillingTier,
-                        t.AllowSystemWriteAccess))
+                        t.AllowSystemWriteAccess,
+                        db.Provinces.Where(p => p.Id == t.ProvinceId).Select(p => p.Name).FirstOrDefault(),
+                        db.Districts.Where(d => d.Id == t.DistrictId).Select(d => d.Name).FirstOrDefault(),
+                        db.Neighborhoods.Where(n => n.Id == t.NeighborhoodId).Select(n => n.Name).FirstOrDefault(),
+                        t.ContractStartDate,
+                        t.ContractEndDate,
+                        t.TransitionGraceDays))
                     .ToListAsync(ct);
                 return (IReadOnlyList<TenantListItem>)list;
             },
@@ -66,7 +78,12 @@ public sealed class TenantCatalogReader : ITenantCatalogReader
                     .Where(t => t.Id == id)
                     .Select(t => new TenantListItem(
                         t.Id, t.UrlCode, t.Name, t.LegalName,
-                        t.Status, t.BillingTier, t.AllowSystemWriteAccess))
+                        t.LegalIdentityType, t.LegalIdentityNumber,
+                        t.Status, t.BillingTier, t.AllowSystemWriteAccess,
+                        db.Provinces.Where(p => p.Id == t.ProvinceId).Select(p => p.Name).FirstOrDefault(),
+                        db.Districts.Where(d => d.Id == t.DistrictId).Select(d => d.Name).FirstOrDefault(),
+                        db.Neighborhoods.Where(n => n.Id == t.NeighborhoodId).Select(n => n.Name).FirstOrDefault(),
+                        t.ContractStartDate, t.ContractEndDate, t.TransitionGraceDays))
                     .FirstOrDefaultAsync(ct);
             },
             CacheOptions.DetailMediumLived,
@@ -84,7 +101,12 @@ public sealed class TenantCatalogReader : ITenantCatalogReader
                     .Where(t => t.UrlCode == urlCode)
                     .Select(t => new TenantListItem(
                         t.Id, t.UrlCode, t.Name, t.LegalName,
-                        t.Status, t.BillingTier, t.AllowSystemWriteAccess))
+                        t.LegalIdentityType, t.LegalIdentityNumber,
+                        t.Status, t.BillingTier, t.AllowSystemWriteAccess,
+                        db.Provinces.Where(p => p.Id == t.ProvinceId).Select(p => p.Name).FirstOrDefault(),
+                        db.Districts.Where(d => d.Id == t.DistrictId).Select(d => d.Name).FirstOrDefault(),
+                        db.Neighborhoods.Where(n => n.Id == t.NeighborhoodId).Select(n => n.Name).FirstOrDefault(),
+                        t.ContractStartDate, t.ContractEndDate, t.TransitionGraceDays))
                     .FirstOrDefaultAsync(ct);
             },
             CacheOptions.DetailMediumLived,
@@ -108,6 +130,18 @@ public sealed class TenantCatalogReader : ITenantCatalogReader
                         t.LegalIdentityType,
                         t.LegalIdentityNumber,
                         t.Address,
+                        t.ProvinceId,
+                        db.Provinces.Where(p => p.Id == t.ProvinceId).Select(p => p.Name).FirstOrDefault(),
+                        t.DistrictId,
+                        db.Districts.Where(d => d.Id == t.DistrictId).Select(d => d.Name).FirstOrDefault(),
+                        t.NeighborhoodId,
+                        db.Neighborhoods.Where(n => n.Id == t.NeighborhoodId).Select(n => n.Name).FirstOrDefault(),
+                        t.ContactPerson,
+                        t.ContactEmail,
+                        t.ContactPhone,
+                        t.ContractStartDate,
+                        t.ContractEndDate,
+                        t.TransitionGraceDays,
                         t.Status,
                         t.BillingTier,
                         t.HasDedicatedDatabase,
@@ -136,6 +170,18 @@ public sealed class TenantCatalogReader : ITenantCatalogReader
                         t.LegalIdentityType,
                         t.LegalIdentityNumber,
                         t.Address,
+                        t.ProvinceId,
+                        db.Provinces.Where(p => p.Id == t.ProvinceId).Select(p => p.Name).FirstOrDefault(),
+                        t.DistrictId,
+                        db.Districts.Where(d => d.Id == t.DistrictId).Select(d => d.Name).FirstOrDefault(),
+                        t.NeighborhoodId,
+                        db.Neighborhoods.Where(n => n.Id == t.NeighborhoodId).Select(n => n.Name).FirstOrDefault(),
+                        t.ContactPerson,
+                        t.ContactEmail,
+                        t.ContactPhone,
+                        t.ContractStartDate,
+                        t.ContractEndDate,
+                        t.TransitionGraceDays,
                         t.Status,
                         t.BillingTier,
                         t.HasDedicatedDatabase,

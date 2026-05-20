@@ -39,21 +39,13 @@ else
                         <MudCard Elevation="2">
                             <MudCardHeader><CardHeaderContent><MudText Typo="Typo.h6">@Loc["Lookup.Provinces"]</MudText></CardHeaderContent></MudCardHeader>
                             <MudCardContent>
-                                <MudList T="string" Clickable="true">
-                                    @foreach (var province in _provinces)
-                                    {
-                                        <MudListItem T="string" @onclick="@(() => SelectProvince(province.Id))">
-                                            <MudText Color="@(_selectedProvinceId == province.Id ? Color.Primary : Color.Default)">@province.Name</MudText>
-                                        </MudListItem>
-                                    }
-                                </MudList>
-                                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" Class="mt-2"
+                                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" Class="mb-2"
                                            OnClick="@(() => _showProvinceForm = true)">
                                     <MudIcon Icon="@Icons.Material.Filled.Add" Class="mr-1" /> @Loc["Lookup.Province.Add"]
                                 </MudButton>
                                 @if (_showProvinceForm)
                                 {
-                                    <MudPaper Elevation="1" Class="pa-3 mt-3">
+                                    <MudPaper Elevation="1" Class="pa-3 mb-3">
                                         <MudForm @ref="_provinceForm">
                                             <MudTextField @bind-Value="_provinceModel.Name" Label="@Loc["Lookup.Province.Name"]" Required="true" MaxLength="100" />
                                             <MudNumericField @bind-Value="_provinceModel.PlateCode" Label="@Loc["Lookup.Province.Plate"]" Min="1" Max="81" />
@@ -66,6 +58,14 @@ else
                                         </MudForm>
                                     </MudPaper>
                                 }
+                                <MudList T="string" Clickable="true">
+                                    @foreach (var province in _provinces)
+                                    {
+                                        <MudListItem T="string" @onclick="@(async () => await SelectProvinceAsync(province.Id))">
+                                            <MudText Color="@(_selectedProvinceId == province.Id ? Color.Primary : Color.Default)">@province.Name</MudText>
+                                        </MudListItem>
+                                    }
+                                </MudList>
                             </MudCardContent>
                         </MudCard>
                     </MudItem>
@@ -74,23 +74,15 @@ else
                         <MudCard Elevation="2">
                             <MudCardHeader><CardHeaderContent><MudText Typo="Typo.h6">@Loc["Lookup.Districts"]</MudText></CardHeaderContent></MudCardHeader>
                             <MudCardContent>
-                                <MudList T="string" Clickable="true">
-                                    @foreach (var district in _districts)
-                                    {
-                                        <MudListItem T="string" @onclick="@(() => SelectDistrict(district.Id))">
-                                            <MudText Color="@(_selectedDistrictId == district.Id ? Color.Primary : Color.Default)">@district.Name</MudText>
-                                        </MudListItem>
-                                    }
-                                </MudList>
                                 @if (_selectedProvinceId != Guid.Empty)
                                 {
-                                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" Class="mt-2"
+                                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" Class="mb-2"
                                                OnClick="@(() => _showDistrictForm = true)">
                                         <MudIcon Icon="@Icons.Material.Filled.Add" Class="mr-1" /> @Loc["Lookup.District.Add"]
                                     </MudButton>
                                     @if (_showDistrictForm)
                                     {
-                                        <MudPaper Elevation="1" Class="pa-3 mt-3">
+                                        <MudPaper Elevation="1" Class="pa-3 mb-3">
                                             <MudForm @ref="_districtForm">
                                                 <MudTextField @bind-Value="_districtModel.Name" Label="@Loc["Lookup.District.Name"]" Required="true" MaxLength="100" />
                                                 <div class="d-flex gap-2 mt-2">
@@ -103,6 +95,14 @@ else
                                         </MudPaper>
                                     }
                                 }
+                                <MudList T="string" Clickable="true">
+                                    @foreach (var district in _districts)
+                                    {
+                                        <MudListItem T="string" @onclick="@(async () => await SelectDistrictAsync(district.Id))">
+                                            <MudText Color="@(_selectedDistrictId == district.Id ? Color.Primary : Color.Default)">@district.Name</MudText>
+                                        </MudListItem>
+                                    }
+                                </MudList>
                             </MudCardContent>
                         </MudCard>
                     </MudItem>
@@ -111,23 +111,15 @@ else
                         <MudCard Elevation="2">
                             <MudCardHeader><CardHeaderContent><MudText Typo="Typo.h6">@Loc["Lookup.Neighborhoods"]</MudText></CardHeaderContent></MudCardHeader>
                             <MudCardContent>
-                                <MudList T="string" Clickable="true">
-                                    @foreach (var neighborhood in _neighborhoods)
-                                    {
-                                        <MudListItem T="string" @onclick="@(() => SelectNeighborhood(neighborhood.Id))">
-                                            <MudText Color="@(_selectedNeighborhoodId == neighborhood.Id ? Color.Primary : Color.Default)">@neighborhood.Name</MudText>
-                                        </MudListItem>
-                                    }
-                                </MudList>
                                 @if (_selectedDistrictId != Guid.Empty)
                                 {
-                                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" Class="mt-2"
+                                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" Class="mb-2"
                                                OnClick="@(() => _showNeighborhoodForm = true)">
                                         <MudIcon Icon="@Icons.Material.Filled.Add" Class="mr-1" /> @Loc["Lookup.Neighborhood.Add"]
                                     </MudButton>
                                     @if (_showNeighborhoodForm)
                                     {
-                                        <MudPaper Elevation="1" Class="pa-3 mt-3">
+                                        <MudPaper Elevation="1" Class="pa-3 mb-3">
                                             <MudForm @ref="_neighborhoodForm">
                                                 <MudTextField @bind-Value="_neighborhoodModel.Name" Label="@Loc["Lookup.Neighborhood.Name"]" Required="true" MaxLength="100" />
                                                 <div class="d-flex gap-2 mt-2">
@@ -140,6 +132,14 @@ else
                                         </MudPaper>
                                     }
                                 }
+                                <MudList T="string" Clickable="true">
+                                    @foreach (var neighborhood in _neighborhoods)
+                                    {
+                                        <MudListItem T="string" @onclick="@(() => SelectNeighborhood(neighborhood.Id))">
+                                            <MudText Color="@(_selectedNeighborhoodId == neighborhood.Id ? Color.Primary : Color.Default)">@neighborhood.Name</MudText>
+                                        </MudListItem>
+                                    }
+                                </MudList>
                             </MudCardContent>
                         </MudCard>
                     </MudItem>
@@ -290,8 +290,22 @@ else
         _buildingTypes = await LookUpReader.GetBuildingTypesAsync();
     }
 
-    private void SelectProvince(Guid id) { _selectedProvinceId = id; _selectedDistrictId = Guid.Empty; _selectedNeighborhoodId = Guid.Empty; }
-    private void SelectDistrict(Guid id) { _selectedDistrictId = id; _selectedNeighborhoodId = Guid.Empty; }
+    private async Task SelectProvinceAsync(Guid id)
+    {
+        _selectedProvinceId = id;
+        _selectedDistrictId = Guid.Empty;
+        _selectedNeighborhoodId = Guid.Empty;
+        _neighborhoods = [];
+        await RefreshDistrictsAsync();
+    }
+
+    private async Task SelectDistrictAsync(Guid id)
+    {
+        _selectedDistrictId = id;
+        _selectedNeighborhoodId = Guid.Empty;
+        await RefreshNeighborhoodsAsync();
+    }
+
     private void SelectNeighborhood(Guid id) => _selectedNeighborhoodId = id;
 
     private async Task RefreshDistrictsAsync()

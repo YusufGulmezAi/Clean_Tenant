@@ -142,6 +142,7 @@ public static class DependencyInjection
         services.AddScoped<DevSeedData>();
         services.AddScoped<DemoSeedData>();
         services.AddScoped<LocalizationSeeder>();
+        services.AddScoped<LookUpSeeder>();
 
         // ---- v0.2.10 Lokalizasyon ----
         // LocalizationStore singleton — startup'ta DB'den preload edilir

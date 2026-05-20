@@ -72,6 +72,22 @@ public sealed class TenantConfiguration : IEntityTypeConfiguration<Tenant>
         builder.Property(t => t.Address)
             .HasMaxLength(512);
 
+        // v0.2.11.b — Adres FK'ları (LookUp), İletişim ve Sözleşme alanları
+        builder.Property(t => t.ProvinceId);
+        builder.Property(t => t.DistrictId);
+        builder.Property(t => t.NeighborhoodId);
+        builder.HasIndex(t => t.ProvinceId);
+        builder.HasIndex(t => t.DistrictId);
+        builder.HasIndex(t => t.NeighborhoodId);
+
+        builder.Property(t => t.ContactPerson).HasMaxLength(200);
+        builder.Property(t => t.ContactEmail).HasMaxLength(256);
+        builder.Property(t => t.ContactPhone).HasMaxLength(32);
+
+        builder.Property(t => t.ContractStartDate);
+        builder.Property(t => t.ContractEndDate);
+        builder.Property(t => t.TransitionGraceDays);
+
         // xmin → RowVersion (PostgreSQL optimistic concurrency)
         builder.UseXminAsConcurrencyToken();
 

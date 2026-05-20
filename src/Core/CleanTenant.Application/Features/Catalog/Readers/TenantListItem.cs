@@ -14,6 +14,14 @@ public sealed record TenantListItem(
     string UrlCode,
     string Name,
     string? LegalName,
+    LegalIdentityType LegalIdentityType,
+    string LegalIdentityNumber,
     TenantStatus Status,
     BillingTier BillingTier,
-    bool AllowSystemWriteAccess);
+    bool AllowSystemWriteAccess,
+    string? ProvinceName,
+    string? DistrictName,
+    string? NeighborhoodName,
+    DateOnly? ContractStartDate,
+    DateOnly? ContractEndDate,
+    int? TransitionGraceDays);

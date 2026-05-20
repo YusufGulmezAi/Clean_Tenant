@@ -1,32 +1,49 @@
-using CleanTenant.Application.Common.Persistence;
 using CleanTenant.Application.Features.Catalog.Readers;
 using Microsoft.EntityFrameworkCore;
 
 namespace CleanTenant.Infrastructure.Persistence.Catalog.Readers;
 
+/// <summary>
+/// <para>
+/// <see cref="ILookUpCatalogReader"/> implementasyonu. v0.2.11.b'de
+/// <c>IDbContextFactory&lt;CatalogDbContext&gt;</c>'ye geçildi — Blazor Server'da
+/// prerender + interactive double-render senaryosunda scoped DbContext concurrency
+/// hatası veriyordu (TenantCatalogReader ile aynı sebep, v0.2.9 fix).
+/// </para>
+/// </summary>
 internal sealed class LookUpCatalogReader : ILookUpCatalogReader
 {
-    private readonly ICatalogDbContext _db;
+    private readonly IDbContextFactory<CatalogDbContext> _dbFactory;
 
-    public LookUpCatalogReader(ICatalogDbContext db)
+    /// <summary>DI bağımlılıklarını alır.</summary>
+    public LookUpCatalogReader(IDbContextFactory<CatalogDbContext> dbFactory)
     {
-        _db = db;
+        _dbFactory = dbFactory;
     }
 
+    /// <inheritdoc />
     public async Task<IReadOnlyList<ProvinceListItem>> GetProvincesAsync(CancellationToken ct = default)
     {
-        var result = await _db.Provinces
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        // Plaka koduna göre sırala (Türkiye konvansiyonu: 01 Adana → 81 Düzce).
+        // Postgres default collation Türkçe-aware değil; Name OrderBy'ı Ç/Ğ/İ/Ö/Ş/Ü
+        // gibi karakterleri beklenmedik yere atar. PlateCode null ise sona düşer.
+        var result = await db.Provinces
             .AsNoTracking()
             .Where(x => !x.IsDeleted)
-            .OrderBy(x => x.Name)
+            .OrderBy(x => x.PlateCode == null)
+            .ThenBy(x => x.PlateCode)
+            .ThenBy(x => x.Name)
             .Select(x => new ProvinceListItem(x.Id, x.UrlCode, x.Name, x.PlateCode))
             .ToListAsync(ct);
         return result;
     }
 
+    /// <inheritdoc />
     public async Task<IReadOnlyList<DistrictListItem>> GetDistrictsByProvinceAsync(Guid provinceId, CancellationToken ct = default)
     {
-        var result = await _db.Districts
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var result = await db.Districts
             .AsNoTracking()
             .Where(x => x.ProvinceId == provinceId && !x.IsDeleted)
             .OrderBy(x => x.Name)
@@ -35,9 +52,11 @@ internal sealed class LookUpCatalogReader : ILookUpCatalogReader
         return result;
     }
 
+    /// <inheritdoc />
     public async Task<IReadOnlyList<NeighborhoodListItem>> GetNeighborhoodsByDistrictAsync(Guid districtId, CancellationToken ct = default)
     {
-        var result = await _db.Neighborhoods
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var result = await db.Neighborhoods
             .AsNoTracking()
             .Where(x => x.DistrictId == districtId && !x.IsDeleted)
             .OrderBy(x => x.Name)
@@ -46,9 +65,11 @@ internal sealed class LookUpCatalogReader : ILookUpCatalogReader
         return result;
     }
 
+    /// <inheritdoc />
     public async Task<IReadOnlyList<ResidentialTypeListItem>> GetResidentialTypesAsync(CancellationToken ct = default)
     {
-        var result = await _db.ResidentialTypes
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var result = await db.ResidentialTypes
             .AsNoTracking()
             .Where(x => !x.IsDeleted)
             .OrderBy(x => x.Name)
@@ -57,9 +78,11 @@ internal sealed class LookUpCatalogReader : ILookUpCatalogReader
         return result;
     }
 
+    /// <inheritdoc />
     public async Task<IReadOnlyList<BuildingTypeListItem>> GetBuildingTypesAsync(CancellationToken ct = default)
     {
-        var result = await _db.BuildingTypes
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var result = await db.BuildingTypes
             .AsNoTracking()
             .Where(x => !x.IsDeleted)
             .OrderBy(x => x.Name)
@@ -68,9 +91,11 @@ internal sealed class LookUpCatalogReader : ILookUpCatalogReader
         return result;
     }
 
+    /// <inheritdoc />
     public async Task<IReadOnlyList<BankListItem>> GetBanksAsync(CancellationToken ct = default)
     {
-        var result = await _db.Banks
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var result = await db.Banks
             .AsNoTracking()
             .Where(x => !x.IsDeleted)
             .OrderBy(x => x.FullName)
@@ -87,9 +112,11 @@ internal sealed class LookUpCatalogReader : ILookUpCatalogReader
         return result;
     }
 
+    /// <inheritdoc />
     public async Task<BankDetail?> GetBankDetailAsync(Guid id, CancellationToken ct = default)
     {
-        var result = await _db.Banks
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var result = await db.Banks
             .AsNoTracking()
             .Where(x => x.Id == id && !x.IsDeleted)
             .Select(x => new BankDetail(

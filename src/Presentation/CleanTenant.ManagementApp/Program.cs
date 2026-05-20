@@ -138,6 +138,13 @@ using (var scope = app.Services.CreateScope())
     await locStore.ReloadAsync();
 }
 
+// v0.2.11.b — LookUp coğrafya seed (il/ilçe/mahalle, CSV'den, idempotent).
+using (var scope = app.Services.CreateScope())
+{
+    var lookUpSeeder = scope.ServiceProvider.GetRequiredService<CleanTenant.Infrastructure.Persistence.Seeding.LookUpSeeder>();
+    await lookUpSeeder.SeedGeographyAsync();
+}
+
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);

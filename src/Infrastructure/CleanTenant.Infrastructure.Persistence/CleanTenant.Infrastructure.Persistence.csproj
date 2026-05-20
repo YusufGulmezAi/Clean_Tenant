@@ -29,6 +29,16 @@
          Microsoft.AspNetCore.App framework reference üzerinden geliyor. -->
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- v0.2.11.b — Türkiye il/ilçe/mahalle CSV'si LookUpSeeder tarafından
+         runtime'da okunur. Output'a kopyalanır (Link ile flat dizine alınır)
+         → AppContext.BaseDirectory/data/seed/... yolundan erişilir. -->
+    <Content Include="..\..\..\data\seed\turkey-administrative-regions.csv">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>data\seed\turkey-administrative-regions.csv</Link>
+    </Content>
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>

@@ -96,4 +96,48 @@ public sealed class Tenant : BaseEntity, IAggregateRoot, IHasUrlCode
     /// Max 512 karakter.
     /// </summary>
     public string? Address { get; set; }
+
+    /// <summary>Adres: bağlı il (LookUp.Provinces FK). v0.2.11.b'de eklendi.</summary>
+    public Guid? ProvinceId { get; set; }
+
+    /// <summary>Adres: bağlı ilçe (LookUp.Districts FK). v0.2.11.b'de eklendi.</summary>
+    public Guid? DistrictId { get; set; }
+
+    /// <summary>Adres: bağlı mahalle (LookUp.Neighborhoods FK). v0.2.11.b'de eklendi.</summary>
+    public Guid? NeighborhoodId { get; set; }
+
+    /// <summary>
+    /// İletişim kişisi adı-soyadı (operasyonel temas). Sorumlu Yönetici User'ından
+    /// ayrı tutulur — User kimlik için, ContactPerson iş iletişimi için.
+    /// Max 200 karakter.
+    /// </summary>
+    public string? ContactPerson { get; set; }
+
+    /// <summary>İletişim e-postası (genel kurumsal). Max 256 karakter.</summary>
+    public string? ContactEmail { get; set; }
+
+    /// <summary>
+    /// İletişim telefonu (genel kurumsal). Max 32 karakter — uluslararası
+    /// formatlara izin verir.
+    /// </summary>
+    public string? ContactPhone { get; set; }
+
+    /// <summary>
+    /// Sözleşmenin başlangıç tarihi (gün hassasiyetinde). Faturalama döngüsü
+    /// hesabında ve tahsilat takvimi/uyarılarda kullanılır.
+    /// </summary>
+    public DateOnly? ContractStartDate { get; set; }
+
+    /// <summary>
+    /// Sözleşmenin bitiş tarihi (gün hassasiyetinde). Süresiz sözleşmeler için
+    /// null kalır. Yenileme/uyarı akışlarının kaynak alanı.
+    /// </summary>
+    public DateOnly? ContractEndDate { get; set; }
+
+    /// <summary>
+    /// Sözleşme bitişi sonrası devir/kapanış için verilen ek süre (gün).
+    /// Veri taşıma, son fatura gibi işlemler bu pencerede tamamlanır.
+    /// Null → ek süre tanımlanmamış.
+    /// </summary>
+    public int? TransitionGraceDays { get; set; }
 }

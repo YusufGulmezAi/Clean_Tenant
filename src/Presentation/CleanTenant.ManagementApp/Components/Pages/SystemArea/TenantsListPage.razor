@@ -131,11 +131,52 @@ else
                 </CellTemplate>
             </PropertyColumn>
             <PropertyColumn T="TenantListItem" TProperty="BillingTier" Property="@(t => t.BillingTier)" Title="@Loc["Tenants.List.Col.Tier"].Value" />
+            <PropertyColumn T="TenantListItem" TProperty="string" Property="@(t => t.LegalIdentityNumber)" Title="@Loc["Tenants.List.Col.Identity"].Value">
+                <CellTemplate>
+                    <MudText Typo="Typo.body2" Style="font-family:monospace">
+                        @context.Item.LegalIdentityType.ToString().ToUpperInvariant(): @context.Item.LegalIdentityNumber
+                    </MudText>
+                </CellTemplate>
+            </PropertyColumn>
+            <PropertyColumn T="TenantListItem" TProperty="string" Property="@(t => t.ProvinceName ?? "")" Title="@Loc["Tenants.List.Col.Province"].Value">
+                <CellTemplate>
+                    <MudText Typo="Typo.body2">@(context.Item.ProvinceName ?? "—")</MudText>
+                </CellTemplate>
+            </PropertyColumn>
+            <PropertyColumn T="TenantListItem" TProperty="string" Property="@(t => t.DistrictName ?? "")" Title="@Loc["Tenants.List.Col.District"].Value">
+                <CellTemplate>
+                    <MudText Typo="Typo.body2">@(context.Item.DistrictName ?? "—")</MudText>
+                </CellTemplate>
+            </PropertyColumn>
+            <PropertyColumn T="TenantListItem" TProperty="string" Property="@(t => t.NeighborhoodName ?? "")" Title="@Loc["Tenants.List.Col.Neighborhood"].Value">
+                <CellTemplate>
+                    <MudText Typo="Typo.body2">@(context.Item.NeighborhoodName ?? "—")</MudText>
+                </CellTemplate>
+            </PropertyColumn>
             <PropertyColumn T="TenantListItem" TProperty="bool" Property="@(t => t.AllowSystemWriteAccess)" Title="@Loc["Tenants.List.Col.SystemWrite"].Value">
                 <CellTemplate>
                     <MudIcon Icon="@(context.Item.AllowSystemWriteAccess ? Icons.Material.Filled.LockOpen : Icons.Material.Filled.Lock)"
                              Color="@(context.Item.AllowSystemWriteAccess ? Color.Success : Color.Warning)"
                              Size="Size.Small" />
+                </CellTemplate>
+            </PropertyColumn>
+            <PropertyColumn T="TenantListItem" TProperty="DateOnly?" Property="@(t => t.ContractStartDate)" Title="@Loc["Tenants.List.Col.ContractStart"].Value" Hideable="true">
+                <CellTemplate>
+                    <MudText Typo="Typo.body2">@(context.Item.ContractStartDate?.ToString("dd.MM.yyyy") ?? "—")</MudText>
+                </CellTemplate>
+            </PropertyColumn>
+            <PropertyColumn T="TenantListItem" TProperty="DateOnly?" Property="@(t => t.ContractEndDate)" Title="@Loc["Tenants.List.Col.ContractEnd"].Value" Hideable="true">
+                <CellTemplate>
+                    <MudText Typo="Typo.body2">@(context.Item.ContractEndDate?.ToString("dd.MM.yyyy") ?? "—")</MudText>
+                </CellTemplate>
+            </PropertyColumn>
+            <PropertyColumn T="TenantListItem" TProperty="int?" Property="@(t => t.TransitionGraceDays)" Title="@Loc["Tenants.List.Col.GraceDays"].Value" Hideable="true">
+                <CellTemplate>
+                    <MudText Typo="Typo.body2">
+                        @(context.Item.TransitionGraceDays.HasValue
+                            ? Loc["Tenants.List.Col.GraceDaysFormat", context.Item.TransitionGraceDays.Value].Value
+                            : "—")
+                    </MudText>
                 </CellTemplate>
             </PropertyColumn>
             <TemplateColumn T="TenantListItem" CellClass="d-flex justify-end" Filterable="false" Sortable="false">
