@@ -1,0 +1,518 @@
+@using CleanTenant.Application.Features.System.Users
+@using CleanTenant.Application.Features.Tenant.Users
+@using CleanTenant.SharedKernel.Context
+@using MediatR
+@using MudBlazor
+
+@inject IMediator Mediator
+@inject IStringLocalizer Loc
+
+@*
+    Kullanıcı onboarding sihirbazı.
+    TCKN/VKN/YKN + telefon + e-posta alanlarında gerçek zamanlı (debounced) arama yapar.
+    - Kullanıcı bulunursa → rol seç → atama yap (AssignUserToTenantCommand)
+    - Bulunamazsa → ad/soyad/şifre alanları açılır → yeni kullanıcı oluştur
+    OTP doğrulaması: TODO — ilerleyen fazda IVerificationCodeService ile eklenecek.
+*@
+
+@if (_state == WizardState.Idle || _state == WizardState.Searching || _state == WizardState.Partial)
+{
+    @* ─── ARAMA ADIMI ─────────────────────────────────────────────── *@
+    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+        @Loc["Onboarding.Lookup.Help"]
+    </MudText>
+
+    <MudTextField Value="@_tckn"
+                  ValueChanged="@(async (string v) => { _tckn = v; await OnTcknChangedAsync(v); })"
+                  Label="@Loc["Onboarding.Lookup.Tckn"]"
+                  Variant="Variant.Outlined"
+                  Margin="Margin.Dense"
+                  Adornment="@(_tcknSearching ? Adornment.End : Adornment.None)"
+                  AdornmentIcon="@Icons.Material.Filled.HourglassEmpty"
+                  HelperText="@TcknHelperText()"
+                  Class="mb-3" />
+
+    <MudTextField Value="@_phone"
+                  ValueChanged="@(async (string v) => { _phone = v; await OnPhoneChangedAsync(v); })"
+                  Label="@Loc["Onboarding.Lookup.Phone"]"
+                  Variant="Variant.Outlined"
+                  Margin="Margin.Dense"
+                  Adornment="@(_phoneSearching ? Adornment.End : Adornment.None)"
+                  AdornmentIcon="@Icons.Material.Filled.HourglassEmpty"
+                  HelperText="@PhoneHelperText()"
+                  Class="mb-3" />
+
+    <MudTextField Value="@_email"
+                  ValueChanged="@(async (string v) => { _email = v; await OnEmailChangedAsync(v); })"
+                  Label="@Loc["Onboarding.Lookup.Email"]"
+                  InputType="InputType.Email"
+                  Variant="Variant.Outlined"
+                  Margin="Margin.Dense"
+                  Adornment="@(_emailSearching ? Adornment.End : Adornment.None)"
+                  AdornmentIcon="@Icons.Material.Filled.HourglassEmpty"
+                  HelperText="@EmailHelperText()"
+                  Class="mb-3" />
+
+    @if (_state == WizardState.Searching)
+    {
+        <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-2" />
+    }
+
+    <div class="d-flex justify-end gap-2 mt-4">
+        <MudButton Variant="Variant.Text" OnClick="@OnCancel">@Loc["Common.Cancel"]</MudButton>
+        <MudButton Color="Color.Primary"
+                   Variant="Variant.Filled"
+                   Disabled="@(!CanProceedToNewUser)"
+                   OnClick="@GoToNewUser">
+            @Loc["Onboarding.Lookup.CreateNew"]
+        </MudButton>
+    </div>
+}
+else if (_state == WizardState.UserFound)
+{
+    @* ─── KULLANICI BULUNDU ADIMI ─────────────────────────────────── *@
+    <MudAlert Severity="Severity.Success" Class="mb-4">
+        @Loc["Onboarding.Found.Message"]
+    </MudAlert>
+
+    <MudPaper Variant="Variant.Outlined" Class="pa-3 mb-4">
+        <MudText Typo="Typo.subtitle2">@_foundUser?.FirstName @_foundUser?.LastName</MudText>
+        <MudText Typo="Typo.caption" Color="Color.Secondary">@_foundUser?.Email</MudText>
+        @if (!string.IsNullOrEmpty(_foundUser?.PhoneNumber))
+        {
+            <MudText Typo="Typo.caption" Color="Color.Secondary">@_foundUser!.PhoneNumber</MudText>
+        }
+        @if (_foundUser?.IsActive == false)
+        {
+            <MudChip T="string" Size="Size.Small" Color="Color.Error" Class="mt-1">
+                @Loc["UserStatus.Inactive"]
+            </MudChip>
+        }
+    </MudPaper>
+
+    <MudSelect T="Guid"
+               MultiSelection="true"
+               SelectedValues="@_selectedRoleIds"
+               SelectedValuesChanged="@(v => _selectedRoleIds = v)"
+               Label="@Loc["UserForm.Roles"]"
+               Variant="Variant.Outlined"
+               Margin="Margin.Dense"
+               Class="mb-4">
+        @foreach (var role in AvailableRoles)
+        {
+            <MudSelectItem T="Guid" Value="@role.Id">@role.Name</MudSelectItem>
+        }
+    </MudSelect>
+
+    @if (!string.IsNullOrEmpty(_errorMessage))
+    {
+        <MudAlert Severity="Severity.Error" Class="mb-3">@_errorMessage</MudAlert>
+    }
+
+    <div class="d-flex justify-end gap-2">
+        <MudButton Variant="Variant.Text" OnClick="@ResetWizard">@Loc["Common.Back"]</MudButton>
+        <MudButton Color="Color.Primary"
+                   Variant="Variant.Filled"
+                   Disabled="@(_isSubmitting || !_selectedRoleIds.Any())"
+                   OnClick="@HandleAssignAsync"
+                   StartIcon="@Icons.Material.Filled.PersonAdd">
+            @Loc["Onboarding.Found.Assign"]
+        </MudButton>
+    </div>
+}
+else if (_state == WizardState.NewUser)
+{
+    @* ─── YENİ KULLANICI ADIMI ────────────────────────────────────── *@
+    <MudAlert Severity="Severity.Info" Class="mb-4">
+        @Loc["Onboarding.New.Message"]
+    </MudAlert>
+
+    <div class="d-flex gap-2 mb-3">
+        <MudTextField @bind-Value="_firstName"
+                      Label="@Loc["UserForm.FirstName"]"
+                      Variant="Variant.Outlined"
+                      Margin="Margin.Dense"
+                      Class="flex-1" />
+        <MudTextField @bind-Value="_lastName"
+                      Label="@Loc["UserForm.LastName"]"
+                      Variant="Variant.Outlined"
+                      Margin="Margin.Dense"
+                      Class="flex-1" />
+    </div>
+
+    <MudTextField Value="@_email"
+                  Label="@Loc["UserForm.Email"]"
+                  InputType="InputType.Email"
+                  Variant="Variant.Outlined"
+                  Margin="Margin.Dense"
+                  Disabled="true"
+                  Class="mb-3" />
+
+    <MudTextField @bind-Value="_password"
+                  Label="@Loc["UserForm.Password"]"
+                  InputType="@(_showPassword ? InputType.Text : InputType.Password)"
+                  Variant="Variant.Outlined"
+                  Margin="Margin.Dense"
+                  Adornment="Adornment.End"
+                  AdornmentIcon="@(_showPassword ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
+                  OnAdornmentClick="@(() => _showPassword = !_showPassword)"
+                  HelperText="@Loc["UserForm.Password.Help"]"
+                  Class="mb-3" />
+
+    <MudSelect T="Guid"
+               MultiSelection="true"
+               SelectedValues="@_selectedRoleIds"
+               SelectedValuesChanged="@(v => _selectedRoleIds = v)"
+               Label="@Loc["UserForm.Roles"]"
+               Variant="Variant.Outlined"
+               Margin="Margin.Dense"
+               Class="mb-4">
+        @foreach (var role in AvailableRoles)
+        {
+            <MudSelectItem T="Guid" Value="@role.Id">@role.Name</MudSelectItem>
+        }
+    </MudSelect>
+
+    @if (!string.IsNullOrEmpty(_errorMessage))
+    {
+        <MudAlert Severity="Severity.Error" Class="mb-3">@_errorMessage</MudAlert>
+    }
+
+    <div class="d-flex justify-end gap-2">
+        <MudButton Variant="Variant.Text" OnClick="@ResetWizard">@Loc["Common.Back"]</MudButton>
+        <MudButton Color="Color.Primary"
+                   Variant="Variant.Filled"
+                   Disabled="@(_isSubmitting || !CanCreateNewUser)"
+                   OnClick="@HandleCreateAsync"
+                   StartIcon="@Icons.Material.Filled.PersonAdd">
+            @Loc["Onboarding.New.Create"]
+        </MudButton>
+    </div>
+}
+
+@code {
+    [Parameter] public ScopeLevel Scope { get; set; } = ScopeLevel.Tenant;
+    [Parameter] public Guid? TenantId { get; set; }
+    [Parameter] public IReadOnlyList<RoleOption> AvailableRoles { get; set; } = [];
+    [Parameter] public EventCallback<UserListItem> OnSuccess { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private enum WizardState { Idle, Searching, Partial, UserFound, NewUser }
+
+    private WizardState _state = WizardState.Idle;
+
+    // Lookup alanları
+    private string _tckn = string.Empty;
+    private string _phone = string.Empty;
+    private string _email = string.Empty;
+
+    // Arama durumları
+    private bool _tcknSearching;
+    private bool _phoneSearching;
+    private bool _emailSearching;
+
+    // Arama sonuçları: null = arama yapılmadı / empty; found = kullanıcı var; notFound = yok
+    private UserLookupResult? _tcknResult;
+    private UserLookupResult? _phoneResult;
+    private UserLookupResult? _emailResult;
+    private bool _tcknSearched;
+    private bool _phoneSearched;
+    private bool _emailSearched;
+
+    // Debounce
+    private CancellationTokenSource? _tcknCts;
+    private CancellationTokenSource? _phoneCts;
+    private CancellationTokenSource? _emailCts;
+
+    // Bulunan kullanıcı / yeni kullanıcı form alanları
+    private UserLookupResult? _foundUser;
+    private string _firstName = string.Empty;
+    private string _lastName = string.Empty;
+    private string _password = string.Empty;
+    private bool _showPassword;
+
+    // Rol seçimi
+    private IEnumerable<Guid> _selectedRoleIds = [];
+
+    private bool _isSubmitting;
+    private string _errorMessage = string.Empty;
+
+    private static readonly TimeSpan DebounceDelay = TimeSpan.FromMilliseconds(500);
+
+    private bool CanProceedToNewUser =>
+        !_tcknSearching && !_phoneSearching && !_emailSearching &&
+        _tcknSearched && _phoneSearched && _emailSearched &&
+        _tcknResult is null && _phoneResult is null && _emailResult is null &&
+        !string.IsNullOrWhiteSpace(_email);
+
+    private bool CanCreateNewUser =>
+        !string.IsNullOrWhiteSpace(_firstName) &&
+        !string.IsNullOrWhiteSpace(_lastName) &&
+        !string.IsNullOrWhiteSpace(_email) &&
+        _password.Length >= 8;
+
+    private string TcknHelperText() =>
+        _tcknSearching ? Loc["Onboarding.Searching"].Value :
+        _tcknSearched && _tcknResult is not null ? $"✓ {_tcknResult.FirstName} {_tcknResult.LastName}" :
+        _tcknSearched && _tcknResult is null && !string.IsNullOrWhiteSpace(_tckn) ? Loc["Onboarding.NotFound"].Value :
+        string.Empty;
+
+    private string PhoneHelperText() =>
+        _phoneSearching ? Loc["Onboarding.Searching"].Value :
+        _phoneSearched && _phoneResult is not null ? $"✓ {_phoneResult.FirstName} {_phoneResult.LastName}" :
+        _phoneSearched && _phoneResult is null && !string.IsNullOrWhiteSpace(_phone) ? Loc["Onboarding.NotFound"].Value :
+        string.Empty;
+
+    private string EmailHelperText() =>
+        _emailSearching ? Loc["Onboarding.Searching"].Value :
+        _emailSearched && _emailResult is not null ? $"✓ {_emailResult.FirstName} {_emailResult.LastName}" :
+        _emailSearched && _emailResult is null && !string.IsNullOrWhiteSpace(_email) ? Loc["Onboarding.NotFound"].Value :
+        string.Empty;
+
+    private async Task OnTcknChangedAsync(string value)
+    {
+        _tckn = value;
+        _tcknCts?.Cancel();
+        _tcknCts?.Dispose();
+        _tcknSearched = false;
+        _tcknResult = null;
+
+        if (string.IsNullOrWhiteSpace(value) || value.Length < 10)
+        {
+            _tcknSearching = false;
+            UpdateState();
+            return;
+        }
+
+        _tcknSearching = true;
+        _tcknCts = new CancellationTokenSource();
+        var token = _tcknCts.Token;
+
+        try
+        {
+            await Task.Delay(DebounceDelay, token);
+            var query = new LookupUserByIdentifierQuery(UserLookupType.Tckn, value);
+            var result = await Mediator.Send(query, token);
+            if (result.IsSuccess)
+            {
+                _tcknResult = result.Value;
+            }
+        }
+        catch (TaskCanceledException) { return; }
+        finally
+        {
+            _tcknSearching = false;
+            _tcknSearched = true;
+        }
+
+        CheckForUserFound();
+        UpdateState();
+        StateHasChanged();
+    }
+
+    private async Task OnPhoneChangedAsync(string value)
+    {
+        _phone = value;
+        _phoneCts?.Cancel();
+        _phoneCts?.Dispose();
+        _phoneSearched = false;
+        _phoneResult = null;
+
+        if (string.IsNullOrWhiteSpace(value) || value.Length < 10)
+        {
+            _phoneSearching = false;
+            UpdateState();
+            return;
+        }
+
+        _phoneSearching = true;
+        _phoneCts = new CancellationTokenSource();
+        var token = _phoneCts.Token;
+
+        try
+        {
+            await Task.Delay(DebounceDelay, token);
+            var query = new LookupUserByIdentifierQuery(UserLookupType.Phone, value);
+            var result = await Mediator.Send(query, token);
+            if (result.IsSuccess)
+            {
+                _phoneResult = result.Value;
+            }
+        }
+        catch (TaskCanceledException) { return; }
+        finally
+        {
+            _phoneSearching = false;
+            _phoneSearched = true;
+        }
+
+        CheckForUserFound();
+        UpdateState();
+        StateHasChanged();
+    }
+
+    private async Task OnEmailChangedAsync(string value)
+    {
+        _email = value;
+        _emailCts?.Cancel();
+        _emailCts?.Dispose();
+        _emailSearched = false;
+        _emailResult = null;
+
+        if (string.IsNullOrWhiteSpace(value) || value.Length < 5)
+        {
+            _emailSearching = false;
+            UpdateState();
+            return;
+        }
+
+        _emailSearching = true;
+        _emailCts = new CancellationTokenSource();
+        var token = _emailCts.Token;
+
+        try
+        {
+            await Task.Delay(DebounceDelay, token);
+            var query = new LookupUserByIdentifierQuery(UserLookupType.Email, value);
+            var result = await Mediator.Send(query, token);
+            if (result.IsSuccess)
+            {
+                _emailResult = result.Value;
+            }
+        }
+        catch (TaskCanceledException) { return; }
+        finally
+        {
+            _emailSearching = false;
+            _emailSearched = true;
+        }
+
+        CheckForUserFound();
+        UpdateState();
+        StateHasChanged();
+    }
+
+    private void CheckForUserFound()
+    {
+        var found = _tcknResult ?? _phoneResult ?? _emailResult;
+        if (found is not null)
+        {
+            _foundUser = found;
+            _state = WizardState.UserFound;
+        }
+    }
+
+    private void UpdateState()
+    {
+        if (_state == WizardState.UserFound || _state == WizardState.NewUser)
+            return;
+
+        if (_tcknSearching || _phoneSearching || _emailSearching)
+            _state = WizardState.Searching;
+        else if (_tcknSearched || _phoneSearched || _emailSearched)
+            _state = WizardState.Partial;
+        else
+            _state = WizardState.Idle;
+    }
+
+    private void GoToNewUser()
+    {
+        _firstName = string.Empty;
+        _lastName = string.Empty;
+        _password = string.Empty;
+        _selectedRoleIds = [];
+        _errorMessage = string.Empty;
+        _state = WizardState.NewUser;
+    }
+
+    private void ResetWizard()
+    {
+        _state = WizardState.Idle;
+        _foundUser = null;
+        _tckn = _phone = _email = string.Empty;
+        _tcknResult = _phoneResult = _emailResult = null;
+        _tcknSearched = _phoneSearched = _emailSearched = false;
+        _selectedRoleIds = [];
+        _errorMessage = string.Empty;
+    }
+
+    private async Task HandleAssignAsync()
+    {
+        if (_foundUser is null || !_selectedRoleIds.Any()) return;
+        if (Scope != ScopeLevel.Tenant || !TenantId.HasValue) return;
+
+        _isSubmitting = true;
+        _errorMessage = string.Empty;
+
+        try
+        {
+            var cmd = new AssignUserToTenantCommand(
+                TenantId.Value,
+                _foundUser.Email,
+                [.. _selectedRoleIds]);
+
+            var result = await Mediator.Send(cmd);
+            if (result.IsSuccess)
+            {
+                await OnSuccess.InvokeAsync(result.Value);
+            }
+            else
+            {
+                _errorMessage = result.FirstError.Message;
+            }
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+
+    private async Task HandleCreateAsync()
+    {
+        if (!CanCreateNewUser) return;
+
+        _isSubmitting = true;
+        _errorMessage = string.Empty;
+
+        try
+        {
+            if (Scope == ScopeLevel.Tenant && TenantId.HasValue)
+            {
+                var cmd = new CreateTenantUserCommand(
+                    TenantId.Value,
+                    _firstName,
+                    _lastName,
+                    _email,
+                    string.IsNullOrWhiteSpace(_phone) ? null : _phone,
+                    _password,
+                    [.. _selectedRoleIds]);
+
+                var result = await Mediator.Send(cmd);
+                if (result.IsSuccess)
+                    await OnSuccess.InvokeAsync(result.Value);
+                else
+                    _errorMessage = result.FirstError.Message;
+            }
+            else
+            {
+                var cmd = new CreateSystemUserCommand(
+                    _firstName,
+                    _lastName,
+                    _email,
+                    string.IsNullOrWhiteSpace(_phone) ? null : _phone,
+                    _password,
+                    [.. _selectedRoleIds]);
+
+                var result = await Mediator.Send(cmd);
+                if (result.IsSuccess)
+                    await OnSuccess.InvokeAsync(result.Value);
+                else
+                    _errorMessage = result.FirstError.Message;
+            }
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+}

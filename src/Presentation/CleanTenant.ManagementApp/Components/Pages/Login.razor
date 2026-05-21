@@ -19,6 +19,13 @@
         <MudText Typo="Typo.h4" Class="ml-2">@Loc["Layout.AppBar.Brand"]</MudText>
     </div>
 
+    @if (!string.IsNullOrEmpty(Info))
+    {
+        <MudAlert Severity="Severity.Success" Class="mb-4">
+            @InfoMessageFor(Info)
+        </MudAlert>
+    }
+
     @if (!string.IsNullOrEmpty(ErrorCode))
     {
         <MudAlert Severity="@SeverityFor(ErrorCode)" Class="mb-4" ShowCloseIcon="true">
@@ -67,18 +74,32 @@
     <MudDivider Class="my-4" />
 
     <MudText Typo="Typo.caption" Color="Color.Default" Align="Align.Center" Class="d-block">
+        <MudLink Href="/forgot-password">@Loc["Login.ForgotPassword"]</MudLink>
+    </MudText>
+
+    <MudText Typo="Typo.caption" Color="Color.Default" Align="Align.Center" Class="d-block mt-1">
         v0.2.2 · @Loc["Login.Footer"]
     </MudText>
 </MudPaper>
 
 @code {
-    [SupplyParameterFromQuery]
+    [SupplyParameterFromQuery(Name = "error")]
     public string? ErrorCode { get; set; }
+
+    [SupplyParameterFromQuery(Name = "info")]
+    public string? Info { get; set; }
+
+    private string InfoMessageFor(string info) => info switch
+    {
+        "password-reset-success" => Loc["Login.Info.PasswordResetSuccess"].Value,
+        _ => info,
+    };
 
     private static Severity SeverityFor(string code) => code switch
     {
         "AUTH-001" or "AUTH-009" => Severity.Warning,
         "AUTH-002" or "AUTH-003" => Severity.Error,
+        "AUTH-010" => Severity.Error,
         "AUTH-2FA-ENROLLMENT-REQUIRED" => Severity.Info,
         "AUTH-2FA-ENROLL-CHALLENGE-NOT-FOUND" => Severity.Warning,
         "AUTH-2FA-ENROLL-NOT-VERIFIED" => Severity.Warning,
@@ -93,6 +114,7 @@
         "AUTH-003" => Loc["Login.Error.Lockout"].Value,
         "AUTH-004" => Loc["Login.Error.NoManagementScope"].Value,
         "AUTH-009" => Loc["Login.Error.IdentifierTypeUnknown"].Value,
+        "AUTH-010" => Loc["Login.Error.Deactivated"].Value,
         // v0.2.2.a öncesi error — sistem normalde otomatik enrollment sayfasına
         // yönlendirir; bu mesaj yalnız edge case'lerde (tutarsız 2FA durumu) görünür.
         "AUTH-2FA-ENROLLMENT-REQUIRED" => Loc["Login.Error.TwoFactorEnrollmentRequired"].Value,

@@ -1,0 +1,183 @@
+@using CleanTenant.Application.Features.System.Users
+@using MudBlazor
+
+@*
+    Kullanıcı oluşturma / düzenleme paylaşımlı form bileşeni.
+    System / Tenant / Company scope'larında aynı markup kullanılır;
+    scope'a özgü farklar (rol listesi, zorunluluklar) dışarıdan geçirilir.
+
+    v0.2.12 — UserListPanel içinde sağ drawer'da kullanılır.
+*@
+
+<MudForm @ref="_form" Model="@Model" Validation="@ValidateValue" ValidationDelay="0">
+
+    @* ── Kişisel Bilgiler ─────────────────────────────────────────────── *@
+    <MudText Typo="Typo.subtitle1" Class="mb-2 mt-1">@Loc["UserForm.Section.Personal"]</MudText>
+    <MudGrid Spacing="2">
+        <MudItem xs="12" sm="6">
+            <MudTextField @bind-Value="Model.FirstName"
+                          For="@(() => Model.FirstName)"
+                          Label="@Loc["UserForm.FirstName"]"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          MaxLength="100"
+                          Immediate="true" />
+        </MudItem>
+        <MudItem xs="12" sm="6">
+            <MudTextField @bind-Value="Model.LastName"
+                          For="@(() => Model.LastName)"
+                          Label="@Loc["UserForm.LastName"]"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          MaxLength="100"
+                          Immediate="true" />
+        </MudItem>
+    </MudGrid>
+
+    @* ── İletişim ─────────────────────────────────────────────────────── *@
+    <MudDivider Class="my-3" />
+    <MudText Typo="Typo.subtitle1" Class="mb-2">@Loc["UserForm.Section.Contact"]</MudText>
+    <MudGrid Spacing="2">
+        <MudItem xs="12">
+            <MudTextField @bind-Value="Model.Email"
+                          For="@(() => Model.Email)"
+                          Label="@Loc["UserForm.Email"]"
+                          InputType="InputType.Email"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          MaxLength="256"
+                          Immediate="true" />
+        </MudItem>
+        <MudItem xs="12">
+            <MudTextField @bind-Value="Model.PhoneNumber"
+                          For="@(() => Model.PhoneNumber)"
+                          Label="@Loc["UserForm.PhoneNumber"]"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          MaxLength="20"
+                          Immediate="true" />
+        </MudItem>
+    </MudGrid>
+
+    @* ── Güvenlik (Create modunda şifre, Edit modunda durum) ─────────── *@
+    <MudDivider Class="my-3" />
+    <MudText Typo="Typo.subtitle1" Class="mb-2">@Loc["UserForm.Section.Security"]</MudText>
+    <MudGrid Spacing="2">
+        @if (Mode == UserFormMode.Create)
+        {
+            <MudItem xs="12">
+                <MudTextField @bind-Value="Model.Password"
+                              For="@(() => Model.Password)"
+                              Label="@Loc["UserForm.Password"]"
+                              InputType="@(_showPassword ? InputType.Text : InputType.Password)"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Adornment="Adornment.End"
+                              AdornmentIcon="@(_showPassword ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
+                              OnAdornmentClick="@(() => _showPassword = !_showPassword)"
+                              Immediate="true" />
+            </MudItem>
+        }
+    </MudGrid>
+
+    @* ── Roller ───────────────────────────────────────────────────────── *@
+    <MudDivider Class="my-3" />
+    <MudText Typo="Typo.subtitle1" Class="mb-2">@Loc["UserForm.Section.Roles"]</MudText>
+    @if (AvailableRoles.Count == 0)
+    {
+        <MudAlert Severity="Severity.Warning" Dense="true">
+            @Loc["UserForm.Roles.NoOptions"]
+        </MudAlert>
+    }
+    else
+    {
+        <div class="d-flex flex-wrap gap-2">
+            @foreach (var role in AvailableRoles)
+            {
+                var isSelected = Model.SelectedRoleIds.Contains(role.Id);
+                <MudChip T="string"
+                         Color="@(isSelected ? Color.Primary : Color.Default)"
+                         Variant="@(isSelected ? Variant.Filled : Variant.Outlined)"
+                         OnClick="@(() => ToggleRole(role.Id))"
+                         Size="Size.Small"
+                         Style="cursor:pointer">
+                    @role.Name
+                    @if (role.IsBuiltIn)
+                    {
+                        <MudIcon Icon="@Icons.Material.Filled.Lock" Size="Size.Small" Class="ml-1" />
+                    }
+                </MudChip>
+            }
+        </div>
+        @if (!Model.SelectedRoleIds.Any())
+        {
+            <MudText Typo="Typo.caption" Color="Color.Error" Class="mt-1">
+                @Loc["UserForm.Roles.Required"]
+            </MudText>
+        }
+    }
+
+    @* ── Aksiyon Butonları ────────────────────────────────────────────── *@
+    <div class="d-flex justify-end gap-2 mt-4">
+        <MudButton Variant="Variant.Text"
+                   OnClick="@OnCancel"
+                   Disabled="@IsSubmitting">
+            @Loc["Common.Cancel"]
+        </MudButton>
+        <MudButton Color="Color.Primary"
+                   Variant="Variant.Filled"
+                   OnClick="@SubmitAsync"
+                   Disabled="@IsSubmitting"
+                   StartIcon="@(IsSubmitting ? null : Icons.Material.Filled.Save)">
+            @if (IsSubmitting)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="ms-n1" />
+                <MudText Class="ms-2">@Loc["Common.Saving"]</MudText>
+            }
+            else
+            {
+                @(Mode == UserFormMode.Create ? Loc["UserForm.Create.Submit"] : Loc["UserForm.Edit.Submit"])
+            }
+        </MudButton>
+    </div>
+</MudForm>
+
+@code {
+    [Inject] private IStringLocalizer Loc { get; set; } = default!;
+
+    [Parameter, EditorRequired] public UserFormModel Model { get; set; } = default!;
+    [Parameter, EditorRequired] public UserFormMode Mode { get; set; }
+    [Parameter, EditorRequired] public IReadOnlyList<RoleOption> AvailableRoles { get; set; } = [];
+    [Parameter] public bool IsSubmitting { get; set; }
+    [Parameter] public EventCallback OnValidSubmit { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private MudForm _form = default!;
+    private bool _showPassword;
+
+    private Func<object, string, Task<IEnumerable<string>>> ValidateValue =>
+        async (model, propertyName) =>
+        {
+            // MudForm'un inline validation için boş liste yeterli — FluentValidation pipeline'da çalışır
+            await Task.CompletedTask;
+            return [];
+        };
+
+    private void ToggleRole(Guid roleId)
+    {
+        if (Model.SelectedRoleIds.Contains(roleId))
+            Model.SelectedRoleIds.Remove(roleId);
+        else
+            Model.SelectedRoleIds.Add(roleId);
+    }
+
+    /// <summary>Form doğrulaması başarılıysa OnValidSubmit'i tetikler.</summary>
+    public async Task SubmitAsync()
+    {
+        await _form.Validate();
+
+        // Rol seçimi formu kesmez; handler validate eder — UI uyarısı yeterli
+        if (!_form.IsValid) return;
+        await OnValidSubmit.InvokeAsync();
+    }
+}

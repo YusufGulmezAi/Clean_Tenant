@@ -94,8 +94,9 @@ public static class PermissionCatalog
         new("Reporting.System",     "Sistem geneli raporlar (System rol)", "Reporting", ScopeLevel.System),
 
         // ---------- System (yalnız System) ----------
-        new("System.Settings.Manage",       "Sistem ayarlarını yönetme", "System", ScopeLevel.System),
-        new("System.Localization.Manage",   "Dil kaynaklarını yönetme",  "System", ScopeLevel.System),
+        new("System.Settings.Manage",       "Sistem ayarlarını yönetme",       "System", ScopeLevel.System),
+        new("System.Localization.Manage",   "Dil kaynaklarını yönetme",        "System", ScopeLevel.System),
+        new("System.Users.Manage",          "Sistem kullanıcılarını yönetme",  "System", ScopeLevel.System),
 
         // ---------- LookUp Tabloları ----------
         new("LookUp.Read",          "LookUp tabloları (il, ilçe, mahalle, mesken tipi, yapı tipi, banka) görüntüleme", "LookUp", ScopeLevel.Tenant),

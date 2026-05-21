@@ -1,3 +1,5 @@
+using CleanTenant.Domain.Tenant.Companies;
+
 namespace CleanTenant.ManagementApp.Components.Shared;
 
 /// <summary>
@@ -23,6 +25,9 @@ public sealed class CompanyFormModel
 
     /// <summary>Telefon numarası. Opsiyonel, max 20 karakter.</summary>
     public string? Phone { get; set; }
+
+    /// <summary>Site durumu. Yeni kayıtta varsayılan Active; düzenleme modunda mevcut değer yüklenir.</summary>
+    public CompanyStatus Status { get; set; } = CompanyStatus.Active;
 }
 
 /// <summary>

@@ -31,7 +31,7 @@
       MudBlazor migration sprint'inde düzeltilecek.
       CS1591: XML documentation comments — UI component properties not documented.
     -->
-    <NoWarn>$(NoWarn);MUD0002;CS1591</NoWarn>
+    <NoWarn>$(NoWarn);MUD0002;CS1591;CS8669</NoWarn>
   </PropertyGroup>
 
 </Project>

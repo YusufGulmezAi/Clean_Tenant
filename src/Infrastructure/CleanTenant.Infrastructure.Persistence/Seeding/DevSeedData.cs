@@ -128,11 +128,13 @@ public sealed class DevSeedData
         _logger.LogInformation("Dev admin'e Developer (System) rolü atandı.");
     }
 
+    private const string DemoTenantLegalId = "1000000001";
+
     private async Task EnsureDemoTenantAsync(CancellationToken cancellationToken)
     {
         var exists = await _db.Tenants
             .AsNoTracking()
-            .AnyAsync(t => t.Name == DemoTenantName, cancellationToken);
+            .AnyAsync(t => t.LegalIdentityNumber == DemoTenantLegalId, cancellationToken);
 
         if (exists)
         {

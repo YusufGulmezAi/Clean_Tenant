@@ -40,6 +40,7 @@ public sealed class UpdateCompanyCommandHandler : IRequestHandler<UpdateCompanyC
         company.Vkn = command.Vkn;
         company.Email = command.Email;
         company.Phone = command.Phone;
+        company.Status = command.Status;
 
         _db.Companies.Update(company);
         await _db.SaveChangesAsync(cancellationToken);

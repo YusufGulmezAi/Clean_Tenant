@@ -99,6 +99,21 @@ public sealed class User : IdentityUser<Guid>, IAuditable, ISoftDeletable, IHasU
     /// <inheritdoc />
     public Guid? UpdatedBy { get; set; }
 
+    /// <summary>
+    /// Hesap aktif mi. False → kullanıcı giriş yapamaz ama kayıt silinmez;
+    /// yönetici tarafından tekrar aktif edilebilir. <see cref="IsDeleted"/>
+    /// ile karıştırma: IsDeleted kalıcı/geri dönüşsüz, IsActive geçici/tersine alınabilir.
+    /// </summary>
+    public bool IsActive { get; set; } = true;
+
+    /// <summary>
+    /// Kullanıcı bir sonraki girişte şifresini değiştirmek zorunda mı.
+    /// Admin tarafından oluşturulan kullanıcılarda true set edilir; ilk
+    /// başarılı giriş denemesinde /change-password sayfasına yönlendirilir.
+    /// Şifre değiştirilince false'a set edilir.
+    /// </summary>
+    public bool RequiresPasswordChange { get; set; }
+
     /// <inheritdoc />
     public bool IsDeleted { get; set; }
 

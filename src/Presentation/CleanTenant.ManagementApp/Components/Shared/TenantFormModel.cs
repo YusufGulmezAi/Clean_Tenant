@@ -82,4 +82,7 @@ public sealed class TenantFormModel
 
     /// <summary>Devir için verilen ek süre (gün).</summary>
     public int? TransitionGraceDays { get; set; }
+
+    /// <summary>Yönetim durumu (yalnız Sistem scope Edit modunda değiştirilebilir).</summary>
+    public TenantStatus Status { get; set; } = TenantStatus.Active;
 }

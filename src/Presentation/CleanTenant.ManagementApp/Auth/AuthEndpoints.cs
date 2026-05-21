@@ -3,6 +3,8 @@ using System.Security.Claims;
 using CleanTenant.Application.Common.Auth;
 using CleanTenant.Application.Features.Auth.Login;
 using CleanTenant.Application.Features.Auth.Logout;
+using CleanTenant.Application.Features.Auth.PasswordChange;
+using CleanTenant.Application.Features.Auth.PasswordReset;
 using CleanTenant.Application.Features.Auth.Tenants;
 using CleanTenant.Application.Features.Auth.TwoFactor.PreAuthEnrollment;
 using CleanTenant.Application.Features.Auth.TwoFactor.SendCode;
@@ -46,6 +48,12 @@ public static class AuthEndpoints
     /// <summary>v0.2.3.b — Aktif şirket adı claim adı (CompanyName AuthSession'da denormalize edildiğinde set edilir).</summary>
     public const string CompanyNameClaim = "company_name";
 
+    // İlk giriş şifre değişimi challenge cookie adı.
+    internal const string PasswordChangeCookieName = "__ct_pwd_chg";
+
+    // Şifre sıfırlama akışında e-posta adresini taşır.
+    internal const string ForgotPasswordEmailCookieName = "__ct_pwd_rst";
+
     // v0.2.2.d — 2FA challenge / enrollment token'ları artık query string yerine
     // kısa ömürlü HttpOnly cookie ile taşınır. Önceki davranışta token URL bar'da
     // görünüyordu: hem profesyonel olmayan görüntü, hem browser history / Referer
@@ -72,6 +80,28 @@ public static class AuthEndpoints
         SameSite = SameSiteMode.Strict,
         Path = "/",
         MaxAge = TimeSpan.FromMinutes(10),
+        IsEssential = true,
+    };
+
+    // Şifre değişim challenge 15 dk.
+    private static readonly CookieOptions PasswordChangeCookieOptions = new()
+    {
+        HttpOnly = true,
+        Secure = true,
+        SameSite = SameSiteMode.Strict,
+        Path = "/",
+        MaxAge = TimeSpan.FromMinutes(15),
+        IsEssential = true,
+    };
+
+    // Şifre sıfırlama OTP 15 dk.
+    private static readonly CookieOptions ForgotPasswordCookieOptions = new()
+    {
+        HttpOnly = true,
+        Secure = true,
+        SameSite = SameSiteMode.Strict,
+        Path = "/",
+        MaxAge = TimeSpan.FromMinutes(15),
         IsEssential = true,
     };
 
@@ -132,6 +162,20 @@ public static class AuthEndpoints
         // User.PreferredCulture DB'ye yazılır. Anonim kullanıcılar için yalnız
         // cookie set'lenir (login sonrası PreferredCulture'dan üzerine yazılır).
         routes.MapPost("/auth/change-culture", ChangeCultureFormAsync)
+              .DisableAntiforgery()
+              .AllowAnonymous();
+
+        // İlk giriş zorunlu şifre değişimi finalize.
+        routes.MapPost("/auth/change-password", CompletePasswordChangeAsync)
+              .DisableAntiforgery()
+              .AllowAnonymous();
+
+        // Şifre sıfırlama: OTP gönder + doğrula+sıfırla.
+        routes.MapPost("/auth/forgot-password", ForgotPasswordAsync)
+              .DisableAntiforgery()
+              .AllowAnonymous();
+
+        routes.MapPost("/auth/reset-password", ResetPasswordAsync)
               .DisableAntiforgery()
               .AllowAnonymous();
 
@@ -250,6 +294,14 @@ public static class AuthEndpoints
             var token = login.EnrollmentChallenge!.ChallengeToken;
             httpContext.Response.Cookies.Append(EnrollmentCookieName, token.ToString("N"), EnrollmentCookieOptions);
             return Results.Redirect("/2fa/enroll-pre-auth");
+        }
+
+        // İlk giriş zorunlu şifre değişimi
+        if (login.Status == LoginStatus.PasswordChangeRequired)
+        {
+            var token = login.PasswordChangeChallenge!.ChallengeToken;
+            httpContext.Response.Cookies.Append(PasswordChangeCookieName, token.ToString("N"), PasswordChangeCookieOptions);
+            return Results.Redirect("/change-password");
         }
 
         // Success → cookie set
@@ -386,6 +438,82 @@ public static class AuthEndpoints
         }
 
         return Results.Redirect(string.IsNullOrEmpty(returnUrl) ? "/" : returnUrl);
+    }
+
+    private static async Task<IResult> CompletePasswordChangeAsync(
+        HttpContext httpContext,
+        [FromForm] string newPassword,
+        [FromServices] IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var raw = httpContext.Request.Cookies[PasswordChangeCookieName];
+        if (string.IsNullOrEmpty(raw) || (!Guid.TryParseExact(raw, "N", out var challengeToken) && !Guid.TryParse(raw, out challengeToken)))
+        {
+            httpContext.Response.Cookies.Delete(PasswordChangeCookieName, DeleteCookieOptions);
+            return Results.Redirect("/login?error=AUTH-020");
+        }
+
+        var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        var ua = httpContext.Request.Headers.UserAgent.ToString();
+        var command = new CompletePasswordChangeCommand(challengeToken, newPassword, ip, ua);
+
+        var result = await mediator.Send(command, cancellationToken);
+        if (result.IsFailure)
+        {
+            httpContext.Response.Cookies.Append(PasswordChangeCookieName, raw, PasswordChangeCookieOptions);
+            return Results.Redirect($"/change-password?error={Uri.EscapeDataString(result.FirstError.Code)}");
+        }
+
+        httpContext.Response.Cookies.Delete(PasswordChangeCookieName, DeleteCookieOptions);
+        await SignInWithSessionAsync(httpContext, result.Value!, rememberMe: false);
+        return Results.Redirect("/");
+    }
+
+    private static async Task<IResult> ForgotPasswordAsync(
+        HttpContext httpContext,
+        [FromForm] string email,
+        [FromServices] IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(email))
+            return Results.Redirect("/forgot-password?error=AUTH-033");
+
+        await mediator.Send(new RequestPasswordResetCommand(email.Trim()), cancellationToken);
+
+        // Enumeration koruması: her zaman reset-password sayfasına yönlendir.
+        httpContext.Response.Cookies.Append(
+            ForgotPasswordEmailCookieName,
+            email.Trim().ToLowerInvariant(),
+            ForgotPasswordCookieOptions);
+
+        return Results.Redirect("/reset-password");
+    }
+
+    private static async Task<IResult> ResetPasswordAsync(
+        HttpContext httpContext,
+        [FromForm] string code,
+        [FromForm] string newPassword,
+        [FromServices] IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var email = httpContext.Request.Cookies[ForgotPasswordEmailCookieName];
+        if (string.IsNullOrEmpty(email))
+        {
+            httpContext.Response.Cookies.Delete(ForgotPasswordEmailCookieName, DeleteCookieOptions);
+            return Results.Redirect("/forgot-password?error=AUTH-034");
+        }
+
+        var command = new ResetPasswordWithCodeCommand(email, code, newPassword);
+        var result = await mediator.Send(command, cancellationToken);
+
+        if (result.IsFailure)
+        {
+            httpContext.Response.Cookies.Append(ForgotPasswordEmailCookieName, email, ForgotPasswordCookieOptions);
+            return Results.Redirect($"/reset-password?error={Uri.EscapeDataString(result.FirstError.Code)}");
+        }
+
+        httpContext.Response.Cookies.Delete(ForgotPasswordEmailCookieName, DeleteCookieOptions);
+        return Results.Redirect("/login?info=password-reset-success");
     }
 
     private static async Task<IResult> FinalizePreAuthEnrollmentAsync(

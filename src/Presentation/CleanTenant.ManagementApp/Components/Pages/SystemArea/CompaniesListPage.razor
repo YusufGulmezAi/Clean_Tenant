@@ -34,8 +34,7 @@
 }
 else
 {
-    <div Class="d-flex justify-between align-center mb-4">
-        <div></div>
+    <div class="d-flex justify-end mb-2">
         <MudButton Href="/system/companies/new"
                    Color="Color.Primary"
                    Variant="Variant.Filled"
@@ -46,16 +45,36 @@ else
 
     <DataTable TItem="CompanyListItem"
                Items="@_items"
-               Title="@Loc["Companies.List.Title"].Value"
                SearchPlaceholder="@Loc["Companies.List.Search"]"
                SearchableFields="@(row => new[] { row.Name, row.UrlCode, row.TenantName, row.LegalName })"
                ExportColumns="@_exportColumns">
+        <ToolbarRight>
+            <MudMenu Dense="true"
+                     AnchorOrigin="Origin.BottomRight"
+                     TransformOrigin="Origin.TopRight">
+                <ActivatorContent>
+                    <MudIconButton Icon="@Icons.Material.Filled.ViewColumn"
+                                   Size="Size.Small"
+                                   Color="Color.Default"
+                                   title="@Loc["DataTable.ColumnChooser"]" />
+                </ActivatorContent>
+                <ChildContent>
+                    <div class="pa-3" style="min-width: 180px;">
+                        <MudText Typo="Typo.caption" Class="mb-2 d-block">@Loc["DataTable.ColumnChooser"]</MudText>
+                        <div><MudCheckBox @bind-Value="_colUrlCode" Dense="true" Label="@Loc["Companies.List.Col.UrlCode"].Value" /></div>
+                        <div><MudCheckBox @bind-Value="_colTenantName" Dense="true" Label="@Loc["Companies.List.Col.Tenant"].Value" /></div>
+                        <div><MudCheckBox @bind-Value="_colLegalName" Dense="true" Label="@Loc["Companies.List.Col.LegalName"].Value" /></div>
+                        <div><MudCheckBox @bind-Value="_colStatus" Dense="true" Label="@Loc["Companies.List.Col.Status"].Value" /></div>
+                    </div>
+                </ChildContent>
+            </MudMenu>
+        </ToolbarRight>
         <Columns>
             <PropertyColumn T="CompanyListItem" TProperty="string" Property="@(c => c.Name)" Title="@Loc["Companies.List.Col.Name"].Value" />
-            <PropertyColumn T="CompanyListItem" TProperty="string" Property="@(c => c.UrlCode)" Title="@Loc["Companies.List.Col.UrlCode"].Value" />
-            <PropertyColumn T="CompanyListItem" TProperty="string" Property="@(c => c.TenantName)" Title="@Loc["Companies.List.Col.Tenant"].Value" Grouping="true" />
-            <PropertyColumn T="CompanyListItem" TProperty="string" Property="@(c => c.LegalName)" Title="@Loc["Companies.List.Col.LegalName"].Value" />
-            <PropertyColumn T="CompanyListItem" TProperty="CompanyStatus" Property="@(c => c.Status)" Title="@Loc["Companies.List.Col.Status"].Value">
+            <PropertyColumn T="CompanyListItem" TProperty="string" Property="@(c => c.UrlCode)" Title="@Loc["Companies.List.Col.UrlCode"].Value" Hidden="@(!_colUrlCode)" />
+            <PropertyColumn T="CompanyListItem" TProperty="string" Property="@(c => c.TenantName)" Title="@Loc["Companies.List.Col.Tenant"].Value" Hidden="@(!_colTenantName)" />
+            <PropertyColumn T="CompanyListItem" TProperty="string" Property="@(c => c.LegalName)" Title="@Loc["Companies.List.Col.LegalName"].Value" Hidden="@(!_colLegalName)" />
+            <PropertyColumn T="CompanyListItem" TProperty="CompanyStatus" Property="@(c => c.Status)" Title="@Loc["Companies.List.Col.Status"].Value" Hidden="@(!_colStatus)">
                 <CellTemplate>
                     <MudChip T="string" Size="Size.Small"
                              Color="@(context.Item.Status == CompanyStatus.Active ? Color.Success : Color.Default)">
@@ -93,6 +112,11 @@ else
     private PersistingComponentStateSubscription _persistSubscription;
 
     private IReadOnlyList<ExportColumn<CompanyListItem>> _exportColumns = [];
+
+    private bool _colUrlCode = true;
+    private bool _colTenantName = true;
+    private bool _colLegalName = true;
+    private bool _colStatus = true;
 
     protected override async Task OnInitializedAsync()
     {

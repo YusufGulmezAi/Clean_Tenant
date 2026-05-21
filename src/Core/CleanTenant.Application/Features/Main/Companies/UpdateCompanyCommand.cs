@@ -1,4 +1,5 @@
 using CleanTenant.Application.Features.Main.Readers;
+using CleanTenant.Domain.Tenant.Companies;
 using CleanTenant.SharedKernel.Common.Results;
 using MediatR;
 
@@ -13,4 +14,5 @@ public sealed record UpdateCompanyCommand(
     string? LegalName,
     string? Vkn,
     string? Email,
-    string? Phone) : IRequest<Result<CompanyDetail>>;
+    string? Phone,
+    CompanyStatus Status) : IRequest<Result<CompanyDetail>>;

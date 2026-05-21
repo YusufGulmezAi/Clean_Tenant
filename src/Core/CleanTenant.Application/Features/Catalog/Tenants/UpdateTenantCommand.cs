@@ -39,4 +39,5 @@ public sealed record UpdateTenantCommand(
     string? ContactPhone = null,
     DateOnly? ContractStartDate = null,
     DateOnly? ContractEndDate = null,
-    int? TransitionGraceDays = null) : IRequest<Result>;
+    int? TransitionGraceDays = null,
+    TenantStatus Status = TenantStatus.Active) : IRequest<Result>;

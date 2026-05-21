@@ -833,6 +833,10 @@ namespace CleanTenant.Infrastructure.Persistence.Catalog.Migrations
                         .HasColumnType("character varying(128)")
                         .HasColumnName("first_name");
 
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean")
                         .HasColumnName("is_deleted");
@@ -885,6 +889,10 @@ namespace CleanTenant.Infrastructure.Persistence.Catalog.Migrations
                     b.Property<string>("PreferredCulture")
                         .HasColumnType("text")
                         .HasColumnName("preferred_culture");
+
+                    b.Property<bool>("RequiresPasswordChange")
+                        .HasColumnType("boolean")
+                        .HasColumnName("requires_password_change");
 
                     b.Property<uint>("RowVersion")
                         .IsConcurrencyToken()

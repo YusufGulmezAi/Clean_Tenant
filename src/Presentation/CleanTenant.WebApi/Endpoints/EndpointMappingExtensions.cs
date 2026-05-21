@@ -15,6 +15,8 @@ public static class EndpointMappingExtensions
         app.MapUserAdminEndpoints();
         app.MapSystemEndpoints();
         app.MapSystemLocalizationEndpoints();
+        app.MapSystemUsersEndpoints();
+        app.MapTenantUsersEndpoints();
         app.MapTenantAuditEndpoints();
         app.MapCompanyEndpoints();
         app.MapRoleEndpoints();

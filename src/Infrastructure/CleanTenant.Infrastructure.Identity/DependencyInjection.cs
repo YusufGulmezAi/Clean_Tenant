@@ -1,6 +1,7 @@
 using CleanTenant.Application.Common.Auditing;
 using CleanTenant.Application.Common.Auth;
 using CleanTenant.Application.Common.Authorization;
+using CleanTenant.Application.Common.Identity;
 using CleanTenant.Application.Common.Notifications;
 using CleanTenant.Application.Features.Auth.Login;
 using CleanTenant.Infrastructure.Identity.Auditing;
@@ -10,6 +11,7 @@ using CleanTenant.Infrastructure.Identity.Jwt;
 using CleanTenant.Infrastructure.Identity.Notifications;
 using CleanTenant.Infrastructure.Identity.Pipeline;
 using CleanTenant.Infrastructure.Identity.RefreshTokens;
+using CleanTenant.Infrastructure.Identity.Users;
 using CleanTenant.SharedKernel.Context;
 using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -67,6 +69,9 @@ public static class DependencyInjection
 
         // v0.1.7 — Audit metadata accessor (HttpContext + session + UA parser)
         services.AddScoped<IAuditMetadataAccessor, HttpAuditMetadataAccessor>();
+
+        // Kullanıcı yönetimi (UserManager sarmalayıcısı)
+        services.AddScoped<IUserRepository, UserRepository>();
 
         // JWT bearer authentication
         var jwt = configuration.GetSection(JwtSettings.SectionName).Get<JwtSettings>()

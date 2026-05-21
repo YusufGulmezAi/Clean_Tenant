@@ -8,16 +8,15 @@
 @inject IStringLocalizer Loc
 @using CleanTenant.Application.Features.Catalog.Readers
 @using CleanTenant.Application.Features.Catalog.Tenants
+@using CleanTenant.SharedKernel.Context
 @using CleanTenant.ManagementApp.Components.Shared
 
 <PageTitle>@Loc["Tenants.Edit.PageTitle"]</PageTitle>
 
 @*
-    v0.2.4.b.3 — Yönetim düzenleme (Sistem operatör için). Detay reader'dan
-    yüklenir, TenantForm Edit modunda kullanılır, UpdateTenantCommand
-    Mediator'a gönderilir.
-
+    v0.2.4.b.3 — Yönetim düzenleme (Sistem operatör için).
     v0.2.10.e.4 — Tenants.Edit.* anahtarlarıyla lokalize edildi.
+    v0.2.12    — MudTabs: Genel + Kullanıcılar sekmesi eklendi.
 *@
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
@@ -46,12 +45,35 @@
             @Loc["Tenants.Edit.UrlCodeLabel"] <code>@_urlCode</code>
         </MudText>
 
-        <TenantForm Model="_model"
-                    Mode="TenantFormMode.Edit"
-                    OnValidSubmit="@SubmitAsync"
-                    IsSubmitting="@_busy"
-                    SubmitButtonText="@Loc["Tenants.Edit.SubmitButton"]"
-                    CancelHref="/system/tenants" />
+        <MudTabs Outlined="true"
+                 Position="Position.Top"
+                 Rounded="false"
+                 Border="true"
+                 KeepPanelsAlive="true"
+                 PanelClass="pa-0">
+
+            @* ── Genel ── *@
+            <MudTabPanel Text="@Loc["Tenants.Edit.Tab.General"].Value"
+                         Icon="@Icons.Material.Filled.Info">
+                <div class="pa-3">
+                    <TenantForm Model="_model"
+                                Mode="TenantFormMode.Edit"
+                                OnValidSubmit="@SubmitAsync"
+                                IsSubmitting="@_busy"
+                                SubmitButtonText="@Loc["Tenants.Edit.SubmitButton"].Value" />
+                </div>
+            </MudTabPanel>
+
+            @* ── Kullanıcılar ── *@
+            <MudTabPanel Text="@Loc["Tenants.Edit.Tab.Users"].Value"
+                         Icon="@Icons.Material.Filled.People">
+                <div class="pa-3">
+                    <UserListPanel Scope="ScopeLevel.Tenant"
+                                   TenantId="@_tenantId" />
+                </div>
+            </MudTabPanel>
+
+        </MudTabs>
     }
 </MudContainer>
 
@@ -119,6 +141,7 @@
         ContractStartDate = d.ContractStartDate,
         ContractEndDate = d.ContractEndDate,
         TransitionGraceDays = d.TransitionGraceDays,
+        Status = d.Status,
     };
 
     private async Task SubmitAsync()
@@ -144,7 +167,8 @@
                 ContactPhone: string.IsNullOrWhiteSpace(_model.ContactPhone) ? null : _model.ContactPhone,
                 ContractStartDate: _model.ContractStartDate,
                 ContractEndDate: _model.ContractEndDate,
-                TransitionGraceDays: _model.TransitionGraceDays);
+                TransitionGraceDays: _model.TransitionGraceDays,
+                Status: _model.Status);
 
             var result = await Mediator.Send(command);
             if (result.IsFailure)
@@ -154,7 +178,6 @@
             }
 
             Snackbar.Add(Loc["Tenants.Save.UpdateSuccess"].Value, Severity.Success);
-            Nav.NavigateTo("/system/tenants");
         }
         catch (Exception ex)
         {

@@ -1,6 +1,7 @@
 using CleanTenant.Application.Common.Export;
 using CleanTenant.Application.Features.Main.Companies;
 using CleanTenant.Application.Features.Main.Readers;
+using CleanTenant.Domain.Tenant.Companies;
 using CleanTenant.Infrastructure.Identity.Authorization;
 using CleanTenant.SharedKernel.Common.Errors;
 using MediatR;
@@ -96,7 +97,7 @@ public static class CompanyEndpoints
         [FromServices] IMediator mediator,
         CancellationToken cancellationToken)
     {
-        var command = new UpdateCompanyCommand(companyId, request.Name, request.LegalName, request.Vkn, request.Email, request.Phone);
+        var command = new UpdateCompanyCommand(companyId, request.Name, request.LegalName, request.Vkn, request.Email, request.Phone, request.Status);
         var result = await mediator.Send(command, cancellationToken);
         return result.IsSuccess
             ? Results.Ok(result.Value)
@@ -142,4 +143,5 @@ public record UpdateCompanyRequest(
     string? LegalName,
     string? Vkn,
     string? Email,
-    string? Phone);
+    string? Phone,
+    CompanyStatus Status = CompanyStatus.Active);

@@ -1,0 +1,79 @@
+@using MudBlazor
+
+@*
+    Genel amaçlı onay diyaloğu. JS confirm() yerine kullanılır.
+    Tüm aksiyonlarda tutarlı, profesyonel görünüm sağlar.
+
+    Kullanım:
+        var parameters = new DialogParameters<ConfirmDialog>
+        {
+            { x => x.Message, "Kullanıcı devre dışı bırakılacak." },
+            { x => x.ConfirmText, "Devre Dışı Bırak" },
+            { x => x.ConfirmColor, Color.Error },
+            { x => x.ConfirmIcon, Icons.Material.Filled.PersonOff },
+        };
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Başlık", parameters);
+        var result = await dialog.Result;
+        if (result?.Canceled == true) return;
+*@
+
+<MudDialog>
+    <TitleContent>
+        <div class="d-flex align-center gap-2">
+            @if (!string.IsNullOrEmpty(TitleIcon))
+            {
+                <MudIcon Icon="@TitleIcon" Color="@ConfirmColor" Size="Size.Medium" />
+            }
+            <MudText Typo="Typo.h6">@MudDialog.Title</MudText>
+        </div>
+    </TitleContent>
+    <DialogContent>
+        <MudText Typo="Typo.body1">@Message</MudText>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text"
+                   OnClick="@Cancel"
+                   Disabled="@_busy">
+            @CancelText
+        </MudButton>
+        <MudButton Color="@ConfirmColor"
+                   Variant="Variant.Filled"
+                   StartIcon="@ConfirmIcon"
+                   OnClick="@Confirm"
+                   Disabled="@_busy">
+            @ConfirmText
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    /// <summary>Diyalog gövdesinde gösterilecek mesaj.</summary>
+    [Parameter] public string Message { get; set; } = string.Empty;
+
+    /// <summary>Onayla butonu metni.</summary>
+    [Parameter] public string ConfirmText { get; set; } = "Onayla";
+
+    /// <summary>İptal butonu metni.</summary>
+    [Parameter] public string CancelText { get; set; } = "İptal";
+
+    /// <summary>Onayla butonunun rengi.</summary>
+    [Parameter] public Color ConfirmColor { get; set; } = Color.Primary;
+
+    /// <summary>Onayla butonunun ikonu (MudBlazor icon path).</summary>
+    [Parameter] public string? ConfirmIcon { get; set; }
+
+    /// <summary>Başlık satırındaki ikon (boşsa gizlenir).</summary>
+    [Parameter] public string? TitleIcon { get; set; }
+
+    private bool _busy;
+
+    private void Confirm()
+    {
+        _busy = true;
+        MudDialog.Close(DialogResult.Ok(true));
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

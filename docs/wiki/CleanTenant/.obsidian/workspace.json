@@ -1,0 +1,228 @@
+{
+  "main": {
+    "id": "79971363cb502181",
+    "type": "split",
+    "children": [
+      {
+        "id": "54c94cf769984a88",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "a6e54a87beac7e58",
+            "type": "leaf",
+            "state": {
+              "type": "kanban",
+              "state": {
+                "file": "Proje Tahtası.md",
+                "kanbanViewState": {
+                  "kanban-plugin": "board",
+                  "list-collapse": []
+                }
+              },
+              "icon": "lucide-trello",
+              "title": "Proje Tahtası"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "ce2c3a8d254e7a0c",
+    "type": "split",
+    "children": [
+      {
+        "id": "5d23df170726b676",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "63794eb7bcd6d0ba",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Dosya Gezgini"
+            }
+          },
+          {
+            "id": "d040f88ccf913b06",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Ara"
+            }
+          },
+          {
+            "id": "cb34279f15e93f7c",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "Yer İmleri"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "3e78aa58bef94c6d",
+    "type": "split",
+    "children": [
+      {
+        "id": "1093c49c1837eea8",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "a6e32d128828a946",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "Proje Tahtası.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Proje Tahtası için geri bağlantılar"
+            }
+          },
+          {
+            "id": "bd0ec73028657c23",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "Proje Tahtası.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Proje Tahtası'dan giden bağlantılar"
+            }
+          },
+          {
+            "id": "4b5c93d53cc8f3ec",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Etiketler"
+            }
+          },
+          {
+            "id": "a4162823f4b0e473",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "Tüm özellikler"
+            }
+          },
+          {
+            "id": "1128b0a22584a9c1",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "Proje Tahtası.md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Proje Tahtası ana hatları"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Hızlı geçişi aç": false,
+      "graph:Grafik görünümünü aç": false,
+      "canvas:Yeni tuval oluşturun": false,
+      "daily-notes:Bugünün Notunu Aç": false,
+      "templates:Şablon ekle": false,
+      "command-palette:Komut paletini aç": false,
+      "bases:Yeni taban oluştur": false,
+      "obsidian-kanban:Create new board": false
+    }
+  },
+  "active": "a6e54a87beac7e58",
+  "lastOpenFiles": [
+    "Proje Tahtası.md.tmp.69696.1779384120391",
+    "Proje Tahtası.md.tmp.69696.1779384114234",
+    "_prompts/cleantenant-wiki.md",
+    "Proje Tahtası.md",
+    "Hoş geldiniz.md",
+    "Specs/budget-module/03-DECISIONS-OPEN.md",
+    "Specs/budget-module/00-CONTEXT.md",
+    "Fazlar/v0.2/v0.2.12-oturum.md",
+    "Hoş geldiniz.md.tmp.69696.1779382898191",
+    "Kimlik & Auth/Kimlik Mimarisi.md",
+    "Kimlik & Auth/Kimlik Mimarisi.md.tmp.69696.1779382860102",
+    "Kararlar/ADR-001 Hibrit JWT + Redis Session.md",
+    "Fazlar/v0.1/FINAL-ARCHITECTURE-MAP.md",
+    "Fazlar/v0.2/v0.2.12-oturum.md.tmp.69696.1779382830888",
+    "Fazlar/v0.2/v0.2.10-FINAL-ARCHITECTURE-MAP.md",
+    "Fazlar/v0.2/CHANGELOG.md",
+    "Mimari/Clean Architecture Katmanları.md",
+    "Fikirler/graph-explorer.md",
+    "Proje Tahtası.md.tmp.69696.1779382794650",
+    "_templates/Faz-Kapanis.md",
+    "_templates/Oturum-Notu.md",
+    "_templates/ADR.md",
+    "_templates",
+    "Kararlar/ADR-004 Elle Eşleme (AutoMapper Yok).md",
+    "Kararlar/ADR-003 EF Core ve Dapper Hibrit Okuma.md",
+    "Kararlar/ADR-003 EF Core ve Dapper Hibrit Okuma.md.tmp.20964.1779382124865",
+    "Kararlar/ADR-002 Dört Veritabanı Mimarisi.md",
+    "Fikirler",
+    "Specs/budget-module/README.md",
+    "Specs/budget-module/04-CLAUDE-CODE-PLAYBOOK.md",
+    "Specs/budget-module/02-PHASE-CARDS.md",
+    "Specs/budget-module/01-SDD-v1.0.md",
+    "Specs/budget-module",
+    "Specs",
+    "Fazlar/v0.2/v0.2.11-FINAL-ARCHITECTURE-MAP.md",
+    "Fazlar/v0.1/README.md"
+  ]
+}

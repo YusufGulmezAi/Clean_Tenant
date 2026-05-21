@@ -7,6 +7,7 @@
 @using MudBlazor
 
 @inject ICurrentSessionAccessor SessionAccessor
+@inject AuthenticationStateProvider AuthProvider
 @inject IMediator Mediator
 @inject ISnackbar Snackbar
 @inject NavigationManager Nav
@@ -128,6 +129,17 @@
     private CompanyFormModel _infoModel = new();
     private bool _isSubmitting;
     private string _errorMessage = string.Empty;
+    private string? _scopeFromClaims;
+
+    /// <inheritdoc />
+    protected override async Task OnInitializedAsync()
+    {
+        // Blazor Server SignalR circuit'inde ICurrentSessionAccessor.Current null olabilir
+        // (SessionLoaderBehavior yalnızca MediatR pipeline'da çalışır). Scope kontrolü
+        // için JWT claim'lerinden okumak daha güvenilirdir.
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        _scopeFromClaims = authState.User.FindFirst("scope")?.Value;
+    }
 
     /// <inheritdoc />
     protected override void OnParametersSet()
@@ -140,16 +152,18 @@
             Vkn = Detail.Vkn,
             Email = Detail.Email,
             Phone = Detail.Phone,
+            Status = Detail.Status,
         };
     }
 
     private bool HasPermission(string code)
     {
+        // System scope tüm tab'ları görür — claim'den okumak Blazor Server'da güvenilir.
+        if (string.Equals(_scopeFromClaims, "System", StringComparison.OrdinalIgnoreCase))
+            return true;
+
         var session = SessionAccessor.Current;
         if (session is null) return false;
-
-        // System scope tüm tab'ları görür ve düzenleyebilir.
-        if (session.ScopeLevel == ScopeLevel.System) return true;
 
         return session.Permissions.Contains(code);
     }
@@ -173,7 +187,8 @@
                 LegalName: _infoModel.LegalName,
                 Vkn: _infoModel.Vkn,
                 Email: _infoModel.Email,
-                Phone: _infoModel.Phone);
+                Phone: _infoModel.Phone,
+                Status: _infoModel.Status);
 
             var result = await Mediator.Send(command);
 

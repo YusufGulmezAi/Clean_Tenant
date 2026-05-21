@@ -144,6 +144,7 @@ public sealed class UpdateTenantCommandHandler : IRequestHandler<UpdateTenantCom
             tenant.LegalIdentityNumber = command.LegalIdentityNumber;
             tenant.BillingTier = command.BillingTier;
             tenant.HasDedicatedDatabase = command.HasDedicatedDatabase;
+            tenant.Status = command.Status;
         }
 
         await _db.SaveChangesAsync(cancellationToken);

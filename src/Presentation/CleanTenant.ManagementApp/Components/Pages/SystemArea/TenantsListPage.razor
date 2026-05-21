@@ -120,10 +120,38 @@ else
                SearchPlaceholder="@Loc["Tenants.List.Search"]"
                SearchableFields="@(row => new[] { row.Name, row.UrlCode, row.LegalName })"
                ExportColumns="@_exportColumns">
+        <ToolbarRight>
+            <MudMenu Dense="true"
+                     AnchorOrigin="Origin.BottomRight"
+                     TransformOrigin="Origin.TopRight">
+                <ActivatorContent>
+                    <MudIconButton Icon="@Icons.Material.Filled.ViewColumn"
+                                   Size="Size.Small"
+                                   Color="Color.Default"
+                                   title="@Loc["DataTable.ColumnChooser"]" />
+                </ActivatorContent>
+                <ChildContent>
+                    <div class="pa-3" style="min-width: 200px;">
+                        <MudText Typo="Typo.caption" Class="mb-2 d-block">@Loc["DataTable.ColumnChooser"]</MudText>
+                        <div><MudCheckBox @bind-Value="_colUrlCode"       Dense="true" Label="@Loc["Tenants.List.Col.UrlCode"].Value" /></div>
+                        <div><MudCheckBox @bind-Value="_colLegalName"     Dense="true" Label="@Loc["Tenants.List.Col.LegalName"].Value" /></div>
+                        <div><MudCheckBox @bind-Value="_colBillingTier"   Dense="true" Label="@Loc["Tenants.List.Col.Tier"].Value" /></div>
+                        <div><MudCheckBox @bind-Value="_colIdentity"      Dense="true" Label="@Loc["Tenants.List.Col.Identity"].Value" /></div>
+                        <div><MudCheckBox @bind-Value="_colProvince"      Dense="true" Label="@Loc["Tenants.List.Col.Province"].Value" /></div>
+                        <div><MudCheckBox @bind-Value="_colDistrict"      Dense="true" Label="@Loc["Tenants.List.Col.District"].Value" /></div>
+                        <div><MudCheckBox @bind-Value="_colNeighborhood"  Dense="true" Label="@Loc["Tenants.List.Col.Neighborhood"].Value" /></div>
+                        <div><MudCheckBox @bind-Value="_colSystemWrite"   Dense="true" Label="@Loc["Tenants.List.Col.SystemWrite"].Value" /></div>
+                        <div><MudCheckBox @bind-Value="_colContractStart" Dense="true" Label="@Loc["Tenants.List.Col.ContractStart"].Value" /></div>
+                        <div><MudCheckBox @bind-Value="_colContractEnd"   Dense="true" Label="@Loc["Tenants.List.Col.ContractEnd"].Value" /></div>
+                        <div><MudCheckBox @bind-Value="_colGraceDays"     Dense="true" Label="@Loc["Tenants.List.Col.GraceDays"].Value" /></div>
+                    </div>
+                </ChildContent>
+            </MudMenu>
+        </ToolbarRight>
         <Columns>
             <PropertyColumn T="TenantListItem" TProperty="string" Property="@(t => t.Name)" Title="@Loc["Tenants.List.Col.Name"].Value" />
-            <PropertyColumn T="TenantListItem" TProperty="string" Property="@(t => t.UrlCode)" Title="@Loc["Tenants.List.Col.UrlCode"].Value" />
-            <PropertyColumn T="TenantListItem" TProperty="string" Property="@(t => t.LegalName)" Title="@Loc["Tenants.List.Col.LegalName"].Value" />
+            <PropertyColumn T="TenantListItem" TProperty="string" Property="@(t => t.UrlCode)" Title="@Loc["Tenants.List.Col.UrlCode"].Value" Hidden="@(!_colUrlCode)" />
+            <PropertyColumn T="TenantListItem" TProperty="string" Property="@(t => t.LegalName)" Title="@Loc["Tenants.List.Col.LegalName"].Value" Hidden="@(!_colLegalName)" />
             <PropertyColumn T="TenantListItem" TProperty="TenantStatus" Property="@(t => t.Status)" Title="@Loc["Tenants.List.Col.Status"].Value">
                 <CellTemplate>
                     <MudChip T="string" Size="Size.Small"
@@ -132,47 +160,47 @@ else
                     </MudChip>
                 </CellTemplate>
             </PropertyColumn>
-            <PropertyColumn T="TenantListItem" TProperty="BillingTier" Property="@(t => t.BillingTier)" Title="@Loc["Tenants.List.Col.Tier"].Value" />
-            <PropertyColumn T="TenantListItem" TProperty="string" Property="@(t => t.LegalIdentityNumber)" Title="@Loc["Tenants.List.Col.Identity"].Value">
+            <PropertyColumn T="TenantListItem" TProperty="BillingTier" Property="@(t => t.BillingTier)" Title="@Loc["Tenants.List.Col.Tier"].Value" Hidden="@(!_colBillingTier)" />
+            <PropertyColumn T="TenantListItem" TProperty="string" Property="@(t => t.LegalIdentityNumber)" Title="@Loc["Tenants.List.Col.Identity"].Value" Hidden="@(!_colIdentity)">
                 <CellTemplate>
                     <MudText Typo="Typo.body2" Style="font-family:monospace">
                         @context.Item.LegalIdentityType.ToString().ToUpperInvariant(): @context.Item.LegalIdentityNumber
                     </MudText>
                 </CellTemplate>
             </PropertyColumn>
-            <PropertyColumn T="TenantListItem" TProperty="string" Property="@(t => t.ProvinceName ?? "")" Title="@Loc["Tenants.List.Col.Province"].Value">
+            <PropertyColumn T="TenantListItem" TProperty="string" Property="@(t => t.ProvinceName ?? "")" Title="@Loc["Tenants.List.Col.Province"].Value" Hidden="@(!_colProvince)">
                 <CellTemplate>
                     <MudText Typo="Typo.body2">@(context.Item.ProvinceName ?? "—")</MudText>
                 </CellTemplate>
             </PropertyColumn>
-            <PropertyColumn T="TenantListItem" TProperty="string" Property="@(t => t.DistrictName ?? "")" Title="@Loc["Tenants.List.Col.District"].Value">
+            <PropertyColumn T="TenantListItem" TProperty="string" Property="@(t => t.DistrictName ?? "")" Title="@Loc["Tenants.List.Col.District"].Value" Hidden="@(!_colDistrict)">
                 <CellTemplate>
                     <MudText Typo="Typo.body2">@(context.Item.DistrictName ?? "—")</MudText>
                 </CellTemplate>
             </PropertyColumn>
-            <PropertyColumn T="TenantListItem" TProperty="string" Property="@(t => t.NeighborhoodName ?? "")" Title="@Loc["Tenants.List.Col.Neighborhood"].Value">
+            <PropertyColumn T="TenantListItem" TProperty="string" Property="@(t => t.NeighborhoodName ?? "")" Title="@Loc["Tenants.List.Col.Neighborhood"].Value" Hidden="@(!_colNeighborhood)">
                 <CellTemplate>
                     <MudText Typo="Typo.body2">@(context.Item.NeighborhoodName ?? "—")</MudText>
                 </CellTemplate>
             </PropertyColumn>
-            <PropertyColumn T="TenantListItem" TProperty="bool" Property="@(t => t.AllowSystemWriteAccess)" Title="@Loc["Tenants.List.Col.SystemWrite"].Value">
+            <PropertyColumn T="TenantListItem" TProperty="bool" Property="@(t => t.AllowSystemWriteAccess)" Title="@Loc["Tenants.List.Col.SystemWrite"].Value" Hidden="@(!_colSystemWrite)">
                 <CellTemplate>
                     <MudIcon Icon="@(context.Item.AllowSystemWriteAccess ? Icons.Material.Filled.LockOpen : Icons.Material.Filled.Lock)"
                              Color="@(context.Item.AllowSystemWriteAccess ? Color.Success : Color.Warning)"
                              Size="Size.Small" />
                 </CellTemplate>
             </PropertyColumn>
-            <PropertyColumn T="TenantListItem" TProperty="DateOnly?" Property="@(t => t.ContractStartDate)" Title="@Loc["Tenants.List.Col.ContractStart"].Value" Hideable="true">
+            <PropertyColumn T="TenantListItem" TProperty="DateOnly?" Property="@(t => t.ContractStartDate)" Title="@Loc["Tenants.List.Col.ContractStart"].Value" Hidden="@(!_colContractStart)">
                 <CellTemplate>
                     <MudText Typo="Typo.body2">@(context.Item.ContractStartDate?.ToString("dd.MM.yyyy") ?? "—")</MudText>
                 </CellTemplate>
             </PropertyColumn>
-            <PropertyColumn T="TenantListItem" TProperty="DateOnly?" Property="@(t => t.ContractEndDate)" Title="@Loc["Tenants.List.Col.ContractEnd"].Value" Hideable="true">
+            <PropertyColumn T="TenantListItem" TProperty="DateOnly?" Property="@(t => t.ContractEndDate)" Title="@Loc["Tenants.List.Col.ContractEnd"].Value" Hidden="@(!_colContractEnd)">
                 <CellTemplate>
                     <MudText Typo="Typo.body2">@(context.Item.ContractEndDate?.ToString("dd.MM.yyyy") ?? "—")</MudText>
                 </CellTemplate>
             </PropertyColumn>
-            <PropertyColumn T="TenantListItem" TProperty="int?" Property="@(t => t.TransitionGraceDays)" Title="@Loc["Tenants.List.Col.GraceDays"].Value" Hideable="true">
+            <PropertyColumn T="TenantListItem" TProperty="int?" Property="@(t => t.TransitionGraceDays)" Title="@Loc["Tenants.List.Col.GraceDays"].Value" Hidden="@(!_colGraceDays)">
                 <CellTemplate>
                     <MudText Typo="Typo.body2">
                         @(context.Item.TransitionGraceDays.HasValue
@@ -209,6 +237,18 @@ else
     private PersistingComponentStateSubscription _persistSubscription;
 
     private IReadOnlyList<ExportColumn<TenantListItem>> _exportColumns = [];
+
+    private bool _colUrlCode       = true;
+    private bool _colLegalName     = true;
+    private bool _colBillingTier   = true;
+    private bool _colIdentity      = true;
+    private bool _colProvince      = false;
+    private bool _colDistrict      = false;
+    private bool _colNeighborhood  = false;
+    private bool _colSystemWrite   = true;
+    private bool _colContractStart = false;
+    private bool _colContractEnd   = false;
+    private bool _colGraceDays     = false;
 
     protected override async Task OnInitializedAsync()
     {

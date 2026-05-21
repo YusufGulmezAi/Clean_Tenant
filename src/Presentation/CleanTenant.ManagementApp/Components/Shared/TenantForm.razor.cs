@@ -129,6 +129,7 @@ public sealed partial class TenantForm : ComponentBase
     private bool DedicatedDbReadOnly => Mode == TenantFormMode.Settings;
     private bool ShowAdminBlock => Mode == TenantFormMode.Create;
     private bool ShowSystemWriteAccess => Mode != TenantFormMode.Create;
+    private bool ShowStatusBlock => Mode == TenantFormMode.Edit;
 
     private string _lastFormattedPhone = string.Empty;
 

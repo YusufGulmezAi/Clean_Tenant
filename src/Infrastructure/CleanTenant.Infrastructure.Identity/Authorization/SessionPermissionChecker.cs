@@ -1,5 +1,6 @@
 using CleanTenant.Application.Common.Auth;
 using CleanTenant.Application.Common.Authorization;
+using CleanTenant.SharedKernel.Context;
 
 namespace CleanTenant.Infrastructure.Identity.Authorization;
 
@@ -22,17 +23,19 @@ internal sealed class SessionPermissionChecker : IPermissionChecker
     public bool HasPermission(string permissionCode)
     {
         var session = _sessionAccessor.Current;
-        return session is not null && session.Permissions.Contains(permissionCode);
+        if (session is null) return false;
+        // System scope kullanıcısı tüm yetkileri bypass eder.
+        if (session.ScopeLevel == ScopeLevel.System) return true;
+        return session.Permissions.Contains(permissionCode);
     }
 
     /// <inheritdoc />
     public bool HasAnyPermission(IReadOnlyList<string> permissionCodes)
     {
         var session = _sessionAccessor.Current;
-        if (session is null || permissionCodes.Count == 0)
-        {
-            return false;
-        }
+        if (session is null || permissionCodes.Count == 0) return false;
+        // System scope kullanıcısı tüm yetkileri bypass eder.
+        if (session.ScopeLevel == ScopeLevel.System) return true;
 
         var owned = session.Permissions;
         for (var i = 0; i < permissionCodes.Count; i++)

@@ -1,4 +1,5 @@
 @using MudBlazor
+@using CleanTenant.Domain.Tenant.Companies
 
 @*
     Site CRUD paylaşımlı form bileşeni. Create/Edit modlarında aynı markup;
@@ -9,8 +10,8 @@
 
 <MudForm @ref="_form" Model="@Model" Validation="@ValidateValue" ValidationDelay="0">
     <MudCard Elevation="0" Outlined="true">
-        <MudCardContent>
-            <MudGrid>
+        <MudCardContent Class="pa-3">
+            <MudGrid Spacing="2">
 
                 @* ── Site Bilgileri ───────────────────────────────────────── *@
                 <MudItem xs="12">
@@ -79,12 +80,32 @@
                                   Immediate="true" />
                 </MudItem>
 
+                @* ── Durum ────────────────────────────────────────────────── *@
+                @if (Mode == CompanyFormMode.Edit)
+                {
+                    <MudItem xs="12">
+                        <MudDivider Class="my-2" />
+                        <MudText Typo="Typo.h6">@Loc["CompanyForm.Section.Status"]</MudText>
+                    </MudItem>
+                    <MudItem xs="12" sm="4">
+                        <MudSelect T="CompanyStatus"
+                                   @bind-Value="Model.Status"
+                                   Label="@Loc["CompanyForm.Status"]"
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense">
+                            <MudSelectItem Value="CompanyStatus.Active">@Loc["CompanyStatus.Active"]</MudSelectItem>
+                            <MudSelectItem Value="CompanyStatus.Suspended">@Loc["CompanyStatus.Suspended"]</MudSelectItem>
+                            <MudSelectItem Value="CompanyStatus.Closed">@Loc["CompanyStatus.Closed"]</MudSelectItem>
+                        </MudSelect>
+                    </MudItem>
+                }
+
             </MudGrid>
         </MudCardContent>
 
         @if (!HideActions)
         {
-            <MudCardActions Class="d-flex justify-end pa-4">
+            <MudCardActions Class="d-flex justify-end pa-3">
                 @if (!string.IsNullOrEmpty(CancelHref))
                 {
                     <MudButton Href="@CancelHref"

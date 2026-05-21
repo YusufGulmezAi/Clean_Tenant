@@ -6,8 +6,8 @@
 
 <MudForm @ref="_form" Model="@Model" Validation="@ValidateValue" ValidationDelay="0">
     <MudCard Elevation="0" Outlined="true">
-        <MudCardContent>
-            <MudGrid>
+        <MudCardContent Class="pa-3">
+            <MudGrid Spacing="2">
                 <MudItem xs="12">
                     <MudText Typo="Typo.h6">@Loc["Roles.Form.Section.Info"]</MudText>
                 </MudItem>
@@ -52,7 +52,7 @@
             </MudGrid>
         </MudCardContent>
 
-        <MudCardActions Class="d-flex justify-end pa-4">
+        <MudCardActions Class="d-flex justify-end pa-3">
             @if (!string.IsNullOrEmpty(CancelHref))
             {
                 <MudButton Href="@CancelHref"

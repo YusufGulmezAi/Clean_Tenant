@@ -1,5 +1,7 @@
+@using CleanTenant.Application.Common.Auth
 @inject AuthenticationStateProvider AuthProvider
 @inject IStringLocalizer Loc
+@inject ICurrentSessionAccessor SessionAccessor
 
 @*
     v0.2.3.c — Scope-aware sol drawer.
@@ -50,36 +52,35 @@
     {
         var systemTenantsLabel = Loc["NavMenu.Tenants"].Value;
         var systemCompaniesLabel = Loc["NavMenu.Companies"].Value;
-        var systemRolesLabel = Loc["NavMenu.Roles"].Value;
 
-        @if (Matches(systemTenantsLabel))
+        var systemMgmtChildren = new[] { systemTenantsLabel, systemCompaniesLabel };
+        @if (AnyMatch(systemMgmtChildren))
         {
-            <MudNavLink Href="/system/tenants" Icon="@Icons.Material.Filled.Domain">
-                @systemTenantsLabel
-            </MudNavLink>
-        }
-
-        @if (Matches(systemCompaniesLabel))
-        {
-            <MudNavLink Href="/system/companies" Icon="@Icons.Material.Filled.Apartment">
-                @systemCompaniesLabel
-            </MudNavLink>
-        }
-
-        @if (Matches(systemRolesLabel))
-        {
-            <MudNavLink Href="/system/roles" Icon="@Icons.Material.Filled.Shield">
-                @systemRolesLabel
-            </MudNavLink>
+            <MudNavGroup Title="@systemTenantsLabel" Icon="@Icons.Material.Filled.Domain" Expanded="@IsSearching">
+                @if (Matches(systemTenantsLabel))
+                {
+                    <MudNavLink Href="/system/tenants" Icon="@Icons.Material.Filled.FormatListBulleted">
+                        @systemTenantsLabel
+                    </MudNavLink>
+                }
+                @if (Matches(systemCompaniesLabel))
+                {
+                    <MudNavLink Href="/system/companies" Icon="@Icons.Material.Filled.Apartment">
+                        @systemCompaniesLabel
+                    </MudNavLink>
+                }
+            </MudNavGroup>
         }
 
         var systemAdminChildren = new[]
         {
+            (Loc["NavMenu.SystemUsers"].Value, "/system/users", Icons.Material.Filled.ManageAccounts, "", false),
             (Loc["NavMenu.LookUpTables"].Value, "/system/lookup-tables", Icons.Material.Filled.DataObject, "", false),
             (Loc["NavMenu.Banks"].Value, "/system/banks", Icons.Material.Filled.AccountBalance, "", false),
             (Loc["NavMenu.AuditExplorer"].Value, "/system/audit", Icons.Material.Filled.History, "", false),
             (Loc["NavMenu.Localization"].Value, "/system/localization", Icons.Material.Filled.Translate, "", false),
             (Loc["NavMenu.LogViewer"].Value, "/logs", Icons.Material.Filled.Article, "Faz 1.6", true),
+            (Loc["NavMenu.Roles"].Value, "/system/roles", Icons.Material.Filled.Shield, "", false),
             (Loc["NavMenu.PermissionCatalog"].Value, "/permissions", Icons.Material.Filled.Security, "Faz 1.5", true),
             (Loc["NavMenu.SystemSettings"].Value, "/system/settings", Icons.Material.Filled.Tune, "Faz 1.4", true),
         };
@@ -108,6 +109,8 @@
     @if (_scope == "Tenant" && _activeTenantId.HasValue)
     {
         var tenantCompaniesLabel = Loc["NavMenu.Companies"].Value;
+        var tenantUsersLabel = Loc["NavMenu.Users"].Value;
+        var tenantRolesLabel = Loc["NavMenu.RolesAndPermissions"].Value;
 
         @if (Matches(tenantCompaniesLabel))
         {
@@ -116,10 +119,22 @@
             </MudNavLink>
         }
 
+        @if (_canManageUsers && Matches(tenantUsersLabel))
+        {
+            <MudNavLink Href="/tenant/users" Icon="@Icons.Material.Filled.People">
+                @tenantUsersLabel
+            </MudNavLink>
+        }
+
+        @if (Matches(tenantRolesLabel))
+        {
+            <MudNavLink Href="/tenant/roles" Icon="@Icons.Material.Filled.Security">
+                @tenantRolesLabel
+            </MudNavLink>
+        }
+
         var tenantAdminChildren = new[]
         {
-            (Loc["NavMenu.Users"].Value, "/tenant/users", Icons.Material.Filled.People, "Faz 1.5", true),
-            (Loc["NavMenu.RolesAndPermissions"].Value, "/tenant/roles", Icons.Material.Filled.Security, string.Empty, false),
             (Loc["NavMenu.AuditHistory"].Value, "/tenant/audit", Icons.Material.Filled.History, "Faz 1.6", true),
             (Loc["NavMenu.SupportAccess"].Value, "/tenant/support-access", Icons.Material.Filled.Support, "Faz 1.6", true),
             (Loc["NavMenu.TenantSettings"].Value, "/tenant/settings", Icons.Material.Filled.Settings, string.Empty, false),
@@ -204,6 +219,7 @@
     private string? _scope;
     private Guid? _activeTenantId;
     private Guid? _activeCompanyId;
+    private bool _canManageUsers;
 
     private bool IsSearching => !string.IsNullOrWhiteSpace(_search);
 
@@ -225,6 +241,17 @@
         if (user.FindFirst("company_id") is { Value: var cid } && Guid.TryParseExact(cid, "N", out var companyGuid))
         {
             _activeCompanyId = companyGuid;
+        }
+
+        // System scope tüm yetkilere sahiptir; Tenant scope için session permission'ı kontrol et.
+        if (string.Equals(_scope, "System", StringComparison.OrdinalIgnoreCase))
+        {
+            _canManageUsers = true;
+        }
+        else
+        {
+            var session = SessionAccessor.Current;
+            _canManageUsers = session is not null && session.Permissions.Contains("Tenant.Users.Manage");
         }
     }
 

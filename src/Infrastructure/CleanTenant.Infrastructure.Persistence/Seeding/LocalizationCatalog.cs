@@ -284,11 +284,15 @@ public static class LocalizationCatalog
         new("DataTable.DefaultTitle",        "Liste",               "List"),
         new("DataTable.Export.NoColumns.Excel","Excel export için kolon tanımı verilmedi.", "No column definitions provided for Excel export."),
         new("DataTable.Export.NoColumns.Pdf","PDF export için kolon tanımı verilmedi.", "No column definitions provided for PDF export."),
+        new("DataTable.ColumnChooser",        "Kolonlar",              "Columns"),
 
         // ========== Auth - Login ==========
         new("Login.Identifier",              "E-posta / TCKN / VKN / Telefon", "Email / TCKN / VKN / Phone"),
         new("Login.RememberMe.Days",         "Beni hatırla (7 gün)", "Remember me (7 days)"),
         new("Login.Footer",                  "CleanTenant Yönetim Paneli", "CleanTenant Management Panel"),
+        new("Login.ForgotPassword",              "Şifremi unuttum",            "Forgot password"),
+        new("Login.Info.PasswordResetSuccess",   "Şifreniz başarıyla sıfırlandı. Yeni şifrenizle giriş yapabilirsiniz.",
+                                                 "Your password has been reset successfully. You can now sign in with your new password."),
         new("Login.Error.IdentifierRequired","Kullanıcı kimliği ve şifre zorunlu.", "Username and password are required."),
         new("Login.Error.Invalid",           "Geçersiz kimlik veya şifre.", "Invalid identifier or password."),
         new("Login.Error.Lockout",           "Hesap geçici olarak kilitli (çok fazla başarısız deneme).", "Account temporarily locked (too many failed attempts)."),
@@ -456,6 +460,12 @@ public static class LocalizationCatalog
 
         new("TenantForm.Plan.ComingSoon",      "Paket ve Limitler özellikleri yakında geliyor.", "Plan & Limits features coming soon."),
 
+        new("TenantForm.Section.Status",     "Durum",               "Status"),
+        new("TenantForm.Status",             "Yönetim Durumu",      "Tenant Status"),
+        new("TenantStatus.Active",           "Aktif",               "Active"),
+        new("TenantStatus.Suspended",        "Askıya Alındı",       "Suspended"),
+        new("TenantStatus.Terminated",       "Sonlandırıldı",       "Terminated"),
+
         // ========== v0.2.11.d — FluentValidation lokalize mesajları ==========
         // Tenant + Company + Role validator'larında kullanılan mesajlar
         new("Validation.Tenant.Name.Required",          "Yönetim adı zorunlu.",                           "Tenant name is required."),
@@ -547,6 +557,11 @@ public static class LocalizationCatalog
         new("CompanyForm.Section.Info",      "Site Bilgileri",      "Company Information"),
         new("CompanyForm.Section.Identity",  "Kimlik",              "Identity"),
         new("CompanyForm.Section.Contact",   "İletişim",            "Contact"),
+        new("CompanyForm.Section.Status",    "Durum",               "Status"),
+        new("CompanyForm.Status",            "Site Durumu",         "Company Status"),
+        new("CompanyStatus.Active",          "Aktif",               "Active"),
+        new("CompanyStatus.Suspended",       "Askıya Alındı",       "Suspended"),
+        new("CompanyStatus.Closed",          "Kapalı",              "Closed"),
         new("CompanyForm.Name",              "Site Adı *",          "Company Name *"),
         new("CompanyForm.LegalName",         "Yasal Ad",            "Legal Name"),
         new("CompanyForm.Vkn",               "VKN",                 "VKN"),
@@ -985,5 +1000,169 @@ public static class LocalizationCatalog
         new("MudMessageBox.Cancel",             "İptal",                         "Cancel"),
         new("MudMessageBox.Yes",                "Evet",                          "Yes"),
         new("MudMessageBox.No",                 "Hayır",                         "No"),
+
+        // ========== System Users (v0.2.12) ==========
+        new("SystemUsers.PageTitle",            "Sistem Kullanıcıları",          "System Users"),
+        new("SystemUsers.NewButton",            "Yeni Kullanıcı",                "New User"),
+        new("SystemUsers.Unauthorized",         "Bu sayfa yalnız Sistem kullanıcıları için. Aktif bağlamınız Sistem değil.",
+                                                "This page is for System users only. Your active context is not System."),
+        new("SystemUsers.List.Search",          "Ad, e-posta veya rol ile ara…", "Search by name, email or role…"),
+        new("SystemUsers.List.Empty",           "Henüz sistem kullanıcısı yok.", "No system users yet."),
+        new("SystemUsers.List.Col.Name",        "Ad Soyad",                      "Full Name"),
+        new("SystemUsers.List.Col.Phone",       "Telefon",                       "Phone"),
+        new("SystemUsers.List.Col.Roles",       "Roller",                        "Roles"),
+        new("SystemUsers.List.Col.Status",      "Durum",                         "Status"),
+        new("SystemUsers.List.Col.LastLogin",   "Son Giriş",                     "Last Login"),
+        new("SystemUsers.List.Action.ResetPassword","Şifre Sıfırla",            "Reset Password"),
+        new("SystemUsers.List.Action.ForceLogout",  "Oturumları Kapat",          "End All Sessions"),
+        new("SystemUsers.List.Action.Deactivate",   "Devre Dışı Bırak",         "Deactivate"),
+        new("SystemUsers.ForceLogout.Confirm",  "{name} kullanıcısının tüm oturumları kapatılacak. Devam edilsin mi?",
+                                                "All sessions for {name} will be ended. Continue?"),
+        new("SystemUsers.Deactivate.Confirm",   "{name} kullanıcısı devre dışı bırakılacak. Devam edilsin mi?",
+                                                "User {name} will be deactivated. Continue?"),
+        new("SystemUsers.CreateSuccess",        "Kullanıcı başarıyla oluşturuldu.",  "User created successfully."),
+        new("SystemUsers.UpdateSuccess",        "Kullanıcı bilgileri güncellendi.",   "User updated successfully."),
+        new("SystemUsers.DeactivateSuccess",    "Kullanıcı devre dışı bırakıldı.",   "User deactivated."),
+        new("SystemUsers.ResetPasswordSuccess", "Şifre başarıyla sıfırlandı.",       "Password reset successfully."),
+        new("SystemUsers.ForceLogoutSuccess",   "Kullanıcının tüm oturumları kapatıldı.", "All user sessions ended."),
+
+        // UserForm shared
+        new("UserForm.Section.Personal",    "Kişisel Bilgiler",              "Personal Information"),
+        new("UserForm.Section.Contact",     "İletişim",                      "Contact"),
+        new("UserForm.Section.Security",    "Güvenlik",                      "Security"),
+        new("UserForm.Section.Roles",       "Roller",                        "Roles"),
+        new("UserForm.FirstName",           "Ad",                            "First Name"),
+        new("UserForm.LastName",            "Soyad",                         "Last Name"),
+        new("UserForm.Email",               "E-posta",                       "Email"),
+        new("UserForm.PhoneNumber",         "Telefon",                       "Phone"),
+        new("UserForm.Password",            "Şifre",                         "Password"),
+        new("UserForm.Password.Help",       "En az 8 karakter, harf ve rakam içermeli.", "Min. 8 characters, include letters and numbers."),
+        new("UserForm.IsActive",            "Aktif",                         "Active"),
+        new("UserForm.Roles.NoOptions",     "Bu scope için atanabilir rol bulunamadı.", "No assignable roles found for this scope."),
+        new("UserForm.Roles.Required",      "En az bir rol seçilmelidir.",   "At least one role must be selected."),
+        new("UserForm.Create.Submit",       "Kullanıcı Oluştur",             "Create User"),
+        new("UserForm.Edit.Submit",         "Değişiklikleri Kaydet",         "Save Changes"),
+        new("UserForm.Drawer.Create",       "Yeni Kullanıcı",                "New User"),
+        new("UserForm.Drawer.Edit",         "Kullanıcı Düzenle",             "Edit User"),
+        new("UserForm.Drawer.ResetPassword","Şifre Sıfırla",                 "Reset Password"),
+        new("UserForm.NewPassword",         "Yeni Şifre",                    "New Password"),
+        new("UserForm.ResetPassword.Submit","Şifreyi Sıfırla",               "Reset Password"),
+
+        // User status chips
+        new("UserStatus.Active",            "Aktif",                         "Active"),
+        new("UserStatus.Inactive",          "Pasif",                         "Inactive"),
+        new("UserStatus.Locked",            "Kilitli",                       "Locked"),
+
+        // Reset password validation
+        new("ResetPassword.Validation",     "Yeni şifre en az 8 karakter olmalıdır.", "New password must be at least 8 characters."),
+
+        // Permission entry
+        new("Permission.System.Users.Manage","Sistem kullanıcılarını yönetme","Manage system users"),
+
+        // NavMenu
+        new("NavMenu.SystemUsers",          "Sistem Kullanıcıları",          "System Users"),
+        new("NavMenu.Localization",         "Dil Kaynakları",                "Localization"),
+
+        // UserListPanel — filtre + onay diyaloğu başlıkları
+        new("SystemUsers.Filter.ActiveOnly",    "Sadece Aktifler",               "Active Only"),
+        new("SystemUsers.ForceLogout.Title",    "Oturumları Kapat",              "Force Logout"),
+        new("SystemUsers.Deactivate.Title",     "Kullanıcıyı Devre Dışı Bırak", "Deactivate User"),
+
+        // Tenant kullanıcı yönetim sayfası
+        new("TenantUsers.PageTitle",            "Yönetim Kullanıcıları",         "Tenant Users"),
+
+        // Mevcut kullanıcı atama drawer
+        new("UserForm.Drawer.AssignUser",       "Mevcut Kullanıcı Ekle",         "Assign Existing User"),
+        new("UserForm.AssignUser.Button",       "Mevcut Kullanıcı Ekle",         "Assign Existing User"),
+        new("UserForm.AssignUser.Help",         "Sistemde kayıtlı bir kullanıcıyı bu Yönetim'e ekler. Şifre gerekmez.", "Assigns an existing system user to this Tenant. No password required."),
+        new("UserForm.AssignUser.Submit",       "Ekle",                          "Assign"),
+        new("SystemUsers.AssignSuccess",        "Kullanıcı bu Yönetim'e başarıyla eklendi.", "User assigned to this Tenant successfully."),
+        new("UserForm.Email.Required",          "E-posta adresi zorunludur.",     "Email address is required."),
+
+        // TenantEditPage — sekme başlıkları
+        new("Tenants.Edit.Tab.General",         "Genel",                         "General"),
+        new("Tenants.Edit.Tab.Users",           "Kullanıcılar",                  "Users"),
+
+        // Reactivate akışı
+        new("SystemUsers.List.Action.Reactivate", "Devreye Al",                 "Reactivate"),
+        new("SystemUsers.Reactivate.Title",     "Kullanıcıyı Devreye Al",        "Reactivate User"),
+        new("SystemUsers.Reactivate.Confirm",   "{name} kullanıcısının hesabı tekrar aktif edilecek. Devam edilsin mi?",
+                                                "{name} user account will be reactivated. Continue?"),
+        new("SystemUsers.ReactivateSuccess",    "Kullanıcı başarıyla devreye alındı.", "User reactivated successfully."),
+
+        // Login hata mesajları — ek kodlar
+        new("Login.Error.Deactivated",          "Bu hesap devre dışı bırakılmış. Yöneticinizle iletişime geçin.",
+                                                "This account has been deactivated. Please contact your administrator."),
+
+        // ─── Tenant Kapsamlı Aktif/Pasif ─────────────────────────────────
+        new("TenantUsers.DeactivateSuccess",  "Kullanıcı bu yönetimde pasife alındı.",    "User deactivated for this management."),
+        new("TenantUsers.ReactivateSuccess",  "Kullanıcı bu yönetimde tekrar aktive edildi.", "User reactivated for this management."),
+
+        // ─── Kullanıcı Onboarding Sihirbazı ─────────────────────────────
+        new("Onboarding.Drawer.Title",      "Kullanıcı Ekle",               "Add User"),
+        new("Onboarding.AddButton",         "Kullanıcı Ekle",               "Add User"),
+        new("Onboarding.Lookup.Help",       "Kullanıcıyı TC/Vergi No, telefon veya e-posta ile arayın. Sisteme kayıtlı bir kullanıcı varsa bilgileri görünür ve yalnız rol ataması yapılır. Bulunamazsa yeni kayıt oluşturulur.",
+                                            "Search the user by ID number, phone, or email. If found, only role assignment is needed. Otherwise, a new user will be created."),
+        new("Onboarding.Lookup.Tckn",       "TC / Vergi / Yabancı Kimlik No", "ID / Tax Number"),
+        new("Onboarding.Lookup.Phone",      "Telefon Numarası",             "Phone Number"),
+        new("Onboarding.Lookup.Email",      "E-posta Adresi",               "Email Address"),
+        new("Onboarding.Lookup.CreateNew",  "Yeni Kullanıcı Olarak Ekle",  "Add as New User"),
+        new("Onboarding.Searching",         "Aranıyor...",                  "Searching..."),
+        new("Onboarding.NotFound",          "Bulunamadı",                   "Not found"),
+        new("Onboarding.Found.Message",     "Bu bilgilerle kayıtlı bir kullanıcı bulundu. Rol seçerek ekleyebilirsiniz.",
+                                            "A user with these details was found. Select roles to assign."),
+        new("Onboarding.Found.Assign",      "Atama Yap",                    "Assign"),
+        new("Onboarding.New.Message",       "Sistemde kayıtlı kullanıcı bulunamadı. Ad, soyad ve şifre girerek yeni kullanıcı oluşturulacak.",
+                                            "No existing user found. Enter name and password to create a new user."),
+        new("Onboarding.New.Create",        "Kullanıcı Oluştur",            "Create User"),
+        new("Onboarding.Success",           "Kullanıcı başarıyla eklendi.", "User added successfully."),
+
+        // ─── Şifre Değiştirme Sayfası (/change-password) ────────────────
+        new("ChangePassword.PageTitle",         "Şifre Güncelleme",              "Update Password"),
+        new("ChangePassword.Title",             "Şifre Güncelle",                "Update Password"),
+        new("ChangePassword.Subtitle",          "Hesabınız için yeni bir şifre belirlemeniz gerekmektedir. Lütfen güçlü bir şifre seçin.",
+                                                "You are required to set a new password for your account. Please choose a strong password."),
+        new("ChangePassword.NewPassword",       "Yeni Şifre",                    "New Password"),
+        new("ChangePassword.ConfirmPassword",   "Şifre Tekrar",                  "Confirm Password"),
+        new("ChangePassword.Mismatch",          "Şifreler eşleşmiyor.",          "Passwords do not match."),
+        new("ChangePassword.Submit",            "Şifreyi Güncelle",              "Update Password"),
+        new("ChangePassword.NoSession",         "Geçersiz veya süresi dolmuş oturum. ",
+                                                "Invalid or expired session. "),
+        new("ChangePassword.BackToLogin",       "Giriş sayfasına dön",           "Back to login"),
+        new("ChangePassword.Error.InvalidSession", "Şifre değişim oturumu geçersiz veya süresi dolmuş. Lütfen yeniden giriş yapın.",
+                                                   "Password change session is invalid or expired. Please log in again."),
+        new("ChangePassword.Error.UserNotFound","Kullanıcı bulunamadı veya devre dışı.",
+                                                "User not found or deactivated."),
+        new("ChangePassword.Error.WeakPassword","Şifre güvenlik gereksinimlerini karşılamıyor.",
+                                                "Password does not meet security requirements."),
+        new("ChangePassword.Error.Unknown",     "Bilinmeyen hata: {0}",          "Unknown error: {0}"),
+
+        new("ForgotPassword.PageTitle",         "Şifre Sıfırlama",               "Password Reset"),
+        new("ForgotPassword.Title",             "Şifremi Unuttum",               "Forgot Password"),
+        new("ForgotPassword.Subtitle",          "E-posta adresinizi girin; sıfırlama kodu gönderilecektir.",
+                                                "Enter your email address; a reset code will be sent."),
+        new("ForgotPassword.Email",             "E-posta Adresi",                "Email Address"),
+        new("ForgotPassword.Submit",            "Kod Gönder",                    "Send Code"),
+        new("ForgotPassword.BackToLogin",       "Giriş sayfasına dön",           "Back to login"),
+        new("ForgotPassword.Error.EmailRequired","E-posta adresi zorunludur.",   "Email address is required."),
+        new("ForgotPassword.Error.Unknown",     "Bilinmeyen hata: {0}",          "Unknown error: {0}"),
+
+        new("ResetPassword.PageTitle",          "Şifre Sıfırlama",               "Reset Password"),
+        new("ResetPassword.Title",              "Yeni Şifre Belirle",            "Set New Password"),
+        new("ResetPassword.Subtitle",           "E-postanıza gelen 6 haneli kodu ve yeni şifrenizi girin.",
+                                                "Enter the 6-digit code sent to your email and your new password."),
+        new("ResetPassword.Code",               "Doğrulama Kodu",                "Verification Code"),
+        new("ResetPassword.NewPassword",        "Yeni Şifre",                    "New Password"),
+        new("ResetPassword.ConfirmPassword",    "Şifre Tekrar",                  "Confirm Password"),
+        new("ResetPassword.Mismatch",           "Şifreler eşleşmiyor.",          "Passwords do not match."),
+        new("ResetPassword.Submit",             "Şifreyi Sıfırla",               "Reset Password"),
+        new("ResetPassword.NoSession",          "Oturum bilgisi bulunamadı. ",   "Session not found. "),
+        new("ResetPassword.BackToForgot",       "Koda geri dön",                 "Back to code request"),
+        new("ResetPassword.BackToLogin",        "Giriş sayfasına dön",           "Back to login"),
+        new("ResetPassword.Error.UserNotFound", "Kullanıcı bulunamadı.",         "User not found."),
+        new("ResetPassword.Error.InvalidCode",  "Doğrulama kodu geçersiz veya süresi dolmuş.", "Verification code is invalid or expired."),
+        new("ResetPassword.Error.WeakPassword", "Şifre güvenlik gereksinimlerini karşılamıyor.",
+                                                "Password does not meet security requirements."),
+        new("ResetPassword.Error.Unknown",      "Bilinmeyen hata: {0}",          "Unknown error: {0}"),
     ];
 }

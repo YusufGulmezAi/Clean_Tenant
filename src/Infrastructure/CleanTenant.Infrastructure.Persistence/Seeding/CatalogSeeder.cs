@@ -54,6 +54,7 @@ public sealed class CatalogSeeder
     private static readonly string[] SystemAdminBaselinePermissions =
     [
         "System.Localization.Manage",
+        "System.Users.Manage",
         "LookUp.Manage",
     ];
 

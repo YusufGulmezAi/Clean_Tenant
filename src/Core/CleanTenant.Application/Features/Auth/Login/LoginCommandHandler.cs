@@ -39,6 +39,7 @@ public sealed class LoginCommandHandler : IRequestHandler<LoginCommand, Result<L
     private readonly LoginFinalizer _finalizer;
     private readonly ITwoFactorChallengeStore _challengeStore;
     private readonly IPreAuthEnrollmentStore _enrollmentStore;
+    private readonly IPasswordChangeChallengeStore _passwordChangeStore;
     private readonly IClock _clock;
 
     /// <summary>DI bağımlılıklarını alır.</summary>
@@ -48,6 +49,7 @@ public sealed class LoginCommandHandler : IRequestHandler<LoginCommand, Result<L
         LoginFinalizer finalizer,
         ITwoFactorChallengeStore challengeStore,
         IPreAuthEnrollmentStore enrollmentStore,
+        IPasswordChangeChallengeStore passwordChangeStore,
         IClock clock)
     {
         _userManager = userManager;
@@ -55,6 +57,7 @@ public sealed class LoginCommandHandler : IRequestHandler<LoginCommand, Result<L
         _finalizer = finalizer;
         _challengeStore = challengeStore;
         _enrollmentStore = enrollmentStore;
+        _passwordChangeStore = passwordChangeStore;
         _clock = clock;
     }
 
@@ -76,6 +79,12 @@ public sealed class LoginCommandHandler : IRequestHandler<LoginCommand, Result<L
                 Error.Unauthorized("AUTH-002", "Geçersiz kimlik veya şifre."));
         }
 
+        if (!user.IsActive)
+        {
+            return Result<LoginResult>.Failure(
+                Error.Unauthorized("AUTH-010", "Bu hesap devre dışı bırakılmış. Yöneticinizle iletişime geçin."));
+        }
+
         if (await _userManager.IsLockedOutAsync(user))
         {
             return Result<LoginResult>.Failure(
@@ -91,6 +100,12 @@ public sealed class LoginCommandHandler : IRequestHandler<LoginCommand, Result<L
         }
 
         await _userManager.ResetAccessFailedCountAsync(user);
+
+        // İlk giriş zorunlu şifre değişimi — 2FA'dan önce kontrol edilir
+        if (user.RequiresPasswordChange)
+        {
+            return await IssuePasswordChangeChallengeAsync(user, command, cancellationToken);
+        }
 
         // 2FA branching
         if (user.TwoFactorEnabled)
@@ -111,6 +126,37 @@ public sealed class LoginCommandHandler : IRequestHandler<LoginCommand, Result<L
         return finalize.IsSuccess
             ? Result<LoginResult>.Success(new LoginResult(LoginStatus.Success, finalize.Value, null))
             : Result<LoginResult>.Failure(finalize.FirstError);
+    }
+
+    private async Task<Result<LoginResult>> IssuePasswordChangeChallengeAsync(
+        User user,
+        LoginCommand command,
+        CancellationToken cancellationToken)
+    {
+        var ttl = TimeSpan.FromMinutes(15);
+        var now = _clock.UtcNow;
+        var challengeToken = Guid.CreateVersion7(now);
+        var challenge = new PasswordChangeChallenge
+        {
+            ChallengeToken = challengeToken,
+            UserId = user.Id,
+            Email = user.Email ?? user.UserName ?? string.Empty,
+            ContextId = command.ContextId ?? Guid.CreateVersion7(now),
+            Persona = command.Persona,
+            IpAddress = command.IpAddress,
+            UserAgent = command.UserAgent,
+            IssuedAt = now,
+        };
+
+        await _passwordChangeStore.StoreAsync(challenge, ttl, cancellationToken);
+
+        var response = new PasswordChangeChallengeResponse(
+            challengeToken,
+            now.Add(ttl),
+            challenge.Email);
+
+        return Result<LoginResult>.Success(
+            new LoginResult(LoginStatus.PasswordChangeRequired, null, null, null, response));
     }
 
     private async Task<Result<LoginResult>> IssueEnrollmentChallengeAsync(

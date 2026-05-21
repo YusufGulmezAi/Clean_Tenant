@@ -1,0 +1,619 @@
+@using CleanTenant.Application.Features.System.Users
+@using CleanTenant.Application.Features.Tenant.Users
+@using CleanTenant.SharedKernel.Common.Results
+@using CleanTenant.SharedKernel.Context
+@using MediatR
+@using MudBlazor
+
+@*
+    Kullanıcı listesi + sağ drawer (oluşturma / düzenleme / şifre sıfırlama).
+    System / Tenant / Company scope'larında aynı bileşen kullanılır;
+    scope-özel davranış parametrelerle kontrol edilir.
+
+    v0.2.12 — İlk uygulama System scope (SystemUsersPage).
+*@
+
+@inject IMediator Mediator
+@inject IStringLocalizer Loc
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+@* ─── SAĞ DRAWER ───────────────────────────────────────────────────── *@
+<MudDrawer @bind-Open="_drawerOpen"
+           Anchor="Anchor.Right"
+           Elevation="2"
+           Variant="DrawerVariant.Temporary"
+           Width="480px"
+           CloseOnBackdropClick="true">
+
+    @if (_drawerMode == UserDrawerMode.UserForm)
+    {
+        <MudDrawerHeader Class="d-flex align-center justify-space-between pa-4">
+            <MudText Typo="Typo.h6">
+                @(_formMode == UserFormMode.Create
+                    ? Loc["UserForm.Drawer.Create"]
+                    : Loc["UserForm.Drawer.Edit"])
+            </MudText>
+            <MudIconButton Icon="@Icons.Material.Filled.Close"
+                           Size="Size.Small"
+                           OnClick="@CloseDrawer" />
+        </MudDrawerHeader>
+        <MudDivider />
+        <div class="pa-4 overflow-auto" style="height: calc(100% - 64px);">
+            <UserForm Mode="@_formMode"
+                      Model="@_formModel"
+                      AvailableRoles="@_availableRoles"
+                      IsSubmitting="@_isSubmitting"
+                      OnValidSubmit="@HandleFormSubmitAsync"
+                      OnCancel="@CloseDrawer" />
+        </div>
+    }
+    else if (_drawerMode == UserDrawerMode.ResetPassword)
+    {
+        <MudDrawerHeader Class="d-flex align-center justify-space-between pa-4">
+            <MudText Typo="Typo.h6">@Loc["UserForm.Drawer.ResetPassword"]</MudText>
+            <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" OnClick="@CloseDrawer" />
+        </MudDrawerHeader>
+        <MudDivider />
+        <div class="pa-4">
+            <MudTextField @bind-Value="_newPassword"
+                          Label="@Loc["UserForm.NewPassword"]"
+                          InputType="@(_showNewPassword ? InputType.Text : InputType.Password)"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Adornment="Adornment.End"
+                          AdornmentIcon="@(_showNewPassword ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
+                          OnAdornmentClick="@(() => _showNewPassword = !_showNewPassword)"
+                          Class="mb-4" />
+            <div class="d-flex justify-end gap-2">
+                <MudButton Variant="Variant.Text" OnClick="@CloseDrawer" Disabled="@_isSubmitting">
+                    @Loc["Common.Cancel"]
+                </MudButton>
+                <MudButton Color="Color.Warning"
+                           Variant="Variant.Filled"
+                           OnClick="@HandleResetPasswordAsync"
+                           Disabled="@_isSubmitting"
+                           StartIcon="@Icons.Material.Filled.LockReset">
+                    @Loc["UserForm.ResetPassword.Submit"]
+                </MudButton>
+            </div>
+        </div>
+    }
+    else if (_drawerMode == UserDrawerMode.Onboarding)
+    {
+        <MudDrawerHeader Class="d-flex align-center justify-space-between pa-4">
+            <MudText Typo="Typo.h6">@Loc["Onboarding.Drawer.Title"]</MudText>
+            <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" OnClick="@CloseDrawer" />
+        </MudDrawerHeader>
+        <MudDivider />
+        <div class="pa-4 overflow-auto" style="height: calc(100% - 64px);">
+            <UserOnboardingWizard Scope="@Scope"
+                                  TenantId="@TenantId"
+                                  AvailableRoles="@_availableRoles"
+                                  OnSuccess="@HandleOnboardingSuccessAsync"
+                                  OnCancel="@CloseDrawer" />
+        </div>
+    }
+</MudDrawer>
+
+@* ─── ARAÇ ÇUBUĞU ──────────────────────────────────────────────────── *@
+<div class="d-flex align-center justify-space-between mb-3">
+    <MudSwitch T="bool" @bind-Value="_showActiveOnly"
+               Color="Color.Success"
+               Label="@Loc["SystemUsers.Filter.ActiveOnly"]"
+               Class="mb-0" />
+    <div class="d-flex gap-2">
+        @if (Scope == ScopeLevel.Tenant)
+        {
+            <MudButton Color="Color.Primary"
+                       Variant="Variant.Filled"
+                       StartIcon="@Icons.Material.Filled.PersonAdd"
+                       OnClick="@OpenOnboardingDrawer">
+                @Loc["Onboarding.AddButton"]
+            </MudButton>
+        }
+        else
+        {
+            <MudButton Color="Color.Primary"
+                       Variant="Variant.Filled"
+                       StartIcon="@Icons.Material.Filled.PersonAdd"
+                       OnClick="@OpenCreateDrawer">
+                @Loc["SystemUsers.NewButton"]
+            </MudButton>
+        }
+    </div>
+</div>
+
+@* ─── LİSTE ────────────────────────────────────────────────────────── *@
+@if (_loading)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+}
+else
+{
+    <DataTable TItem="UserListItem"
+               Items="@_filteredItems"
+               Filterable="false"
+               Groupable="false"
+               ShowColumnOptions="false"
+               SearchPlaceholder="@Loc["SystemUsers.List.Search"]"
+               SearchableFields="@(u => new[] { u.FullName, u.Email, string.Join(" ", u.RoleNames) })">
+        <Columns>
+            <TemplateColumn T="UserListItem" Title="@Loc["SystemUsers.List.Col.Name"].Value" SortBy="@(u => u.LastName)">
+                <CellTemplate>
+                    <div>
+                        <MudText Typo="Typo.body2">@context.Item.FullName</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">@context.Item.Email</MudText>
+                    </div>
+                </CellTemplate>
+            </TemplateColumn>
+
+            <PropertyColumn T="UserListItem" TProperty="string?" Property="@(u => u.PhoneNumber)"
+                            Title="@Loc["SystemUsers.List.Col.Phone"].Value" />
+
+            <TemplateColumn T="UserListItem" Title="@Loc["SystemUsers.List.Col.Roles"].Value">
+                <CellTemplate>
+                    <div class="d-flex flex-wrap gap-1">
+                        @foreach (var role in context.Item.RoleNames)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Variant="Variant.Outlined">
+                                @role
+                            </MudChip>
+                        }
+                    </div>
+                </CellTemplate>
+            </TemplateColumn>
+
+            <TemplateColumn T="UserListItem" Title="@Loc["SystemUsers.List.Col.Status"].Value">
+                <CellTemplate>
+                    @if (context.Item.IsLocked)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Warning">@Loc["UserStatus.Locked"]</MudChip>
+                    }
+                    else if (context.Item.IsActive)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Success">@Loc["UserStatus.Active"]</MudChip>
+                    }
+                    else
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Default">@Loc["UserStatus.Inactive"]</MudChip>
+                    }
+                    @if (!context.Item.TwoFactorEnabled)
+                    {
+                        <MudIcon Icon="@Icons.Material.Filled.NoEncryption"
+                                 Size="Size.Small"
+                                 Color="Color.Warning"
+                                 Title="2FA aktif değil"
+                                 Class="ml-1" />
+                    }
+                </CellTemplate>
+            </TemplateColumn>
+
+            <TemplateColumn T="UserListItem" Title="@Loc["SystemUsers.List.Col.LastLogin"].Value">
+                <CellTemplate>
+                    @if (context.Item.LastLoginAt.HasValue)
+                    {
+                        <MudText Typo="Typo.body2">
+                            @context.Item.LastLoginAt.Value.ToLocalTime().ToString("dd.MM.yyyy HH:mm")
+                        </MudText>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">—</MudText>
+                    }
+                </CellTemplate>
+            </TemplateColumn>
+
+            <TemplateColumn T="UserListItem" CellClass="d-flex justify-end gap-1" Filterable="false" Sortable="false">
+                <CellTemplate>
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                   Size="Size.Small"
+                                   Color="Color.Info"
+                                   Title="@Loc["Common.Edit"]"
+                                   OnClick="@(() => OpenEditDrawer(context.Item))" />
+                    <MudIconButton Icon="@Icons.Material.Filled.LockReset"
+                                   Size="Size.Small"
+                                   Color="Color.Warning"
+                                   Title="@Loc["SystemUsers.List.Action.ResetPassword"]"
+                                   OnClick="@(() => OpenResetPasswordDrawer(context.Item))" />
+                    @if (context.Item.IsActive)
+                    {
+                        <MudIconButton Icon="@Icons.Material.Filled.Logout"
+                                       Size="Size.Small"
+                                       Color="Color.Default"
+                                       Title="@Loc["SystemUsers.List.Action.ForceLogout"]"
+                                       OnClick="@(() => ForceLogoutAsync(context.Item))" />
+                        <MudIconButton Icon="@Icons.Material.Filled.PersonOff"
+                                       Size="Size.Small"
+                                       Color="Color.Error"
+                                       Title="@Loc["SystemUsers.List.Action.Deactivate"]"
+                                       OnClick="@(() => DeactivateAsync(context.Item))" />
+                    }
+                    else
+                    {
+                        <MudIconButton Icon="@Icons.Material.Filled.PersonAdd"
+                                       Size="Size.Small"
+                                       Color="Color.Success"
+                                       Title="@Loc["SystemUsers.List.Action.Reactivate"]"
+                                       OnClick="@(() => ReactivateAsync(context.Item))" />
+                    }
+                </CellTemplate>
+            </TemplateColumn>
+        </Columns>
+    </DataTable>
+}
+
+@code {
+    [Parameter] public ScopeLevel Scope { get; set; } = ScopeLevel.System;
+    [Parameter] public Guid? TenantId { get; set; }
+    [Parameter] public Guid? CompanyId { get; set; }
+
+    private IReadOnlyList<UserListItem>? _items;
+    private IReadOnlyList<RoleOption> _availableRoles = [];
+    private bool _loading = true;
+    private bool _showActiveOnly = true;
+
+    private IReadOnlyList<UserListItem>? _filteredItems =>
+        _showActiveOnly
+            ? _items?.Where(u => u.IsActive).ToList()
+            : _items;
+
+    // Drawer state
+    private bool _drawerOpen;
+    private UserDrawerMode _drawerMode = UserDrawerMode.None;
+    private UserFormMode _formMode = UserFormMode.Create;
+    private UserFormModel _formModel = new();
+    private string? _targetUrlCode;
+    private bool _isSubmitting;
+
+    // Password reset
+    private string _newPassword = string.Empty;
+    private bool _showNewPassword;
+
+    // Assign existing user
+    private string _assignEmail = string.Empty;
+    private IEnumerable<Guid> _assignRoleIds = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        _loading = true;
+        var listResult = await Mediator.Send(new ListUsersQuery(Scope, TenantId, CompanyId));
+        if (listResult.IsSuccess) _items = listResult.Value;
+
+        var rolesResult = await Mediator.Send(new GetRoleOptionsQuery(Scope, TenantId, CompanyId));
+        if (rolesResult.IsSuccess) _availableRoles = rolesResult.Value!;
+
+        _loading = false;
+    }
+
+    // ─── Drawer açma ───────────────────────────────────────────────────
+
+    private void OpenCreateDrawer()
+    {
+        _formModel = new UserFormModel();
+        _formMode = UserFormMode.Create;
+        _drawerMode = UserDrawerMode.UserForm;
+        _drawerOpen = true;
+    }
+
+    private async Task OpenEditDrawer(UserListItem user)
+    {
+        var result = await Mediator.Send(new GetUserDetailQuery(user.UrlCode, Scope, TenantId, CompanyId));
+        if (!result.IsSuccess) { Snackbar.Add("Kullanıcı yüklenemedi.", Severity.Error); return; }
+
+        var detail = result.Value!;
+        _formModel = new UserFormModel
+        {
+            Id = detail.Id,
+            UrlCode = detail.UrlCode,
+            FirstName = detail.FirstName,
+            LastName = detail.LastName,
+            Email = detail.Email,
+            PhoneNumber = detail.PhoneNumber,
+            IsActive = detail.IsActive,
+            SelectedRoleIds = detail.Assignments.Where(a => a.IsActive).Select(a => a.RoleId).ToList(),
+        };
+        _targetUrlCode = detail.UrlCode;
+        _formMode = UserFormMode.Edit;
+        _drawerMode = UserDrawerMode.UserForm;
+        _drawerOpen = true;
+    }
+
+    private void OpenResetPasswordDrawer(UserListItem user)
+    {
+        _targetUrlCode = user.UrlCode;
+        _newPassword = string.Empty;
+        _drawerMode = UserDrawerMode.ResetPassword;
+        _drawerOpen = true;
+    }
+
+    private void OpenOnboardingDrawer()
+    {
+        _drawerMode = UserDrawerMode.Onboarding;
+        _drawerOpen = true;
+    }
+
+    private async Task HandleOnboardingSuccessAsync(UserListItem result)
+    {
+        Snackbar.Add(Loc["Onboarding.Success"].Value, Severity.Success);
+        CloseDrawer();
+        await LoadDataAsync();
+    }
+
+    private void OpenAssignDrawer()
+    {
+        _assignEmail = string.Empty;
+        _assignRoleIds = [];
+        _drawerMode = UserDrawerMode.AssignUser;
+        _drawerOpen = true;
+    }
+
+    private void CloseDrawer()
+    {
+        _drawerOpen = false;
+        _drawerMode = UserDrawerMode.None;
+    }
+
+    // ─── Form submit ────────────────────────────────────────────────────
+
+    private async Task HandleFormSubmitAsync()
+    {
+        if (_formModel.SelectedRoleIds.Count == 0)
+        {
+            Snackbar.Add(Loc["UserForm.Roles.Required"].Value, Severity.Warning);
+            return;
+        }
+
+        _isSubmitting = true;
+
+        try
+        {
+            if (_formMode == UserFormMode.Create)
+            {
+                Result<UserListItem> result;
+
+                if (Scope == ScopeLevel.Tenant && TenantId.HasValue)
+                {
+                    var cmd = new CreateTenantUserCommand(
+                        TenantId.Value,
+                        _formModel.FirstName,
+                        _formModel.LastName,
+                        _formModel.Email,
+                        _formModel.PhoneNumber,
+                        _formModel.Password ?? string.Empty,
+                        _formModel.SelectedRoleIds);
+                    result = await Mediator.Send(cmd);
+                }
+                else
+                {
+                    var cmd = new CreateSystemUserCommand(
+                        _formModel.FirstName,
+                        _formModel.LastName,
+                        _formModel.Email,
+                        _formModel.PhoneNumber,
+                        _formModel.Password ?? string.Empty,
+                        _formModel.SelectedRoleIds);
+                    result = await Mediator.Send(cmd);
+                }
+
+                if (result.IsSuccess)
+                {
+                    Snackbar.Add(Loc["SystemUsers.CreateSuccess"].Value, Severity.Success);
+                    CloseDrawer();
+                    await LoadDataAsync();
+                }
+                else
+                {
+                    Snackbar.Add(result.FirstError.Message, Severity.Error);
+                }
+            }
+            else
+            {
+                var cmd = new UpdateUserCommand(
+                    _formModel.UrlCode,
+                    _formModel.FirstName,
+                    _formModel.LastName,
+                    _formModel.Email,
+                    _formModel.PhoneNumber,
+                    Scope,
+                    TenantId,
+                    CompanyId,
+                    _formModel.SelectedRoleIds);
+
+                var result = await Mediator.Send(cmd);
+                if (result.IsSuccess)
+                {
+                    Snackbar.Add(Loc["SystemUsers.UpdateSuccess"].Value, Severity.Success);
+                    CloseDrawer();
+                    await LoadDataAsync();
+                }
+                else
+                {
+                    Snackbar.Add(result.FirstError.Message, Severity.Error);
+                }
+            }
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+
+    private async Task HandleResetPasswordAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newPassword) || _newPassword.Length < 8)
+        {
+            Snackbar.Add(Loc["ResetPassword.Validation"].Value, Severity.Warning);
+            return;
+        }
+
+        _isSubmitting = true;
+        try
+        {
+            var result = await Mediator.Send(new ResetUserPasswordCommand(_targetUrlCode!, _newPassword));
+            if (result.IsSuccess)
+            {
+                Snackbar.Add(Loc["SystemUsers.ResetPasswordSuccess"].Value, Severity.Success);
+                CloseDrawer();
+            }
+            else
+            {
+                Snackbar.Add(result.FirstError.Message, Severity.Error);
+            }
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+
+    private async Task HandleAssignUserAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_assignEmail))
+        {
+            Snackbar.Add(Loc["UserForm.Email.Required"].Value, Severity.Warning);
+            return;
+        }
+        if (!_assignRoleIds.Any())
+        {
+            Snackbar.Add(Loc["UserForm.Roles.Required"].Value, Severity.Warning);
+            return;
+        }
+        if (!TenantId.HasValue)
+        {
+            Snackbar.Add("Tenant bilgisi eksik.", Severity.Error);
+            return;
+        }
+
+        _isSubmitting = true;
+        try
+        {
+            var cmd = new AssignUserToTenantCommand(
+                TenantId.Value,
+                _assignEmail.Trim(),
+                _assignRoleIds.ToList());
+
+            var result = await Mediator.Send(cmd);
+            if (result.IsSuccess)
+            {
+                Snackbar.Add(Loc["SystemUsers.AssignSuccess"].Value, Severity.Success);
+                CloseDrawer();
+                await LoadDataAsync();
+            }
+            else
+            {
+                Snackbar.Add(result.FirstError.Message, Severity.Error);
+            }
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+
+    // ─── Satır aksiyonlar ───────────────────────────────────────────────
+
+    private async Task ForceLogoutAsync(UserListItem user)
+    {
+        var parameters = new DialogParameters<ConfirmDialog>
+        {
+            { x => x.Message, Loc["SystemUsers.ForceLogout.Confirm"].Value.Replace("{name}", user.FullName) },
+            { x => x.ConfirmText, Loc["SystemUsers.List.Action.ForceLogout"].Value },
+            { x => x.ConfirmColor, Color.Warning },
+            { x => x.ConfirmIcon, Icons.Material.Filled.Logout },
+            { x => x.TitleIcon, Icons.Material.Filled.Logout },
+        };
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>(
+            Loc["SystemUsers.ForceLogout.Title"].Value, parameters,
+            new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true });
+        var dialogResult = await dialog.Result;
+        if (dialogResult?.Canceled == true) return;
+
+        var result = await Mediator.Send(
+            new CleanTenant.Application.Features.System.ForceLogoutUser.ForceLogoutUserCommand(
+                user.UrlCode, "Admin tarafından zorla çıkış yapıldı."));
+
+        Snackbar.Add(
+            result.IsSuccess
+                ? Loc["SystemUsers.ForceLogoutSuccess"].Value
+                : result.FirstError.Message,
+            result.IsSuccess ? Severity.Success : Severity.Error);
+    }
+
+    private async Task ReactivateAsync(UserListItem user)
+    {
+        var parameters = new DialogParameters<ConfirmDialog>
+        {
+            { x => x.Message, Loc["SystemUsers.Reactivate.Confirm"].Value.Replace("{name}", user.FullName) },
+            { x => x.ConfirmText, Loc["SystemUsers.List.Action.Reactivate"].Value },
+            { x => x.ConfirmColor, Color.Success },
+            { x => x.ConfirmIcon, Icons.Material.Filled.PersonAdd },
+            { x => x.TitleIcon, Icons.Material.Filled.PersonAdd },
+        };
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>(
+            Loc["SystemUsers.Reactivate.Title"].Value, parameters,
+            new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true });
+        var dialogResult = await dialog.Result;
+        if (dialogResult?.Canceled == true) return;
+
+        if (Scope == ScopeLevel.Tenant && TenantId.HasValue)
+        {
+            var result = await Mediator.Send(new ReactivateTenantUserCommand(user.UrlCode, TenantId.Value));
+            Snackbar.Add(result.IsSuccess
+                ? Loc["TenantUsers.ReactivateSuccess"].Value
+                : result.FirstError.Message,
+                result.IsSuccess ? Severity.Success : Severity.Error);
+        }
+        else
+        {
+            var result = await Mediator.Send(new ReactivateUserCommand(user.UrlCode));
+            Snackbar.Add(result.IsSuccess
+                ? Loc["SystemUsers.ReactivateSuccess"].Value
+                : result.FirstError.Message,
+                result.IsSuccess ? Severity.Success : Severity.Error);
+        }
+
+        await LoadDataAsync();
+    }
+
+    private async Task DeactivateAsync(UserListItem user)
+    {
+        var parameters = new DialogParameters<ConfirmDialog>
+        {
+            { x => x.Message, Loc["SystemUsers.Deactivate.Confirm"].Value.Replace("{name}", user.FullName) },
+            { x => x.ConfirmText, Loc["SystemUsers.List.Action.Deactivate"].Value },
+            { x => x.ConfirmColor, Color.Error },
+            { x => x.ConfirmIcon, Icons.Material.Filled.PersonOff },
+            { x => x.TitleIcon, Icons.Material.Filled.PersonOff },
+        };
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>(
+            Loc["SystemUsers.Deactivate.Title"].Value, parameters,
+            new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true });
+        var dialogResult = await dialog.Result;
+        if (dialogResult?.Canceled == true) return;
+
+        if (Scope == ScopeLevel.Tenant && TenantId.HasValue)
+        {
+            var result = await Mediator.Send(new DeactivateTenantUserCommand(user.UrlCode, TenantId.Value));
+            Snackbar.Add(result.IsSuccess
+                ? Loc["TenantUsers.DeactivateSuccess"].Value
+                : result.FirstError.Message,
+                result.IsSuccess ? Severity.Success : Severity.Error);
+        }
+        else
+        {
+            var result = await Mediator.Send(new DeactivateUserCommand(user.UrlCode));
+            Snackbar.Add(result.IsSuccess
+                ? Loc["SystemUsers.DeactivateSuccess"].Value
+                : result.FirstError.Message,
+                result.IsSuccess ? Severity.Success : Severity.Error);
+        }
+
+        await LoadDataAsync();
+    }
+}

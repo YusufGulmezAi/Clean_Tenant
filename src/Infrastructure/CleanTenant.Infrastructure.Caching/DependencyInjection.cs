@@ -58,6 +58,12 @@ public static class DependencyInjection
         // v0.2.2.a — System scope kullanıcıları için pre-auth 2FA enrollment store (10 dk TTL).
         services.AddScoped<IPreAuthEnrollmentStore, RedisPreAuthEnrollmentStore>();
 
+        // İlk giriş zorunlu şifre değişimi challenge store (15 dk TTL).
+        services.AddScoped<IPasswordChangeChallengeStore, RedisPasswordChangeChallengeStore>();
+
+        // Kullanıcı onboarding OTP doğrulama servisi (SMS/e-posta kod doğrulaması).
+        services.AddScoped<IVerificationCodeService, RedisVerificationCodeService>();
+
         // ─── v0.2.3.d — Generic hybrid cache mimarisi ───
         services.AddMemoryCache();
 

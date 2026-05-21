@@ -145,6 +145,14 @@ using (var scope = app.Services.CreateScope())
     await lookUpSeeder.SeedGeographyAsync();
 }
 
+// Dev ortamı: admin kullanıcı + demo tenant seed (SEED_ADMIN_PASSWORD env'den).
+if (app.Environment.IsDevelopment())
+{
+    using var scope = app.Services.CreateScope();
+    var devSeed = scope.ServiceProvider.GetRequiredService<CleanTenant.Infrastructure.Persistence.Seeding.DevSeedData>();
+    await devSeed.SeedAsync();
+}
+
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);

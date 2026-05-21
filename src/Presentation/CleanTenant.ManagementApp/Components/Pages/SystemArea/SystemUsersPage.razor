@@ -1,0 +1,80 @@
+@page "/system/users"
+@page "/tenant/users"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject AuthenticationStateProvider AuthProvider
+@inject IStringLocalizer Loc
+@using CleanTenant.ManagementApp.Components.Shared
+@using CleanTenant.SharedKernel.Context
+
+@*
+    Kullanıcı yönetim sayfası — System ve Tenant scope için ortak.
+    Oturum claim'lerinden scope + tenantId okunur; UserListPanel
+    doğru parametrelerle çağrılır.
+
+    v0.2.12 — System scope için ilk uygulama.
+    v0.2.12 — Tenant scope desteği eklendi (/tenant/users ikinci route).
+*@
+
+<PageTitle>@Loc["SystemUsers.PageTitle"]</PageTitle>
+
+@if (_unauthorized)
+{
+    <MudAlert Severity="Severity.Warning" Class="my-3">
+        @Loc["SystemUsers.Unauthorized"]
+    </MudAlert>
+}
+else if (_scope == ScopeLevel.System)
+{
+    <MudText Typo="Typo.h5" Class="mb-4">@Loc["SystemUsers.PageTitle"]</MudText>
+    <UserListPanel Scope="ScopeLevel.System" />
+}
+else if (_scope == ScopeLevel.Tenant && _tenantId.HasValue)
+{
+    <MudText Typo="Typo.h5" Class="mb-4">@Loc["TenantUsers.PageTitle"]</MudText>
+    <UserListPanel Scope="ScopeLevel.Tenant" TenantId="@_tenantId" />
+}
+
+@code {
+    private ScopeLevel? _scope;
+    private Guid? _tenantId;
+    private bool _unauthorized;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user?.Identity?.IsAuthenticated != true)
+        {
+            _unauthorized = true;
+            return;
+        }
+
+        var scopeClaim = user.FindFirst("scope")?.Value;
+        _scope = scopeClaim switch
+        {
+            "System" => ScopeLevel.System,
+            "Tenant" => ScopeLevel.Tenant,
+            _ => null,
+        };
+
+        if (_scope is null)
+        {
+            _unauthorized = true;
+            return;
+        }
+
+        if (_scope == ScopeLevel.Tenant)
+        {
+            if (user.FindFirst("tenant_id") is { Value: var tid }
+                && Guid.TryParseExact(tid, "N", out var tenantGuid))
+            {
+                _tenantId = tenantGuid;
+            }
+            else
+            {
+                _unauthorized = true;
+            }
+        }
+    }
+}
