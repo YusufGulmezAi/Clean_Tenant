@@ -45,6 +45,12 @@ public sealed class BudgetLineVersion : BaseEntity, ITenantScoped
     public DistributionModel DistributionModel { get; set; } = DistributionModel.Equal;
 
     /// <summary>
+    /// Katılım grubu — bu kalem yalnızca grup üyesi BB'lere dağıtılır.
+    /// Null ise sitedeki tüm aktif BB'lere dağıtım yapılır (KMK m.18 default).
+    /// </summary>
+    public Guid? ParticipationGroupId { get; set; }
+
+    /// <summary>
     /// Dağıtım/plan ek parametreleri (JSON). Örn. Seasonal için
     /// <c>{"activeMonths":[6,7,8,9]}</c>, Formula için formül metni.
     /// Null ise default davranış.
