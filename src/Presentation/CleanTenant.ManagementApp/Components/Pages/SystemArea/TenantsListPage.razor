@@ -117,9 +117,10 @@ else
        gitmez de buton ikonları aktif kalır). *@
     <DataTable TItem="TenantListItem"
                Items="@_items"
-               SearchPlaceholder="@Loc["Tenants.List.Search"]"
-               SearchableFields="@(row => new[] { row.Name, row.UrlCode, row.LegalName })"
-               ExportColumns="@_exportColumns">
+               ExportColumns="@ActiveExportColumns"
+               ExportTitle="@Loc["Tenants.List.ExportTitle"].Value"
+               Filterable="false"
+               HorizontalScrollbar="true">
         <ToolbarRight>
             <MudMenu Dense="true"
                      AnchorOrigin="Origin.BottomRight"
@@ -236,7 +237,29 @@ else
     private IReadOnlyList<TenantListItem>? _items;
     private PersistingComponentStateSubscription _persistSubscription;
 
-    private IReadOnlyList<ExportColumn<TenantListItem>> _exportColumns = [];
+    private IReadOnlyList<ExportColumn<TenantListItem>> ActiveExportColumns
+    {
+        get
+        {
+            var cols = new List<ExportColumn<TenantListItem>>
+            {
+                new() { Header = Loc["Tenants.List.Col.Name"].Value,   Selector = r => r.Name },
+            };
+            if (_colUrlCode)       cols.Add(new() { Header = Loc["Tenants.List.Col.UrlCode"].Value,       Selector = r => r.UrlCode });
+            if (_colLegalName)     cols.Add(new() { Header = Loc["Tenants.List.Col.LegalName"].Value,     Selector = r => r.LegalName });
+            cols.Add(new() { Header = Loc["Tenants.List.Col.Status"].Value, Selector = r => r.Status.ToString() });
+            if (_colBillingTier)   cols.Add(new() { Header = Loc["Tenants.List.Col.Tier"].Value,          Selector = r => r.BillingTier.ToString() });
+            if (_colIdentity)      cols.Add(new() { Header = Loc["Tenants.List.Col.Identity"].Value,      Selector = r => $"{r.LegalIdentityType}: {r.LegalIdentityNumber}" });
+            if (_colProvince)      cols.Add(new() { Header = Loc["Tenants.List.Col.Province"].Value,      Selector = r => r.ProvinceName ?? "—" });
+            if (_colDistrict)      cols.Add(new() { Header = Loc["Tenants.List.Col.District"].Value,      Selector = r => r.DistrictName ?? "—" });
+            if (_colNeighborhood)  cols.Add(new() { Header = Loc["Tenants.List.Col.Neighborhood"].Value,  Selector = r => r.NeighborhoodName ?? "—" });
+            if (_colSystemWrite)   cols.Add(new() { Header = Loc["Tenants.List.Col.SystemWrite"].Value,   Selector = r => r.AllowSystemWriteAccess ? Loc["Common.SystemWrite.On"].Value : Loc["Common.SystemWrite.Off"].Value });
+            if (_colContractStart) cols.Add(new() { Header = Loc["Tenants.List.Col.ContractStart"].Value, Selector = r => r.ContractStartDate?.ToString("dd.MM.yyyy") ?? "—" });
+            if (_colContractEnd)   cols.Add(new() { Header = Loc["Tenants.List.Col.ContractEnd"].Value,   Selector = r => r.ContractEndDate?.ToString("dd.MM.yyyy") ?? "—" });
+            if (_colGraceDays)     cols.Add(new() { Header = Loc["Tenants.List.Col.GraceDays"].Value,     Selector = r => r.TransitionGraceDays.HasValue ? Loc["Tenants.List.Col.GraceDaysFormat", r.TransitionGraceDays.Value].Value : "—" });
+            return cols;
+        }
+    }
 
     private bool _colUrlCode       = true;
     private bool _colLegalName     = true;
@@ -252,18 +275,6 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        // Export columns'u localize edilmiş başlıklarla inşa et.
-        _exportColumns =
-        [
-            new() { Header = Loc["Tenants.List.Col.Name"].Value, Selector = r => r.Name },
-            new() { Header = Loc["Tenants.List.Col.UrlCode"].Value, Selector = r => r.UrlCode },
-            new() { Header = Loc["Tenants.List.Col.LegalName"].Value, Selector = r => r.LegalName },
-            new() { Header = Loc["Tenants.List.Col.Status"].Value, Selector = r => r.Status.ToString() },
-            new() { Header = Loc["Tenants.List.Col.Tier"].Value, Selector = r => r.BillingTier.ToString() },
-            new() { Header = Loc["Tenants.List.Col.SystemWrite"].Value, Selector = r =>
-                r.AllowSystemWriteAccess ? Loc["Common.SystemWrite.On"].Value : Loc["Common.SystemWrite.Off"].Value },
-        ];
-
         var authState = await AuthProvider.GetAuthenticationStateAsync();
         var user = authState.User;
         if (user?.Identity?.IsAuthenticated != true

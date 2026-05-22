@@ -19,20 +19,20 @@ internal sealed class BlockConfiguration : IEntityTypeConfiguration<Block>
         builder.Property(b => b.TenantId).HasColumnType("uuid").IsRequired();
         builder.HasIndex(b => b.TenantId);
 
-        builder.Property(b => b.CompanyId).HasColumnType("uuid").IsRequired();
-        builder.HasIndex(b => b.CompanyId);
+        builder.Property(b => b.BuildingId).HasColumnType("uuid").IsRequired();
+        builder.HasIndex(b => b.BuildingId);
 
         builder.Property(b => b.Name).HasMaxLength(100).IsRequired();
-        builder.HasIndex(b => new { b.CompanyId, b.Name })
-            .HasDatabaseName("ix_blocks_company_name")
+        builder.HasIndex(b => new { b.BuildingId, b.Name })
+            .HasDatabaseName("ix_blocks_building_name")
             .HasFilter("is_deleted = false")
             .IsUnique();
 
         builder.Property(b => b.SortOrder).IsRequired();
 
-        builder.HasOne(b => b.Company)
-            .WithMany()
-            .HasForeignKey(b => b.CompanyId)
+        builder.HasOne(b => b.Building)
+            .WithMany(bu => bu.Blocks)
+            .HasForeignKey(b => b.BuildingId)
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.Property(b => b.CreatedAt).HasColumnType("timestamptz");

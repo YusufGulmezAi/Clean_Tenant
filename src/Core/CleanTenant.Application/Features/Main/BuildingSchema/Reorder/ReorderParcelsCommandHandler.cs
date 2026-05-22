@@ -19,7 +19,7 @@ public sealed class ReorderParcelsCommandHandler : IRequestHandler<ReorderParcel
     public async Task<Result> Handle(ReorderParcelsCommand command, CancellationToken cancellationToken)
     {
         var parcels = await _db.Parcels
-            .Where(p => p.BlockId == command.BlockId && command.OrderedIds.Contains(p.Id))
+            .Where(p => p.LandId == command.LandId && command.OrderedIds.Contains(p.Id))
             .ToListAsync(cancellationToken);
 
         for (var i = 0; i < command.OrderedIds.Count; i++)

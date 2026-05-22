@@ -19,20 +19,20 @@ internal sealed class ParcelConfiguration : IEntityTypeConfiguration<Parcel>
         builder.Property(p => p.TenantId).HasColumnType("uuid").IsRequired();
         builder.HasIndex(p => p.TenantId);
 
-        builder.Property(p => p.BlockId).HasColumnType("uuid").IsRequired();
-        builder.HasIndex(p => p.BlockId);
+        builder.Property(p => p.LandId).HasColumnType("uuid").IsRequired();
+        builder.HasIndex(p => p.LandId);
 
         builder.Property(p => p.Name).HasMaxLength(100).IsRequired();
-        builder.HasIndex(p => new { p.BlockId, p.Name })
-            .HasDatabaseName("ix_parcels_block_name")
+        builder.HasIndex(p => new { p.LandId, p.Name })
+            .HasDatabaseName("ix_parcels_land_name")
             .HasFilter("is_deleted = false")
             .IsUnique();
 
         builder.Property(p => p.SortOrder).IsRequired();
 
-        builder.HasOne(p => p.Block)
-            .WithMany(b => b.Parcels)
-            .HasForeignKey(p => p.BlockId)
+        builder.HasOne(p => p.Land)
+            .WithMany(l => l.Parcels)
+            .HasForeignKey(p => p.LandId)
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.Property(p => p.CreatedAt).HasColumnType("timestamptz");

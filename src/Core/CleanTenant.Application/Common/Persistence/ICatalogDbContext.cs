@@ -3,6 +3,7 @@ using CleanTenant.Domain.Identity.Support;
 using CleanTenant.Domain.Identity.Tenants;
 using CleanTenant.Domain.Identity.Users;
 using CleanTenant.Domain.Localization;
+using CleanTenant.Domain.LookUp;
 using CleanTenant.Domain.LookUp.Banks;
 using CleanTenant.Domain.LookUp.BuildingTypes;
 using CleanTenant.Domain.LookUp.Districts;
@@ -80,6 +81,13 @@ public interface ICatalogDbContext
 
     /// <summary>Lokalizasyon kaynakları (Key + Culture composite unique).</summary>
     DbSet<LocalizedResource> LocalizedResources { get; }
+
+    // ── Muhasebe Modülü — Catalog (sistem geneli referans) ───────────────────
+    /// <summary>TDHP hesap planı şablonu — yeni şirket oluşturulurken klonlanır.</summary>
+    DbSet<ChartOfAccountsTemplate> ChartOfAccountsTemplates { get; }
+
+    /// <summary>TÜİK enflasyon endeksleri (TMS 29 enflasyon muhasebesi için).</summary>
+    DbSet<InflationIndex> InflationIndexes { get; }
 
     /// <summary>Bekleyen değişiklikleri persist eder. Cancellation desteği var.</summary>
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);

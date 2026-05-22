@@ -26,19 +26,19 @@ public sealed class CreateParcelCommandHandler : IRequestHandler<CreateParcelCom
     /// <inheritdoc />
     public async Task<Result<Guid>> Handle(CreateParcelCommand command, CancellationToken cancellationToken)
     {
-        var blockExists = await _db.Blocks
-            .AnyAsync(b => b.Id == command.BlockId, cancellationToken);
-        if (!blockExists)
-            return Result<Guid>.Failure(Error.NotFound("BLOCK-NOT-FOUND", "Ada bulunamadı."));
+        var landExists = await _db.Lands
+            .AnyAsync(l => l.Id == command.LandId, cancellationToken);
+        if (!landExists)
+            return Result<Guid>.Failure(Error.NotFound("LAND-NOT-FOUND", "Ada bulunamadı."));
 
         var nextSortOrder = await _db.Parcels
-            .Where(p => p.BlockId == command.BlockId)
+            .Where(p => p.LandId == command.LandId)
             .MaxAsync(p => (int?)p.SortOrder, cancellationToken) ?? 0;
 
         var parcel = new Parcel
         {
             TenantId = _tenantContext.TenantId!.Value,
-            BlockId = command.BlockId,
+            LandId = command.LandId,
             Name = command.Name,
             SortOrder = nextSortOrder + 1,
         };

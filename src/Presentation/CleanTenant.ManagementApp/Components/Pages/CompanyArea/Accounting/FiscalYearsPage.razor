@@ -1,0 +1,355 @@
+@page "/company/accounting/fiscal-years"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject AuthenticationStateProvider AuthProvider
+@inject MediatR.IMediator Mediator
+@inject ISnackbar Snackbar
+@inject IStringLocalizer Loc
+@using CleanTenant.SharedKernel.Common.Results
+@using CleanTenant.Application.Features.Main.Accounting.FiscalYears
+@using CleanTenant.Application.Features.Main.Accounting.Periods
+@using CleanTenant.Domain.Tenant.Accounting.Enums
+
+<PageTitle>Mali Yıllar</PageTitle>
+
+@if (_unauthorized)
+{
+    <MudAlert Severity="Severity.Warning" Class="my-3">
+        Bu sayfaya erişim yetkiniz bulunmuyor. Şirket kapsamında giriş yapınız.
+    </MudAlert>
+}
+else if (!_initialized)
+{
+    <MudText Typo="Typo.h6" Class="my-3">Yükleniyor...</MudText>
+}
+else
+{
+    <div class="d-flex align-center justify-space-between mb-3">
+        <MudText Typo="Typo.h5">Mali Yıllar</MudText>
+        <MudButton StartIcon="@(_showAddForm ? Icons.Material.Filled.Close : Icons.Material.Filled.Add)"
+                   Color="Color.Primary" Variant="Variant.Filled"
+                   OnClick="@(() => { _showAddForm = !_showAddForm; if (!_showAddForm) _form = new(); })">
+            @(_showAddForm ? "İptal" : "Yeni Mali Yıl")
+        </MudButton>
+    </div>
+
+    @if (_showAddForm)
+    {
+        <MudPaper Class="pa-4 mb-4" Elevation="1">
+            <MudForm @ref="_addForm">
+                <MudGrid Spacing="2">
+                    <MudItem xs="12" sm="4">
+                        <MudTextField @bind-Value="_form.Label"
+                                      Label="Etiket (örn: 2025, 2026-2027)"
+                                      Required="true"
+                                      MaxLength="50" />
+                    </MudItem>
+                    <MudItem xs="12" sm="4">
+                        <MudDatePicker @bind-Date="_form.StartDateDt"
+                                       Label="Başlangıç Tarihi"
+                                       DateFormat="dd.MM.yyyy"
+                                       Required="true" />
+                    </MudItem>
+                    <MudItem xs="12" sm="4">
+                        <MudDatePicker @bind-Date="_form.EndDateDt"
+                                       Label="Bitiş Tarihi"
+                                       DateFormat="dd.MM.yyyy"
+                                       Required="true" />
+                    </MudItem>
+                    @if (_form.IsNonCalendar)
+                    {
+                        <MudItem xs="12">
+                            <MudAlert Severity="Severity.Info" Dense="true">
+                                Takvim dışı mali yıl: başlangıç ve bitiş yılları farklı.
+                            </MudAlert>
+                        </MudItem>
+                    }
+                    <MudItem xs="12" sm="4">
+                        <MudSwitch T="bool" @bind-Value="_form.SetAsCurrent"
+                                   Label="Aktif dönem olarak işaretle"
+                                   Color="Color.Primary" />
+                    </MudItem>
+                </MudGrid>
+                <div class="d-flex gap-2 mt-4">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@CreateFiscalYearAsync">
+                        Kaydet
+                    </MudButton>
+                    <MudButton Variant="Variant.Text" OnClick="@(() => { _showAddForm = false; _form = new(); })">
+                        İptal
+                    </MudButton>
+                </div>
+            </MudForm>
+        </MudPaper>
+    }
+
+    @if (_fiscalYears.Count == 0)
+    {
+        <MudAlert Severity="Severity.Info">Henüz mali yıl tanımlanmamış.</MudAlert>
+    }
+    else
+    {
+        <MudExpansionPanels MultiExpansion="true">
+            @foreach (var fy in _fiscalYears)
+            {
+                <MudExpansionPanel @key="fy.Id"
+                                   IsExpandedChanged="@((bool expanded) => OnFiscalYearExpanded(expanded, fy.Id))">
+                    <TitleContent>
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                            <MudText Typo="Typo.h6">@fy.Label</MudText>
+                            <MudChip T="string" Size="Size.Small" Color="@GetStatusColor(fy.Status)">
+                                @GetStatusLabel(fy.Status)
+                            </MudChip>
+                            @if (fy.IsCurrentYear)
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Primary">Aktif Dönem</MudChip>
+                            }
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                @fy.StartDate.ToString("dd.MM.yyyy") — @fy.EndDate.ToString("dd.MM.yyyy")
+                            </MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Tertiary">
+                                (@fy.PeriodCount dönem)
+                            </MudText>
+                        </MudStack>
+                    </TitleContent>
+                    <ChildContent>
+                        @if (_periodsByYear.TryGetValue(fy.Id, out var periods))
+                        {
+                            <MudSimpleTable Hover="true" Striped="true" Dense="true" Class="mb-3">
+                                <thead>
+                                    <tr>
+                                        <th>Ay</th>
+                                        <th>Tarih Aralığı</th>
+                                        <th>Durum</th>
+                                        <th style="text-align:right">İşlemler</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var p in periods)
+                                    {
+                                        <tr>
+                                            <td>@GetMonthName(p.Month)</td>
+                                            <td>@p.StartDate.ToString("dd.MM") — @p.EndDate.ToString("dd.MM")</td>
+                                            <td>
+                                                <MudChip T="string" Size="Size.Small" Color="@GetStatusColor(p.Status)">
+                                                    @GetStatusLabel(p.Status)
+                                                </MudChip>
+                                            </td>
+                                            <td style="text-align:right">
+                                                @if (p.Status == PeriodStatus.Open)
+                                                {
+                                                    <MudButton Size="Size.Small" Variant="Variant.Text"
+                                                               Color="Color.Warning"
+                                                               OnClick="@(() => LockPeriodAsync(p.Id))">
+                                                        Kilitle
+                                                    </MudButton>
+                                                }
+                                                else if (p.Status == PeriodStatus.Locked)
+                                                {
+                                                    <MudButton Size="Size.Small" Variant="Variant.Text"
+                                                               Color="Color.Info"
+                                                               OnClick="@(() => UnlockPeriodAsync(p.Id, fy.Id))">
+                                                        Aç
+                                                    </MudButton>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </MudSimpleTable>
+
+                            @if (fy.Status == PeriodStatus.Open)
+                            {
+                                <MudButton Color="Color.Error" Variant="Variant.Outlined"
+                                           StartIcon="@Icons.Material.Filled.Lock"
+                                           OnClick="@(() => CloseFiscalYearAsync(fy.Id))">
+                                    Yılı Kalıcı Kapat
+                                </MudButton>
+                            }
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.body2" Class="pa-2">Dönemler yükleniyor...</MudText>
+                        }
+                    </ChildContent>
+                </MudExpansionPanel>
+            }
+        </MudExpansionPanels>
+    }
+}
+
+@code {
+    private Guid _companyId;
+    private Guid? _tenantId;
+    private bool _unauthorized;
+    private bool _initialized;
+    private bool _showAddForm;
+
+    private IReadOnlyList<FiscalYearListItem> _fiscalYears = [];
+    private Dictionary<Guid, IReadOnlyList<PeriodListItem>> _periodsByYear = new();
+    private MudForm? _addForm;
+    private FiscalYearForm _form = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user?.Identity?.IsAuthenticated != true) { _unauthorized = true; _initialized = true; return; }
+        var scope = user.FindFirst("scope")?.Value;
+        if (!string.Equals(scope, "Company", StringComparison.OrdinalIgnoreCase)) { _unauthorized = true; _initialized = true; return; }
+        if (user.FindFirst("company_id") is { Value: var cid } && Guid.TryParseExact(cid, "N", out var cGuid))
+            _companyId = cGuid;
+        else { _unauthorized = true; _initialized = true; return; }
+        if (user.FindFirst("tenant_id") is { Value: var tid } && Guid.TryParseExact(tid, "N", out var tGuid))
+            _tenantId = tGuid;
+        await LoadDataAsync();
+        _initialized = true;
+    }
+
+    private async Task LoadDataAsync()
+    {
+        var result = await Mediator.Send(new GetFiscalYearsQuery(_companyId));
+        if (result.IsSuccess)
+            _fiscalYears = result.Value!;
+    }
+
+    private async Task OnFiscalYearExpanded(bool expanded, Guid fiscalYearId)
+    {
+        if (!expanded || _periodsByYear.ContainsKey(fiscalYearId)) return;
+        var query = new GetPeriodsQuery(_companyId, fiscalYearId);
+        var result = await Mediator.Send(query);
+        if (result.IsSuccess)
+        {
+            _periodsByYear[fiscalYearId] = result.Value!;
+            StateHasChanged();
+        }
+    }
+
+    private async Task CreateFiscalYearAsync()
+    {
+        if (_addForm is null) return;
+        await _addForm.Validate();
+        if (!_addForm.IsValid) return;
+
+        if (_form.StartDate is null || _form.EndDate is null)
+        {
+            Snackbar.Add("Başlangıç ve bitiş tarihi zorunludur.", Severity.Warning);
+            return;
+        }
+
+        if (_tenantId is null)
+        {
+            Snackbar.Add("Kiracı bilgisi bulunamadı.", Severity.Error);
+            return;
+        }
+
+        var cmd = new CreateFiscalYearCommand(
+            _companyId,
+            _tenantId.Value,
+            _form.Label,
+            _form.StartDate.Value,
+            _form.EndDate.Value,
+            _form.SetAsCurrent);
+
+        var result = await Mediator.Send(cmd);
+        if (result.IsFailure)
+        {
+            Snackbar.Add(result.FirstError.Message, Severity.Error);
+            return;
+        }
+
+        Snackbar.Add("Mali yıl oluşturuldu.", Severity.Success);
+        _showAddForm = false;
+        _form = new();
+        _periodsByYear.Clear();
+        await LoadDataAsync();
+    }
+
+    private async Task LockPeriodAsync(Guid periodId)
+    {
+        var result = await Mediator.Send(new LockPeriodCommand(_companyId, periodId));
+        if (result.IsFailure)
+        {
+            Snackbar.Add(result.FirstError.Message, Severity.Error);
+            return;
+        }
+        Snackbar.Add("Dönem kilitlendi.", Severity.Success);
+        await RefreshPeriodsForYearContaining(periodId);
+    }
+
+    private async Task UnlockPeriodAsync(Guid periodId, Guid fiscalYearId)
+    {
+        var result = await Mediator.Send(new UnlockPeriodCommand(_companyId, periodId));
+        if (result.IsFailure)
+        {
+            Snackbar.Add(result.FirstError.Message, Severity.Error);
+            return;
+        }
+        Snackbar.Add("Dönem açıldı.", Severity.Success);
+        _periodsByYear.Remove(fiscalYearId);
+        var query = new GetPeriodsQuery(_companyId, fiscalYearId);
+        var r = await Mediator.Send(query);
+        if (r.IsSuccess) { _periodsByYear[fiscalYearId] = r.Value!; StateHasChanged(); }
+    }
+
+    private async Task RefreshPeriodsForYearContaining(Guid periodId)
+    {
+        foreach (var kvp in _periodsByYear)
+        {
+            if (kvp.Value.Any(p => p.Id == periodId))
+            {
+                _periodsByYear.Remove(kvp.Key);
+                var q = new GetPeriodsQuery(_companyId, kvp.Key);
+                var r = await Mediator.Send(q);
+                if (r.IsSuccess) { _periodsByYear[kvp.Key] = r.Value!; StateHasChanged(); }
+                return;
+            }
+        }
+    }
+
+    private async Task CloseFiscalYearAsync(Guid fiscalYearId)
+    {
+        var result = await Mediator.Send(new CloseFiscalYearCommand(_companyId, fiscalYearId));
+        if (result.IsFailure)
+        {
+            Snackbar.Add(result.FirstError.Message, Severity.Error);
+            return;
+        }
+        Snackbar.Add("Mali yıl kalıcı olarak kapatıldı.", Severity.Success);
+        _periodsByYear.Clear();
+        await LoadDataAsync();
+    }
+
+    private static string GetMonthName(int month) => month switch
+    {
+        1 => "Ocak", 2 => "Şubat", 3 => "Mart", 4 => "Nisan",
+        5 => "Mayıs", 6 => "Haziran", 7 => "Temmuz", 8 => "Ağustos",
+        9 => "Eylül", 10 => "Ekim", 11 => "Kasım", 12 => "Aralık",
+        _ => month.ToString()
+    };
+
+    private static Color GetStatusColor(PeriodStatus status) => status switch
+    {
+        PeriodStatus.Open => Color.Success,
+        PeriodStatus.Locked => Color.Warning,
+        PeriodStatus.ClosedPermanent => Color.Error,
+        _ => Color.Default
+    };
+
+    private static string GetStatusLabel(PeriodStatus status) => status switch
+    {
+        PeriodStatus.Open => "Açık",
+        PeriodStatus.Locked => "Kilitli",
+        PeriodStatus.ClosedPermanent => "Kalıcı Kapalı",
+        _ => status.ToString()
+    };
+
+    private class FiscalYearForm
+    {
+        public string Label { get; set; } = "";
+        public DateTime? StartDateDt { get; set; }
+        public DateTime? EndDateDt { get; set; }
+        public bool SetAsCurrent { get; set; }
+        public DateOnly? StartDate => StartDateDt.HasValue ? DateOnly.FromDateTime(StartDateDt.Value) : null;
+        public DateOnly? EndDate => EndDateDt.HasValue ? DateOnly.FromDateTime(EndDateDt.Value) : null;
+        public bool IsNonCalendar => StartDate.HasValue && EndDate.HasValue && StartDate.Value.Year != EndDate.Value.Year;
+    }
+}

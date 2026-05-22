@@ -6,7 +6,7 @@
 @inject ISnackbar Snackbar
 @inject IJSRuntime JS
 @inject IStringLocalizer Loc
-@using CleanTenant.Application.Features.Main.BuildingSchema.Blocks
+@using CleanTenant.Application.Features.Main.BuildingSchema.Lands
 @using CleanTenant.Application.Features.Main.BuildingSchema.Parcels
 @using CleanTenant.Application.Features.Main.BuildingSchema.Buildings
 @using CleanTenant.Application.Features.Main.BuildingSchema.Units
@@ -97,7 +97,7 @@ else
                           MaxLength="100" Margin="Margin.Dense" Immediate="true" />
             <div class="d-flex gap-2 mt-2">
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
-                           OnClick="AddBlockAsync"
+                           OnClick="AddLandAsync"
                            Disabled="@(string.IsNullOrWhiteSpace(_addBlockName) || _isBusy)">
                     @Loc["Banks.Add"]
                 </MudButton>
@@ -109,7 +109,7 @@ else
         </MudPaper>
     }
 
-    @if (!_schema.Blocks.Any())
+    @if (!_schema.Lands.Any())
     {
         <MudAlert Severity="Severity.Info">
             @Loc["BuildingSchema.NoBlocks"]
@@ -117,12 +117,12 @@ else
     }
 
     <MudExpansionPanels MultiExpansion="true">
-        @foreach (var block in _schema.Blocks.OrderBy(b => b.SortOrder))
+        @foreach (var land in _schema.Lands.OrderBy(l => l.SortOrder))
         {
-            <MudExpansionPanel @key="block.Id">
+            <MudExpansionPanel @key="land.Id">
                 <TitleContent>
                     <div class="d-flex align-center" style="width:100%">
-                        @if (_editingBlockId == block.Id)
+                        @if (_editingBlockId == land.Id)
                         {
                             <div @onclick:stopPropagation="true">
                                 <MudTextField @bind-Value="_editingBlockName" Margin="Margin.Dense"
@@ -131,7 +131,7 @@ else
                             <div @onclick:stopPropagation="true">
                                 <MudIconButton Icon="@Icons.Material.Filled.Check" Size="Size.Small"
                                                Color="Color.Success" Title="@Loc["Common.Save"]"
-                                               OnClick="SaveEditBlockAsync" />
+                                               OnClick="SaveEditLandAsync" />
                             </div>
                             <div @onclick:stopPropagation="true">
                                 <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small"
@@ -141,24 +141,24 @@ else
                         }
                         else
                         {
-                            <MudText><b>@Loc["BuildingSchema.Block.Title"]</b> @block.Name</MudText>
-                            <MudChip T="string" Size="Size.Small" Class="ml-2">@Loc["BuildingSchema.Parcel.Count", block.Parcels.Count]</MudChip>
+                            <MudText><b>@Loc["BuildingSchema.Block.Title"]</b> @land.Name</MudText>
+                            <MudChip T="string" Size="Size.Small" Class="ml-2">@Loc["BuildingSchema.Parcel.Count", land.Parcels.Count]</MudChip>
                         }
                         <div class="ml-auto d-flex gap-1" @onclick:stopPropagation="true">
                             <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Title="@Loc["Common.Edit"]"
-                                           OnClick="@(() => StartEditBlock(block))"
+                                           OnClick="@(() => StartEditLand(land))"
                                            Disabled="@(_editingBlockId.HasValue || _isBusy)" />
                             <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small"
                                            Color="Color.Error" Title="@Loc["Common.Delete"]"
-                                           OnClick="@(() => DeleteBlockAsync(block.Id, block.Name))"
+                                           OnClick="@(() => DeleteLandAsync(land.Id, land.Name))"
                                            Disabled="@_isBusy" />
                             <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward" Size="Size.Small"
                                            Title="@Loc["BuildingSchema.MoveUp"]"
-                                           OnClick="@(() => MoveBlockAsync(block, -1))"
+                                           OnClick="@(() => MoveLandAsync(land, -1))"
                                            Disabled="@_isBusy" />
                             <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward" Size="Size.Small"
                                            Title="@Loc["BuildingSchema.MoveDown"]"
-                                           OnClick="@(() => MoveBlockAsync(block, 1))"
+                                           OnClick="@(() => MoveLandAsync(land, 1))"
                                            Disabled="@_isBusy" />
                         </div>
                     </div>
@@ -166,19 +166,19 @@ else
                 <ChildContent>
                     <div class="d-flex justify-end mb-2">
                         <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.Add"
-                                   OnClick="@(() => ToggleAddParcel(block.Id))" Disabled="@_isBusy">
+                                   OnClick="@(() => ToggleAddParcel(land.Id))" Disabled="@_isBusy">
                             @Loc["BuildingSchema.Parcel.Add"]
                         </MudButton>
                     </div>
 
-                    @if (_addParcelForBlock == block.Id)
+                    @if (_addParcelForBlock == land.Id)
                     {
                         <MudPaper Elevation="1" Class="pa-3 mb-3">
                             <MudTextField @bind-Value="_addParcelName" Label="@Loc["BuildingSchema.Parcel.NameLabel"]"
                                           MaxLength="100" Margin="Margin.Dense" Immediate="true" />
                             <div class="d-flex gap-2 mt-2">
                                 <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
-                                           OnClick="@(async () => await AddParcelAsync(block.Id))"
+                                           OnClick="@(async () => await AddParcelAsync(land.Id))"
                                            Disabled="@(string.IsNullOrWhiteSpace(_addParcelName) || _isBusy)">
                                     @Loc["Banks.Add"]
                                 </MudButton>
@@ -190,13 +190,13 @@ else
                         </MudPaper>
                     }
 
-                    @if (!block.Parcels.Any())
+                    @if (!land.Parcels.Any())
                     {
                         <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">@Loc["BuildingSchema.Parcel.None"]</MudText>
                     }
 
                     <MudExpansionPanels MultiExpansion="true">
-                        @foreach (var parcel in block.Parcels.OrderBy(p => p.SortOrder))
+                        @foreach (var parcel in land.Parcels.OrderBy(p => p.SortOrder))
                         {
                             <MudExpansionPanel @key="parcel.Id">
                                 <TitleContent>
@@ -234,11 +234,11 @@ else
                                                            Disabled="@_isBusy" />
                                             <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward" Size="Size.Small"
                                                            Title="@Loc["BuildingSchema.MoveUp"]"
-                                                           OnClick="@(() => MoveParcelAsync(parcel, block, -1))"
+                                                           OnClick="@(() => MoveParcelAsync(parcel, land, -1))"
                                                            Disabled="@_isBusy" />
                                             <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward" Size="Size.Small"
                                                            Title="@Loc["BuildingSchema.MoveDown"]"
-                                                           OnClick="@(() => MoveParcelAsync(parcel, block, 1))"
+                                                           OnClick="@(() => MoveParcelAsync(parcel, land, 1))"
                                                            Disabled="@_isBusy" />
                                         </div>
                                     </div>
@@ -579,21 +579,21 @@ else
         _isLoading = false;
     }
 
-    // ── Block ────────────────────────────────────────────────────────────────
+    // ── Land (Ada) ───────────────────────────────────────────────────────────
 
-    private void StartEditBlock(BlockDto block)
+    private void StartEditLand(LandDto land)
     {
-        _editingBlockId = block.Id;
-        _editingBlockName = block.Name;
+        _editingBlockId = land.Id;
+        _editingBlockName = land.Name;
     }
 
-    private async Task AddBlockAsync()
+    private async Task AddLandAsync()
     {
         if (string.IsNullOrWhiteSpace(_addBlockName) || _isBusy) return;
         _isBusy = true;
         try
         {
-            var result = await Mediator.Send(new CreateBlockCommand(CompanyId, _addBlockName.Trim()));
+            var result = await Mediator.Send(new CreateLandCommand(CompanyId, _addBlockName.Trim()));
             if (result.IsSuccess)
             {
                 _addBlockName = string.Empty;
@@ -605,20 +605,20 @@ else
         finally { _isBusy = false; }
     }
 
-    private async Task SaveEditBlockAsync()
+    private async Task SaveEditLandAsync()
     {
         if (_editingBlockId is null || string.IsNullOrWhiteSpace(_editingBlockName) || _isBusy) return;
         _isBusy = true;
         try
         {
-            var result = await Mediator.Send(new UpdateBlockCommand(_editingBlockId.Value, _editingBlockName.Trim()));
+            var result = await Mediator.Send(new UpdateLandCommand(_editingBlockId.Value, _editingBlockName.Trim()));
             if (result.IsSuccess) { _editingBlockId = null; await LoadSchemaAsync(); }
             else Snackbar.Add(result.FirstError.Message, Severity.Error);
         }
         finally { _isBusy = false; }
     }
 
-    private async Task DeleteBlockAsync(Guid blockId, string name)
+    private async Task DeleteLandAsync(Guid landId, string name)
     {
         if (_isBusy) return;
         var ok = await JS.InvokeAsync<bool>("confirm", Loc["BuildingSchema.Confirm.Block", name].Value);
@@ -626,26 +626,26 @@ else
         _isBusy = true;
         try
         {
-            var result = await Mediator.Send(new DeleteBlockCommand(blockId));
+            var result = await Mediator.Send(new DeleteLandCommand(landId));
             if (result.IsSuccess) await LoadSchemaAsync();
             else Snackbar.Add(result.FirstError.Message, Severity.Error);
         }
         finally { _isBusy = false; }
     }
 
-    private async Task MoveBlockAsync(BlockDto block, int direction)
+    private async Task MoveLandAsync(LandDto land, int direction)
     {
         if (_isBusy) return;
-        var ordered = _schema!.Blocks.OrderBy(b => b.SortOrder).ToList();
-        var idx = ordered.IndexOf(block);
+        var ordered = _schema!.Lands.OrderBy(l => l.SortOrder).ToList();
+        var idx = ordered.IndexOf(land);
         if (idx + direction < 0 || idx + direction >= ordered.Count) return;
         ordered.RemoveAt(idx);
-        ordered.Insert(idx + direction, block);
+        ordered.Insert(idx + direction, land);
         _isBusy = true;
         try
         {
             var result = await Mediator.Send(
-                new ReorderBlocksCommand(CompanyId, ordered.Select(b => b.Id).ToList()));
+                new ReorderLandsCommand(CompanyId, ordered.Select(l => l.Id).ToList()));
             if (result.IsSuccess) await LoadSchemaAsync();
             else Snackbar.Add(result.FirstError.Message, Severity.Error);
         }
@@ -666,13 +666,13 @@ else
         _editingParcelName = parcel.Name;
     }
 
-    private async Task AddParcelAsync(Guid blockId)
+    private async Task AddParcelAsync(Guid landId)
     {
         if (string.IsNullOrWhiteSpace(_addParcelName) || _isBusy) return;
         _isBusy = true;
         try
         {
-            var result = await Mediator.Send(new CreateParcelCommand(blockId, _addParcelName.Trim()));
+            var result = await Mediator.Send(new CreateParcelCommand(landId, _addParcelName.Trim()));
             if (result.IsSuccess)
             {
                 _addParcelName = string.Empty;
@@ -713,10 +713,10 @@ else
         finally { _isBusy = false; }
     }
 
-    private async Task MoveParcelAsync(ParcelDto parcel, BlockDto block, int direction)
+    private async Task MoveParcelAsync(ParcelDto parcel, LandDto land, int direction)
     {
         if (_isBusy) return;
-        var ordered = block.Parcels.OrderBy(p => p.SortOrder).ToList();
+        var ordered = land.Parcels.OrderBy(p => p.SortOrder).ToList();
         var idx = ordered.IndexOf(parcel);
         if (idx + direction < 0 || idx + direction >= ordered.Count) return;
         ordered.RemoveAt(idx);
@@ -725,7 +725,7 @@ else
         try
         {
             var result = await Mediator.Send(
-                new ReorderParcelsCommand(block.Id, ordered.Select(p => p.Id).ToList()));
+                new ReorderParcelsCommand(land.Id, ordered.Select(p => p.Id).ToList()));
             if (result.IsSuccess) await LoadSchemaAsync();
             else Snackbar.Add(result.FirstError.Message, Severity.Error);
         }

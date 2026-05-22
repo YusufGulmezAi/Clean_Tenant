@@ -98,20 +98,15 @@
         </MudMenu>
     </MudAppBar>
 
-    <MudDrawer @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="1" Variant="@DrawerVariant.Persistent">
+    <MudDrawer @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="1" Variant="@DrawerVariant.Persistent" Class="ct-nav-drawer">
         <NavMenu />
     </MudDrawer>
 
-    <MudMainContent Class="pt-16 px-4">
+    <MudMainContent Class="pt-16 px-2">
         <MudContainer MaxWidth="MaxWidth.False" Class="mt-4">
             @Body
         </MudContainer>
 
-        <MudPaper Elevation="0" Class="mt-8 pa-3 d-flex justify-center" Square="true">
-            <MudText Typo="Typo.caption" Color="Color.Default">
-                @Loc["Layout.Footer.Copyright"] · v0.2.2.c · @Loc["NavMenu.Tenant"]
-            </MudText>
-        </MudPaper>
     </MudMainContent>
 </MudLayout>
 

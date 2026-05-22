@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
 using Microsoft.JSInterop;
 using MudBlazor;
+using System.Globalization;
 
 namespace CleanTenant.ManagementApp.Components.Shared;
 
@@ -80,6 +81,9 @@ public sealed partial class DataTable<TItem> : ComponentBase
     /// <summary>Kolon options menüsünü göster (filter/sort/group).</summary>
     [Parameter] public bool ShowColumnOptions { get; set; } = true;
 
+    /// <summary>Tablonun yatayda kaydırılabilir olup olmadığı (default false).</summary>
+    [Parameter] public bool HorizontalScrollbar { get; set; } = false;
+
     /// <summary>Excel export butonu göster.</summary>
     [Parameter] public bool ShowExcelExport { get; set; } = true;
 
@@ -110,6 +114,8 @@ public sealed partial class DataTable<TItem> : ComponentBase
     [Inject] private ISnackbar Snackbar { get; set; } = default!;
     [Inject] private IStringLocalizer Loc { get; set; } = default!;
 
+    private static readonly CultureInfo _trCulture = CultureInfo.GetCultureInfo("tr-TR");
+
     private string _searchText = string.Empty;
 
     /// <summary>SearchPlaceholder parameter null/boş ise lokalize default'a düşer.</summary>
@@ -138,7 +144,7 @@ public sealed partial class DataTable<TItem> : ComponentBase
 
         var joined = string.Join(" ", fields.Where(f => !string.IsNullOrEmpty(f)));
 
-        return tokens.All(t => joined.Contains(t, StringComparison.OrdinalIgnoreCase));
+        return tokens.All(t => _trCulture.CompareInfo.IndexOf(joined, t, CompareOptions.IgnoreCase) >= 0);
     };
 
     /// <summary>Default: tüm public string + ToString sonucu — reflection kullanmaz, basit ToString.</summary>
@@ -158,7 +164,7 @@ public sealed partial class DataTable<TItem> : ComponentBase
         if (Items is null) return;
 
         var bytes = Excel.Generate(Items, cols, ResolveTitle());
-        var fileName = $"{SanitizeFileName(ResolveTitle())}-{DateTimeOffset.UtcNow:yyyyMMdd-HHmmss}.xlsx";
+        var fileName = $"{SanitizeFileName(ResolveTitle())}_{BuildTimestamp()}.xlsx";
         await DownloadBlobAsync(bytes, fileName, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     }
 
@@ -173,7 +179,7 @@ public sealed partial class DataTable<TItem> : ComponentBase
         if (Items is null) return;
 
         var bytes = Pdf.Generate(Items, cols, ResolveTitle());
-        var fileName = $"{SanitizeFileName(ResolveTitle())}-{DateTimeOffset.UtcNow:yyyyMMdd-HHmmss}.pdf";
+        var fileName = $"{SanitizeFileName(ResolveTitle())}_{BuildTimestamp()}.pdf";
         await DownloadBlobAsync(bytes, fileName, "application/pdf");
     }
 
@@ -187,10 +193,14 @@ public sealed partial class DataTable<TItem> : ComponentBase
         ? (Title ?? Loc["DataTable.DefaultTitle"].Value)
         : ExportTitle;
 
+    private static string BuildTimestamp()
+        => DateTimeOffset.Now.ToString("yyyy-MM-dd_HH-mm-ss", CultureInfo.InvariantCulture);
+
     private static string SanitizeFileName(string title)
     {
         var invalid = Path.GetInvalidFileNameChars();
-        var clean = new string(title.Where(c => !invalid.Contains(c) && c != ' ').ToArray());
-        return string.IsNullOrEmpty(clean) ? "rapor" : clean;
+        var clean = new string(title.Select(c =>
+            invalid.Contains(c) ? '_' : c == ' ' ? '-' : c).ToArray());
+        return string.IsNullOrEmpty(clean.Trim('-', '_')) ? "rapor" : clean.Trim('-', '_');
     }
 }

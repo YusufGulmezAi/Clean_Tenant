@@ -1,4 +1,5 @@
 using CleanTenant.Application.Common.Persistence;
+using CleanTenant.Domain.Tenant.Accounting;
 using CleanTenant.Domain.Tenant.BuildingSchema;
 using CleanTenant.Domain.Tenant.Companies;
 using CleanTenant.SharedKernel.Context;
@@ -35,6 +36,9 @@ public sealed class MainDbContext : DbContext, IMainDbContext
     public DbSet<Company> Companies => Set<Company>();
 
     /// <inheritdoc />
+    public DbSet<Land> Lands => Set<Land>();
+
+    /// <inheritdoc />
     public DbSet<Block> Blocks => Set<Block>();
 
     /// <inheritdoc />
@@ -45,6 +49,40 @@ public sealed class MainDbContext : DbContext, IMainDbContext
 
     /// <inheritdoc />
     public DbSet<Unit> Units => Set<Unit>();
+
+    // ── Muhasebe Modülü ──────────────────────────────────────────────────────
+    /// <summary>Hesap kodları (TDHP 3-kademeli hiyerarşi).</summary>
+    public DbSet<AccountCode> AccountCodes => Set<AccountCode>();
+
+    /// <summary>Maliyet merkezleri.</summary>
+    public DbSet<CostCenter> CostCenters => Set<CostCenter>();
+
+    /// <summary>Mali yıllar.</summary>
+    public DbSet<FiscalYear> FiscalYears => Set<FiscalYear>();
+
+    /// <summary>Muhasebe dönemleri (aylık).</summary>
+    public DbSet<AccountingPeriod> AccountingPeriods => Set<AccountingPeriod>();
+
+    /// <summary>Yevmiye fişleri.</summary>
+    public DbSet<JournalEntry> JournalEntries => Set<JournalEntry>();
+
+    /// <summary>Yevmiye satırları.</summary>
+    public DbSet<JournalLine> JournalLines => Set<JournalLine>();
+
+    /// <summary>Fiş sıra numarası sayaçları.</summary>
+    public DbSet<EntrySequence> EntrySequences => Set<EntrySequence>();
+
+    /// <summary>Muhasebe banka hesapları (LookUp.BankAccount'tan bağımsız).</summary>
+    public DbSet<BankAccount> AccountingBankAccounts => Set<BankAccount>();
+
+    /// <summary>Fatura kayıtları (gelen/giden).</summary>
+    public DbSet<Invoice> Invoices => Set<Invoice>();
+
+    /// <summary>Bütçe kalemleri (dönem + hesap kodu granülaritesi).</summary>
+    public DbSet<Budget> Budgets => Set<Budget>();
+
+    /// <summary>Şirket muhasebe yapılandırmaları.</summary>
+    public DbSet<AccountingSettings> AccountingSettings => Set<AccountingSettings>();
 
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder modelBuilder)

@@ -10,7 +10,7 @@ public sealed class CreateParcelCommandValidator : AbstractValidator<CreateParce
     /// <summary>Validation kurallarını tanımlar.</summary>
     public CreateParcelCommandValidator()
     {
-        RuleFor(x => x.BlockId).NotEmpty();
+        RuleFor(x => x.LandId).NotEmpty();
         RuleFor(x => x.Name)
             .NotEmpty().WithMessage("Parsel adı zorunludur.")
             .MaximumLength(100).WithMessage("Parsel adı en fazla 100 karakter olabilir.");

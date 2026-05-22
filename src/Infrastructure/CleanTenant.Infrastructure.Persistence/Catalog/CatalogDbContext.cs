@@ -4,6 +4,7 @@ using CleanTenant.Domain.Identity.Support;
 using CleanTenant.Domain.Identity.Tenants;
 using CleanTenant.Domain.Identity.Users;
 using CleanTenant.Domain.Localization;
+using CleanTenant.Domain.LookUp;
 using CleanTenant.Domain.LookUp.Banks;
 using CleanTenant.Domain.LookUp.BuildingTypes;
 using CleanTenant.Domain.LookUp.Districts;
@@ -84,6 +85,13 @@ public sealed class CatalogDbContext : IdentityDbContext<User, Role, Guid>, ICat
 
     /// <summary>v0.2.10 — Çok dilli string kaynakları.</summary>
     public DbSet<LocalizedResource> LocalizedResources => Set<LocalizedResource>();
+
+    // ── Muhasebe Modülü — Catalog (sistem geneli referans) ───────────────────
+    /// <summary>TDHP hesap planı şablonu — yeni şirket oluşturulurken klonlanır.</summary>
+    public DbSet<ChartOfAccountsTemplate> ChartOfAccountsTemplates => Set<ChartOfAccountsTemplate>();
+
+    /// <summary>TÜİK enflasyon endeksleri (TMS 29 enflasyon muhasebesi için).</summary>
+    public DbSet<InflationIndex> InflationIndexes => Set<InflationIndex>();
 
     /// <summary>
     /// URL kod havuzu (Infrastructure-only; <see cref="ICatalogDbContext"/>

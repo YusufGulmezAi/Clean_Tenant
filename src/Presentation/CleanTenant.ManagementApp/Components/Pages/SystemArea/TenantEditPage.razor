@@ -8,87 +8,45 @@
 @inject IStringLocalizer Loc
 @using CleanTenant.Application.Features.Catalog.Readers
 @using CleanTenant.Application.Features.Catalog.Tenants
-@using CleanTenant.SharedKernel.Context
 @using CleanTenant.ManagementApp.Components.Shared
 
 <PageTitle>@Loc["Tenants.Edit.PageTitle"]</PageTitle>
 
-@*
-    v0.2.4.b.3 — Yönetim düzenleme (Sistem operatör için).
-    v0.2.10.e.4 — Tenants.Edit.* anahtarlarıyla lokalize edildi.
-    v0.2.12    — MudTabs: Genel + Kullanıcılar sekmesi eklendi.
-*@
-
-<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
-    <MudBreadcrumbs Items="_breadcrumbs" Class="mb-4" />
-
-    @if (_unauthorized)
-    {
-        <MudAlert Severity="Severity.Warning">
-            @Loc["Tenants.List.UnauthorizedSystem"]
-        </MudAlert>
-    }
-    else if (_loading)
-    {
-        <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
-    }
-    else if (_notFound)
-    {
-        <MudAlert Severity="Severity.Error">
-            @Loc["Tenants.Edit.NotFound", UrlCode]
-        </MudAlert>
-    }
-    else
-    {
-        <MudText Typo="Typo.h5" Class="mb-1">@Loc["Tenants.Edit.Title"]</MudText>
-        <MudText Typo="Typo.caption" Color="Color.Default" Class="mb-4">
-            @Loc["Tenants.Edit.UrlCodeLabel"] <code>@_urlCode</code>
-        </MudText>
-
-        <MudTabs Outlined="true"
-                 Position="Position.Top"
-                 Rounded="false"
-                 Border="true"
-                 KeepPanelsAlive="true"
-                 PanelClass="pa-0">
-
-            @* ── Genel ── *@
-            <MudTabPanel Text="@Loc["Tenants.Edit.Tab.General"].Value"
-                         Icon="@Icons.Material.Filled.Info">
-                <div class="pa-3">
-                    <TenantForm Model="_model"
-                                Mode="TenantFormMode.Edit"
-                                OnValidSubmit="@SubmitAsync"
-                                IsSubmitting="@_busy"
-                                SubmitButtonText="@Loc["Tenants.Edit.SubmitButton"].Value" />
-                </div>
-            </MudTabPanel>
-
-            @* ── Kullanıcılar ── *@
-            <MudTabPanel Text="@Loc["Tenants.Edit.Tab.Users"].Value"
-                         Icon="@Icons.Material.Filled.People">
-                <div class="pa-3">
-                    <UserListPanel Scope="ScopeLevel.Tenant"
-                                   TenantId="@_tenantId" />
-                </div>
-            </MudTabPanel>
-
-        </MudTabs>
-    }
-</MudContainer>
+@if (_unauthorized)
+{
+    <MudAlert Severity="Severity.Warning">
+        @Loc["Tenants.List.UnauthorizedSystem"]
+    </MudAlert>
+}
+else if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else if (_notFound)
+{
+    <MudAlert Severity="Severity.Error">
+        @Loc["Tenants.Edit.NotFound", UrlCode]
+    </MudAlert>
+}
+else
+{
+    <TenantForm Model="_model"
+                Mode="TenantFormMode.Edit"
+                OnValidSubmit="@SubmitAsync"
+                IsSubmitting="@_busy"
+                SubmitButtonText="@Loc["Tenants.Edit.SubmitButton"].Value"
+                CancelHref="/system/tenants" />
+}
 
 @code {
     [Parameter] public string UrlCode { get; set; } = string.Empty;
 
     private Guid _tenantId;
     private TenantFormModel _model = new();
-    private string _urlCode = string.Empty;
     private bool _loading = true;
     private bool _notFound;
     private bool _busy;
     private bool _unauthorized;
-
-    private List<BreadcrumbItem> _breadcrumbs = [];
 
     protected override async Task OnInitializedAsync()
     {
@@ -112,13 +70,6 @@
 
         _tenantId = detail.Id;
         _model = MapToFormModel(detail);
-        _urlCode = detail.UrlCode;
-        _breadcrumbs =
-        [
-            new(Loc["Nav.Tenants"].Value, "/system/tenants"),
-            new(detail.Name, null, disabled: true),
-            new(Loc["Common.Edit"].Value, null, disabled: true),
-        ];
         _loading = false;
     }
 

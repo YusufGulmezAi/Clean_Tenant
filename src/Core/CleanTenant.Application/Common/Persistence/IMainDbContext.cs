@@ -1,3 +1,4 @@
+using CleanTenant.Domain.Tenant.Accounting;
 using CleanTenant.Domain.Tenant.BuildingSchema;
 using CleanTenant.Domain.Tenant.Companies;
 using Microsoft.EntityFrameworkCore;
@@ -22,7 +23,10 @@ public interface IMainDbContext
     /// <summary>Şirket (Site) kayıtları (tenant-scoped).</summary>
     DbSet<Company> Companies { get; }
 
-    /// <summary>Ada (Block) kayıtları — yapı şeması 1. seviye.</summary>
+    /// <summary>Ada (Land) kayıtları — yapı şeması 1. seviye.</summary>
+    DbSet<Land> Lands { get; }
+
+    /// <summary>Yapı blok/kule kayıtları — yapı şeması 4. seviye (opsiyonel).</summary>
     DbSet<Block> Blocks { get; }
 
     /// <summary>Parsel kayıtları — yapı şeması 2. seviye.</summary>
@@ -33,6 +37,40 @@ public interface IMainDbContext
 
     /// <summary>Bağımsız bölüm (Unit) kayıtları — yapı şeması 4. seviye.</summary>
     DbSet<Unit> Units { get; }
+
+    // ── Muhasebe Modülü ──────────────────────────────────────────────────────
+    /// <summary>Hesap kodları (TDHP 3-kademeli hiyerarşi).</summary>
+    DbSet<AccountCode> AccountCodes { get; }
+
+    /// <summary>Maliyet merkezleri.</summary>
+    DbSet<CostCenter> CostCenters { get; }
+
+    /// <summary>Mali yıllar.</summary>
+    DbSet<FiscalYear> FiscalYears { get; }
+
+    /// <summary>Muhasebe dönemleri (aylık).</summary>
+    DbSet<AccountingPeriod> AccountingPeriods { get; }
+
+    /// <summary>Yevmiye fişleri.</summary>
+    DbSet<JournalEntry> JournalEntries { get; }
+
+    /// <summary>Yevmiye satırları.</summary>
+    DbSet<JournalLine> JournalLines { get; }
+
+    /// <summary>Fiş sıra numarası sayaçları.</summary>
+    DbSet<EntrySequence> EntrySequences { get; }
+
+    /// <summary>Muhasebe banka hesapları (LookUp.BankAccount'tan bağımsız).</summary>
+    DbSet<BankAccount> AccountingBankAccounts { get; }
+
+    /// <summary>Fatura kayıtları (gelen/giden).</summary>
+    DbSet<Invoice> Invoices { get; }
+
+    /// <summary>Bütçe kalemleri (dönem + hesap kodu granülaritesi).</summary>
+    DbSet<Budget> Budgets { get; }
+
+    /// <summary>Şirket muhasebe yapılandırmaları.</summary>
+    DbSet<AccountingSettings> AccountingSettings { get; }
 
     /// <summary>Bekleyen değişiklikleri persist eder.</summary>
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);

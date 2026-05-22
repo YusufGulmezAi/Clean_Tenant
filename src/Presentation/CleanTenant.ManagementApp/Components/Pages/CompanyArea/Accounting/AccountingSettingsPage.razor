@@ -1,0 +1,208 @@
+@page "/company/accounting/settings"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject AuthenticationStateProvider AuthProvider
+@inject MediatR.IMediator Mediator
+@inject ISnackbar Snackbar
+@inject IStringLocalizer Loc
+@using CleanTenant.SharedKernel.Common.Results
+@using CleanTenant.Application.Features.Main.Accounting.AccountingSettings
+@using CleanTenant.Domain.Tenant.Accounting.Enums
+
+<PageTitle>Muhasebe Ayarları</PageTitle>
+
+@if (_unauthorized)
+{
+    <MudAlert Severity="Severity.Warning" Class="my-3">
+        Bu sayfaya erişim yetkiniz bulunmuyor. Şirket kapsamında giriş yapınız.
+    </MudAlert>
+}
+else if (!_initialized)
+{
+    <MudText Typo="Typo.h6" Class="my-3">Yükleniyor...</MudText>
+}
+else
+{
+    <MudText Typo="Typo.h5" Class="mb-4">Muhasebe Ayarları</MudText>
+
+    @if (_settings is null || !_settings.IsActivated)
+    {
+        <MudAlert Severity="Severity.Info" Class="mb-4">
+            Şirket için muhasebe henüz aktifleştirilmemiş.
+            Aktifleştirme işlemi hesap planını (TDHP) ve cari takvim yılı için varsayılan mali yılı otomatik oluşturur.
+        </MudAlert>
+
+        <div class="d-flex justify-center mt-6">
+            <MudButton Color="Color.Primary" Variant="Variant.Filled"
+                       Size="Size.Large"
+                       StartIcon="@Icons.Material.Filled.AccountBalance"
+                       OnClick="@ActivateAsync"
+                       Disabled="@_activating">
+                @if (_activating)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                }
+                Muhasebeyi Aktifleştir
+            </MudButton>
+        </div>
+    }
+    else
+    {
+        <MudPaper Class="pa-4" Elevation="1">
+            <MudAlert Severity="Severity.Success" Dense="true" Class="mb-4">
+                Muhasebe modülü aktif. Aktivasyon ayarı değiştirilemez.
+            </MudAlert>
+
+            <MudGrid Spacing="3">
+                <MudItem xs="12" sm="6">
+                    <MudTextField Value="@(_settings.DefaultCurrency)"
+                                  Label="Varsayılan Para Birimi"
+                                  ReadOnly="true"
+                                  HelperText="Aktivasyon sırasında belirlenir, değiştirilemez." />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="VatPeriod" @bind-Value="_form.VatPeriod" Label="KDV Periyodu">
+                        @foreach (VatPeriod p in Enum.GetValues<VatPeriod>())
+                        {
+                            <MudSelectItem Value="p">@GetVatPeriodLabel(p)</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudSwitch T="bool" @bind-Value="_form.RequireApproval"
+                               Label="Çift İmza (Dual-Control) Onayı"
+                               Color="Color.Primary" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudSwitch T="bool" @bind-Value="_form.EDefterEnabled"
+                               Label="e-Defter Etkin"
+                               Color="Color.Primary" />
+                </MudItem>
+            </MudGrid>
+
+            <div class="d-flex gap-2 mt-4">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                           OnClick="@SaveAsync" Disabled="@_saving">
+                    @if (_saving)
+                    {
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                    }
+                    Kaydet
+                </MudButton>
+            </div>
+        </MudPaper>
+    }
+}
+
+@code {
+    private Guid _companyId;
+    private Guid? _tenantId;
+    private bool _unauthorized;
+    private bool _initialized;
+    private bool _saving;
+    private bool _activating;
+
+    private AccountingSettingsDto? _settings;
+    private SettingsForm _form = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user?.Identity?.IsAuthenticated != true) { _unauthorized = true; _initialized = true; return; }
+        var scope = user.FindFirst("scope")?.Value;
+        if (!string.Equals(scope, "Company", StringComparison.OrdinalIgnoreCase)) { _unauthorized = true; _initialized = true; return; }
+        if (user.FindFirst("company_id") is { Value: var cid } && Guid.TryParseExact(cid, "N", out var cGuid))
+            _companyId = cGuid;
+        else { _unauthorized = true; _initialized = true; return; }
+        if (user.FindFirst("tenant_id") is { Value: var tid } && Guid.TryParseExact(tid, "N", out var tGuid))
+            _tenantId = tGuid;
+        await LoadDataAsync();
+        _initialized = true;
+    }
+
+    private async Task LoadDataAsync()
+    {
+        var result = await Mediator.Send(new GetAccountingSettingsQuery(_companyId));
+        if (result.IsSuccess && result.Value is { } s)
+        {
+            _settings = s;
+            _form = new SettingsForm
+            {
+                RequireApproval = s.RequireApproval,
+                VatPeriod = s.VatPeriod,
+                EDefterEnabled = s.EDefterEnabled
+            };
+        }
+        // IsActivated false ise veya henüz kayıt yoksa _settings null kalır
+    }
+
+    private async Task ActivateAsync()
+    {
+        if (_tenantId is null)
+        {
+            Snackbar.Add("Kiracı bilgisi bulunamadı.", Severity.Error);
+            return;
+        }
+
+        _activating = true;
+        try
+        {
+            var result = await Mediator.Send(new ActivateAccountingCommand(_companyId, _tenantId.Value));
+            if (result.IsFailure)
+            {
+                Snackbar.Add(result.FirstError.Message, Severity.Error);
+                return;
+            }
+
+            Snackbar.Add("Muhasebe modülü başarıyla aktifleştirildi.", Severity.Success);
+            await LoadDataAsync();
+        }
+        finally
+        {
+            _activating = false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_settings is null) return;
+
+        _saving = true;
+        try
+        {
+            var result = await Mediator.Send(new UpdateAccountingSettingsCommand(
+                _companyId,
+                _form.RequireApproval,
+                _settings.DefaultCurrency,
+                _form.VatPeriod,
+                _form.EDefterEnabled));
+
+            if (result.IsFailure)
+            {
+                Snackbar.Add(result.FirstError.Message, Severity.Error);
+                return;
+            }
+
+            Snackbar.Add("Muhasebe ayarları kaydedildi.", Severity.Success);
+            await LoadDataAsync();
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private static string GetVatPeriodLabel(VatPeriod p) => p switch
+    {
+        VatPeriod.Monthly => "Aylık",
+        VatPeriod.Quarterly => "3 Aylık",
+        _ => p.ToString()
+    };
+
+    private class SettingsForm
+    {
+        public bool RequireApproval { get; set; }
+        public VatPeriod VatPeriod { get; set; } = VatPeriod.Monthly;
+        public bool EDefterEnabled { get; set; }
+    }
+}

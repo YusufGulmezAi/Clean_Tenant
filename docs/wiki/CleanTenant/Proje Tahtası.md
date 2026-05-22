@@ -1,5 +1,7 @@
 ---
+
 kanban-plugin: board
+
 ---
 
 ## 🗂️ Backlog
@@ -15,9 +17,11 @@ kanban-plugin: board
 - [ ] **Redis pub-sub localization invalidation** — Multi-instance için (v0.3+ planı)
 - [ ] **ADR-005** — Şifre sıfırlama akışı karar belgesi (challenge-store vs. OTP)
 
+
 ## 🔄 Devam Ediyor
 
-*(şu an boş)*
+- [ ] asa
+
 
 ## ✅ Tamamlandı
 
@@ -36,3 +40,11 @@ kanban-plugin: board
 - [x] **v0.2.5** Permission/Role CRUD + WebApi
 - [x] **v0.2.1–v0.2.4** ManagementApp Shell + Auth UI + Company CRUD
 
+
+
+
+%% kanban:settings
+```
+{"kanban-plugin":"board"}
+```
+%%

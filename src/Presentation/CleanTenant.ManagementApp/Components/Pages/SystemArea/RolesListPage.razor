@@ -48,6 +48,7 @@ else
                Items="@_items"
                SearchPlaceholder="@Loc["Roles.List.Search"]"
                SearchableFields="@(row => new[] { row.Name, row.Description ?? "" })"
+               ExportTitle="@Loc["Roles.SystemList.ExportTitle"].Value"
                Filterable="true">
         <Columns>
             <PropertyColumn T="RoleListItem" TProperty="string" Property="@(r => r.Name)" Title="@Loc["Roles.List.Col.Name"].Value" />

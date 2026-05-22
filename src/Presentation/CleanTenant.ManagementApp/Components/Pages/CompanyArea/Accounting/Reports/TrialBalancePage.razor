@@ -1,0 +1,177 @@
+@page "/company/accounting/reports/trial-balance"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject AuthenticationStateProvider AuthProvider
+@inject MediatR.IMediator Mediator
+@inject ISnackbar Snackbar
+@inject IStringLocalizer Loc
+@using CleanTenant.SharedKernel.Common.Results
+@using CleanTenant.Application.Features.Main.Accounting.Reports
+@using CleanTenant.Application.Features.Main.Accounting.Readers
+@using CleanTenant.Application.Features.Main.Accounting.FiscalYears
+@using CleanTenant.Application.Features.Main.Accounting.AccountCodes
+@using CleanTenant.Domain.Tenant.Accounting.Enums
+
+<PageTitle>Mizan</PageTitle>
+
+@if (_unauthorized)
+{
+    <MudAlert Severity="Severity.Warning" Class="my-3">
+        Bu sayfaya erişim yetkiniz bulunmuyor. Şirket kapsamında giriş yapınız.
+    </MudAlert>
+}
+else if (!_initialized)
+{
+    <MudText Typo="Typo.h6" Class="my-3">Yükleniyor...</MudText>
+}
+else
+{
+    <MudText Typo="Typo.h5" Class="mb-4">Mizan</MudText>
+
+    <MudPaper Class="pa-4 mb-4" Elevation="1">
+        <MudGrid Spacing="2">
+            <MudItem xs="12" sm="6">
+                <MudSelect T="FiscalYearListItem?" @bind-Value="_selectedYear"
+                           Label="Mali Yıl"
+                           AnchorOrigin="Origin.BottomLeft"
+                           Required="true">
+                    @foreach (var fy in _fiscalYears)
+                    {
+                        <MudSelectItem T="FiscalYearListItem?" Value="fy">@fy.Label</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="3">
+                <MudSelect T="int?" @bind-Value="_selectedMonth"
+                           Label="Ay (boş = tüm yıl)"
+                           Clearable="true"
+                           AnchorOrigin="Origin.BottomLeft">
+                    @for (int m = 1; m <= 12; m++)
+                    {
+                        var month = m;
+                        <MudSelectItem T="int?" Value="@((int?)month)">@month. Ay</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="3" Class="d-flex align-end">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                           FullWidth="true"
+                           Disabled="@(_loading || _selectedYear is null)"
+                           OnClick="@LoadReportAsync">
+                    Raporu Görüntüle
+                </MudButton>
+            </MudItem>
+        </MudGrid>
+        @if (_loading)
+        {
+            <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="mt-3" />
+        }
+    </MudPaper>
+
+    @if (_hasResult)
+    {
+        <MudStack Row="true" Spacing="2" Class="mb-2">
+            <MudButton StartIcon="@Icons.Material.Filled.PictureAsPdf"
+                       Color="Color.Error" Variant="Variant.Outlined"
+                       Disabled="true">PDF</MudButton>
+            <MudButton StartIcon="@Icons.Material.Filled.TableChart"
+                       Color="Color.Success" Variant="Variant.Outlined"
+                       Disabled="true">Excel</MudButton>
+        </MudStack>
+
+        @if (_report is null || _report.Lines.Count == 0)
+        {
+            <MudAlert Severity="Severity.Info">
+                Rapor verisi bulunamadı. (Faz 6 implementasyonuyla tamamlanacak)
+            </MudAlert>
+        }
+        else
+        {
+            <MudTable Items="@_report.Lines" Hover="true" Striped="true" Bordered="true" Dense="true">
+                <HeaderContent>
+                    <MudTh>Hesap Kodu</MudTh>
+                    <MudTh>Hesap Adı</MudTh>
+                    <MudTh Style="text-align:right">Borç</MudTh>
+                    <MudTh Style="text-align:right">Alacak</MudTh>
+                    <MudTh Style="text-align:right">Bakiye</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Hesap Kodu">
+                        <MudText Typo="Typo.body2" Style="font-family:monospace">@context.AccountCode</MudText>
+                    </MudTd>
+                    <MudTd DataLabel="Hesap Adı">@context.AccountName</MudTd>
+                    <MudTd DataLabel="Borç" Style="text-align:right">@context.Debit.ToString("N2")</MudTd>
+                    <MudTd DataLabel="Alacak" Style="text-align:right">@context.Credit.ToString("N2")</MudTd>
+                    <MudTd DataLabel="Bakiye" Style="text-align:right">
+                        <MudText Color="@BalanceColor(context.Balance)">
+                            @context.Balance.ToString("N2")
+                        </MudText>
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
+    }
+}
+
+@code {
+    private Guid _companyId;
+    private Guid? _tenantId;
+    private bool _unauthorized;
+    private bool _initialized;
+    private bool _loading;
+    private bool _hasResult;
+
+    private IReadOnlyList<FiscalYearListItem> _fiscalYears = [];
+    private FiscalYearListItem? _selectedYear;
+    private int? _selectedMonth;
+    private TrialBalanceReport? _report;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user?.Identity?.IsAuthenticated != true) { _unauthorized = true; _initialized = true; return; }
+        var scope = user.FindFirst("scope")?.Value;
+        if (!string.Equals(scope, "Company", StringComparison.OrdinalIgnoreCase)) { _unauthorized = true; _initialized = true; return; }
+        if (user.FindFirst("company_id") is { Value: var cid } && Guid.TryParseExact(cid, "N", out var cGuid))
+            _companyId = cGuid;
+        else { _unauthorized = true; _initialized = true; return; }
+        if (user.FindFirst("tenant_id") is { Value: var tid } && Guid.TryParseExact(tid, "N", out var tGuid))
+            _tenantId = tGuid;
+
+        var fyResult = await Mediator.Send(new GetFiscalYearsQuery(_companyId));
+        if (fyResult.IsSuccess)
+        {
+            _fiscalYears = fyResult.Value!;
+            _selectedYear = _fiscalYears.FirstOrDefault(x => x.IsCurrentYear) ?? _fiscalYears.FirstOrDefault();
+        }
+
+        _initialized = true;
+    }
+
+    private async Task LoadReportAsync()
+    {
+        if (_selectedYear is null) return;
+        _loading = true;
+        _hasResult = false;
+        StateHasChanged();
+
+        var result = await Mediator.Send(new GetTrialBalanceQuery(_companyId, _selectedYear.Id, _selectedMonth));
+
+        if (result.IsFailure)
+        {
+            Snackbar.Add($"Rapor yüklenemedi: {result.FirstError.Message}", Severity.Error);
+        }
+        else
+        {
+            _report = result.Value;
+            _hasResult = true;
+        }
+
+        _loading = false;
+    }
+
+    private static Color BalanceColor(decimal balance) =>
+        balance > 0 ? Color.Success :
+        balance < 0 ? Color.Error :
+        Color.Default;
+}

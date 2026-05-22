@@ -24,6 +24,12 @@ public sealed class Unit : BaseEntity, IHasUrlCode, ITenantScoped
     /// <summary>Bağlı olduğu Yapı.</summary>
     public Guid BuildingId { get; set; }
 
+    /// <summary>
+    /// Bağlı olduğu Blok/Kule (opsiyonel). Null ise BB doğrudan Building'e bağlıdır.
+    /// Null değilse, bu Block'un BuildingId'si ile Unit'in BuildingId'si aynı olmalıdır.
+    /// </summary>
+    public Guid? BlockId { get; set; }
+
     /// <summary>Bağımsız bölüm numarası (örn. "1", "2A", "B-05").</summary>
     public string Number { get; set; } = string.Empty;
 
@@ -36,11 +42,17 @@ public sealed class Unit : BaseEntity, IHasUrlCode, ITenantScoped
     /// <summary>Net kullanım alanı (m²), iki ondalık hassasiyet.</summary>
     public decimal SquareMeters { get; set; }
 
+    /// <summary>Brüt kullanım alanı (m²), iki ondalık hassasiyet. Bütçe dağıtımında kullanılır.</summary>
+    public decimal GrossSquareMeters { get; set; }
+
     /// <summary>
     /// Arsa payı (pay değeri). Payda = yapıdaki tüm Unit'lerin LandShare toplamı.
     /// Örn: 15 pay / 1000 toplam → arsa payı 15/1000.
     /// </summary>
     public int LandShare { get; set; }
+
+    /// <summary>Oda sayısı (salon hariç). Örn: 3+1 daire için 3.</summary>
+    public int RoomCount { get; set; }
 
     /// <summary>Balkon, teras gibi tahsis alanı (m²); opsiyonel.</summary>
     public decimal? AllocatedArea { get; set; }
@@ -59,4 +71,7 @@ public sealed class Unit : BaseEntity, IHasUrlCode, ITenantScoped
 
     /// <summary>Bu Unit'in ait olduğu Building (navigation property).</summary>
     public Building Building { get; set; } = null!;
+
+    /// <summary>Bağlı olduğu Blok/Kule (opsiyonel navigation property).</summary>
+    public Block? Block { get; set; }
 }

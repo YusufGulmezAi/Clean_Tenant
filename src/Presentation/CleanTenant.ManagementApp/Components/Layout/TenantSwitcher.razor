@@ -1,4 +1,4 @@
-@inject CleanTenant.Application.Common.Persistence.ICatalogDbContext Catalog
+@inject IDbContextFactory<CleanTenant.Infrastructure.Persistence.Catalog.CatalogDbContext> CatalogFactory
 @inject CleanTenant.Application.Common.Caching.ICacheStore Cache
 @inject CleanTenant.Application.Features.Catalog.Readers.ITenantCatalogReader TenantReader
 @inject CleanTenant.Application.Features.Main.Readers.IMainCatalogReader CompanyReader
@@ -225,8 +225,8 @@
 
     private async Task<UserContextView> LoadContextsAsync(CancellationToken ct)
     {
-        // UserRoleAssignments — per-user küçük sorgu; cache'in factory'i.
-        var assignments = await Catalog.UserRoleAssignments
+        await using var db = await CatalogFactory.CreateDbContextAsync(ct);
+        var assignments = await db.UserRoleAssignments
             .AsNoTracking()
             .Where(a => a.UserId == _userId && a.IsActive)
             .Select(a => new { a.ScopeLevel, a.TenantId, a.CompanyId })

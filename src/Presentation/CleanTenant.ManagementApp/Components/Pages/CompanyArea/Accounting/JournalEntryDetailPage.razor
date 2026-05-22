@@ -1,0 +1,423 @@
+@page "/company/accounting/journal/{EntryId:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject AuthenticationStateProvider AuthProvider
+@inject MediatR.IMediator Mediator
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject IStringLocalizer Loc
+@inject NavigationManager Nav
+@using CleanTenant.SharedKernel.Common.Results
+@using CleanTenant.Application.Features.Main.Accounting.JournalEntries
+@using CleanTenant.Domain.Tenant.Accounting.Enums
+
+<PageTitle>Yevmiye Fişi Detayı</PageTitle>
+
+@if (_unauthorized)
+{
+    <MudAlert Severity="Severity.Warning" Class="my-3">
+        Bu sayfaya erişim yetkiniz bulunmamaktadır.
+    </MudAlert>
+}
+else if (!_initialized)
+{
+    <MudText Typo="Typo.h6" Class="my-3">Yükleniyor...</MudText>
+}
+else if (_entry is null)
+{
+    <MudAlert Severity="Severity.Error" Class="my-3">
+        Fiş bulunamadı.
+    </MudAlert>
+}
+else
+{
+    <div class="d-flex align-center mb-4 gap-2">
+        <MudIconButton Icon="@Icons.Material.Filled.ArrowBack"
+                       OnClick="@(() => Nav.NavigateTo("/company/accounting/journal"))" />
+        <MudText Typo="Typo.h5">Yevmiye Fişi</MudText>
+    </div>
+
+    @* Fiş Başlık Bilgileri *@
+    <MudPaper Class="pa-4 mb-4" Elevation="1">
+        <div class="d-flex justify-space-between align-center mb-3">
+            <div class="d-flex align-center gap-3">
+                <MudText Typo="Typo.h5" Style="font-family:monospace">@_entry.EntryNumber</MudText>
+                <MudChip T="string"
+                         Color="@GetStatusColor(_entry.Status)"
+                         Size="Size.Medium">
+                    @GetStatusLabel(_entry.Status)
+                </MudChip>
+            </div>
+            <MudStack Row="true" Spacing="2">
+                @if (_entry.Status == JournalEntryStatus.Draft)
+                {
+                    <MudButton Color="Color.Success"
+                               Variant="Variant.Filled"
+                               StartIcon="@Icons.Material.Filled.CheckCircle"
+                               Disabled="@_processing"
+                               OnClick="@PostAsync">
+                        Kesinleştir
+                    </MudButton>
+                    <MudButton Color="Color.Warning"
+                               Variant="Variant.Outlined"
+                               StartIcon="@Icons.Material.Filled.Send"
+                               Disabled="@_processing"
+                               OnClick="@SubmitForApprovalAsync">
+                        Onaya Gönder
+                    </MudButton>
+                }
+                @if (_entry.Status == JournalEntryStatus.PendingApproval)
+                {
+                    <MudButton Color="Color.Success"
+                               Variant="Variant.Filled"
+                               StartIcon="@Icons.Material.Filled.ThumbUp"
+                               Disabled="@_processing"
+                               OnClick="@ApproveAsync">
+                        Onayla
+                    </MudButton>
+                    <MudButton Color="Color.Error"
+                               Variant="Variant.Outlined"
+                               StartIcon="@Icons.Material.Filled.ThumbDown"
+                               Disabled="@_processing"
+                               OnClick="@RejectAsync">
+                        Reddet
+                    </MudButton>
+                }
+                @if (_entry.Status == JournalEntryStatus.Posted)
+                {
+                    <MudButton Color="Color.Error"
+                               Variant="Variant.Outlined"
+                               StartIcon="@Icons.Material.Filled.Undo"
+                               Disabled="@_processing"
+                               OnClick="@(() => _showVoidForm = true)">
+                        İptal (Ters Fiş)
+                    </MudButton>
+                }
+            </MudStack>
+        </div>
+
+        <MudDivider Class="mb-3" />
+
+        <MudGrid Spacing="2">
+            <MudItem xs="12" sm="6" md="3">
+                <MudText Typo="Typo.caption" Color="Color.Secondary">Tarih</MudText>
+                <MudText Typo="Typo.body1">@_entry.EntryDate.ToString("dd.MM.yyyy")</MudText>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudText Typo="Typo.caption" Color="Color.Secondary">Fiş Tipi</MudText>
+                <MudText Typo="Typo.body1">@GetEntryTypeLabel(_entry.EntryType)</MudText>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudText Typo="Typo.caption" Color="Color.Secondary">Toplam Borç</MudText>
+                <MudText Typo="Typo.body1" Style="font-family:monospace">@_entry.TotalDebit.ToString("N2") TL</MudText>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudText Typo="Typo.caption" Color="Color.Secondary">Toplam Alacak</MudText>
+                <MudText Typo="Typo.body1" Style="font-family:monospace">@_entry.TotalCredit.ToString("N2") TL</MudText>
+            </MudItem>
+            <MudItem xs="12">
+                <MudText Typo="Typo.caption" Color="Color.Secondary">Açıklama</MudText>
+                <MudText Typo="Typo.body1">@_entry.Description</MudText>
+            </MudItem>
+            @if (!string.IsNullOrWhiteSpace(_entry.Reference))
+            {
+                <MudItem xs="12" sm="6">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Referans</MudText>
+                    <MudText Typo="Typo.body1" Style="font-family:monospace">@_entry.Reference</MudText>
+                </MudItem>
+            }
+            @if (_entry.PostedAt.HasValue)
+            {
+                <MudItem xs="12" sm="6">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Kesinleştirme Tarihi</MudText>
+                    <MudText Typo="Typo.body2">@_entry.PostedAt.Value.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</MudText>
+                </MudItem>
+            }
+            @if (!string.IsNullOrWhiteSpace(_entry.VoidReason))
+            {
+                <MudItem xs="12">
+                    <MudAlert Severity="Severity.Error" Icon="@Icons.Material.Filled.Cancel">
+                        <b>İptal Gerekçesi:</b> @_entry.VoidReason
+                    </MudAlert>
+                </MudItem>
+            }
+            @if (_entry.OriginalEntryId.HasValue)
+            {
+                <MudItem xs="12">
+                    <MudAlert Severity="Severity.Info">
+                        Bu fiş bir ters fiştir.
+                        <MudLink OnClick="@(() => Nav.NavigateTo($"/company/accounting/journal/{_entry.OriginalEntryId}"))">
+                            Orijinal fişe git
+                        </MudLink>
+                    </MudAlert>
+                </MudItem>
+            }
+        </MudGrid>
+    </MudPaper>
+
+    @* Void Inline Form *@
+    @if (_showVoidForm)
+    {
+        <MudPaper Class="pa-4 mb-4" Elevation="2">
+            <MudText Typo="Typo.h6" Class="mb-3">İptal Gerekçesi</MudText>
+            <MudAlert Severity="Severity.Warning" Class="mb-3">
+                VUK gereği, fişin iptali için gerekçe girilmesi zorunludur.
+                Orijinal fiş silinmez; borç/alacak satırları ters çevrilmiş yeni bir fiş oluşturulur.
+            </MudAlert>
+            <MudTextField @bind-Value="_voidReason"
+                          Label="İptal Gerekçesi"
+                          Required="true"
+                          Lines="3"
+                          MaxLength="500"
+                          Placeholder="Örn: Hatalı hesap kodu nedeniyle düzeltme..." />
+            <div class="d-flex gap-2 mt-3">
+                <MudButton Variant="Variant.Filled" Color="Color.Error"
+                           Disabled="@(string.IsNullOrWhiteSpace(_voidReason) || _processing)"
+                           OnClick="@VoidAsync">
+                    @(_processing ? "İşleniyor..." : "Fişi İptal Et")
+                </MudButton>
+                <MudButton Variant="Variant.Text"
+                           OnClick="@(() => { _showVoidForm = false; _voidReason = ""; })">
+                    Vazgeç
+                </MudButton>
+            </div>
+        </MudPaper>
+    }
+
+    @* Reddet Inline Form *@
+    @if (_showRejectForm)
+    {
+        <MudPaper Class="pa-4 mb-4" Elevation="2">
+            <MudText Typo="Typo.h6" Class="mb-3">Red Gerekçesi</MudText>
+            <MudTextField @bind-Value="_rejectionReason"
+                          Label="Red Gerekçesi (isteğe bağlı)"
+                          Lines="2"
+                          MaxLength="500"
+                          Placeholder="Red nedeni..." />
+            <div class="d-flex gap-2 mt-3">
+                <MudButton Variant="Variant.Filled" Color="Color.Error"
+                           Disabled="@_processing"
+                           OnClick="@ConfirmRejectAsync">
+                    @(_processing ? "İşleniyor..." : "Reddet")
+                </MudButton>
+                <MudButton Variant="Variant.Text"
+                           OnClick="@(() => { _showRejectForm = false; _rejectionReason = ""; })">
+                    Vazgeç
+                </MudButton>
+            </div>
+        </MudPaper>
+    }
+
+    @* Yevmiye Satırları *@
+    <MudPaper Class="pa-4" Elevation="1">
+        <MudText Typo="Typo.h6" Class="mb-3">Yevmiye Satırları</MudText>
+        <MudTable Items="@_entry.Lines" Dense="true" Striped="true" Bordered="true">
+            <HeaderContent>
+                <MudTh>Hesap Kodu</MudTh>
+                <MudTh>Açıklama</MudTh>
+                <MudTh Style="text-align:right">Borç</MudTh>
+                <MudTh Style="text-align:right">Alacak</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Hesap Kodu">
+                    <MudText Typo="Typo.body2" Style="font-family:monospace">
+                        @context.AccountCodeValue
+                    </MudText>
+                </MudTd>
+                <MudTd DataLabel="Açıklama">
+                    <MudText Typo="Typo.body2">@(context.Description ?? "—")</MudText>
+                </MudTd>
+                <MudTd DataLabel="Borç" Style="text-align:right">
+                    @if (context.Debit > 0)
+                    {
+                        <MudText Typo="Typo.body2" Style="font-family:monospace">
+                            @context.Debit.ToString("N2")
+                        </MudText>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Tertiary">—</MudText>
+                    }
+                </MudTd>
+                <MudTd DataLabel="Alacak" Style="text-align:right">
+                    @if (context.Credit > 0)
+                    {
+                        <MudText Typo="Typo.body2" Style="font-family:monospace">
+                            @context.Credit.ToString("N2")
+                        </MudText>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Tertiary">—</MudText>
+                    }
+                </MudTd>
+            </RowTemplate>
+            <FooterContent>
+                <MudTd colspan="2">
+                    <MudText Typo="Typo.body1"><b>TOPLAM</b></MudText>
+                </MudTd>
+                <MudTd Style="text-align:right">
+                    <MudText Typo="Typo.body1" Style="font-family:monospace">
+                        <b>@_entry.TotalDebit.ToString("N2")</b>
+                    </MudText>
+                </MudTd>
+                <MudTd Style="text-align:right">
+                    <MudText Typo="Typo.body1" Style="font-family:monospace">
+                        <b>@_entry.TotalCredit.ToString("N2")</b>
+                    </MudText>
+                </MudTd>
+            </FooterContent>
+        </MudTable>
+    </MudPaper>
+}
+
+@code {
+    [Parameter] public Guid EntryId { get; set; }
+
+    private Guid _companyId;
+    private Guid? _tenantId;
+    private bool _unauthorized;
+    private bool _initialized;
+    private bool _processing;
+
+    private JournalEntryDetail? _entry;
+
+    private bool _showVoidForm;
+    private string _voidReason = "";
+
+    private bool _showRejectForm;
+    private string _rejectionReason = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user?.Identity?.IsAuthenticated != true) { _unauthorized = true; _initialized = true; return; }
+        var scope = user.FindFirst("scope")?.Value;
+        if (!string.Equals(scope, "Company", StringComparison.OrdinalIgnoreCase)) { _unauthorized = true; _initialized = true; return; }
+        if (user.FindFirst("company_id") is { Value: var cid } && Guid.TryParseExact(cid, "N", out var cGuid))
+            _companyId = cGuid;
+        else { _unauthorized = true; _initialized = true; return; }
+        if (user.FindFirst("tenant_id") is { Value: var tid } && Guid.TryParseExact(tid, "N", out var tGuid))
+            _tenantId = tGuid;
+        await LoadAsync();
+        _initialized = true;
+    }
+
+    private async Task LoadAsync()
+    {
+        var result = await Mediator.Send(new GetJournalEntryDetailQuery(_companyId, EntryId));
+        if (result.IsSuccess)
+            _entry = result.Value;
+        else
+            Snackbar.Add(result.FirstError.Message, Severity.Error);
+    }
+
+    private async Task PostAsync()
+    {
+        _processing = true;
+        try
+        {
+            var result = await Mediator.Send(new PostJournalEntryCommand(_companyId, EntryId));
+            if (result.IsFailure) { Snackbar.Add(result.FirstError.Message, Severity.Error); return; }
+            Snackbar.Add("Fiş kesinleştirildi.", Severity.Success);
+            await LoadAsync();
+        }
+        finally { _processing = false; }
+    }
+
+    private async Task SubmitForApprovalAsync()
+    {
+        _processing = true;
+        try
+        {
+            var result = await Mediator.Send(new SubmitForApprovalCommand(_companyId, EntryId));
+            if (result.IsFailure) { Snackbar.Add(result.FirstError.Message, Severity.Error); return; }
+            Snackbar.Add("Fiş onaya gönderildi.", Severity.Success);
+            await LoadAsync();
+        }
+        finally { _processing = false; }
+    }
+
+    private async Task ApproveAsync()
+    {
+        _processing = true;
+        try
+        {
+            var result = await Mediator.Send(new ApproveJournalEntryCommand(_companyId, EntryId));
+            if (result.IsFailure) { Snackbar.Add(result.FirstError.Message, Severity.Error); return; }
+            Snackbar.Add("Fiş onaylandı ve kesinleştirildi.", Severity.Success);
+            await LoadAsync();
+        }
+        finally { _processing = false; }
+    }
+
+    private void RejectAsync()
+    {
+        _showRejectForm = true;
+    }
+
+    private async Task ConfirmRejectAsync()
+    {
+        _processing = true;
+        try
+        {
+            var result = await Mediator.Send(new RejectJournalEntryCommand(
+                _companyId,
+                EntryId,
+                string.IsNullOrWhiteSpace(_rejectionReason) ? null : _rejectionReason));
+            if (result.IsFailure) { Snackbar.Add(result.FirstError.Message, Severity.Error); return; }
+            Snackbar.Add("Fiş reddedildi (Taslak durumuna döndürüldü).", Severity.Warning);
+            _showRejectForm = false;
+            _rejectionReason = "";
+            await LoadAsync();
+        }
+        finally { _processing = false; }
+    }
+
+    private async Task VoidAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_voidReason) || _tenantId is null) return;
+        _processing = true;
+        try
+        {
+            var cmd = new VoidJournalEntryCommand(_companyId, _tenantId.Value, EntryId, _voidReason);
+            var result = await Mediator.Send(cmd);
+            if (result.IsFailure) { Snackbar.Add(result.FirstError.Message, Severity.Error); return; }
+            Snackbar.Add($"Fiş iptal edildi. Ters fiş: {result.Value!.EntryNumber}", Severity.Success);
+            _showVoidForm = false;
+            _voidReason = "";
+            await LoadAsync();
+        }
+        finally { _processing = false; }
+    }
+
+    private static Color GetStatusColor(JournalEntryStatus s) => s switch
+    {
+        JournalEntryStatus.Draft => Color.Default,
+        JournalEntryStatus.PendingApproval => Color.Warning,
+        JournalEntryStatus.Posted => Color.Success,
+        JournalEntryStatus.Voided => Color.Error,
+        _ => Color.Default
+    };
+
+    private static string GetStatusLabel(JournalEntryStatus s) => s switch
+    {
+        JournalEntryStatus.Draft => "Taslak",
+        JournalEntryStatus.PendingApproval => "Onay Bekliyor",
+        JournalEntryStatus.Posted => "Kesinleşmiş",
+        JournalEntryStatus.Voided => "İptal",
+        _ => s.ToString()
+    };
+
+    private static string GetEntryTypeLabel(EntryType t) => t switch
+    {
+        EntryType.Normal => "Normal",
+        EntryType.Opening => "Açılış",
+        EntryType.Closing => "Kapanış",
+        EntryType.Adjustment => "Mahsup",
+        EntryType.Transfer => "Virman",
+        EntryType.Correction => "Düzeltme",
+        EntryType.InflationAdjustment => "Enflasyon Düzeltmesi",
+        _ => t.ToString()
+    };
+}

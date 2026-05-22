@@ -14,42 +14,30 @@
     v0.2.10.e.4 — Roles.New.* anahtarlarıyla lokalize edildi.
 *@
 
-<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
-    <MudBreadcrumbs Items="_breadcrumbs" Class="mb-4" />
+@if (_unauthorized)
+{
+    <MudAlert Severity="Severity.Warning">
+        @Loc["Roles.List.UnauthorizedSystem"]
+    </MudAlert>
+}
+else
+{
+    <MudText Typo="Typo.h5" Class="mb-4">@Loc["Roles.New.Title"]</MudText>
 
-    @if (_unauthorized)
-    {
-        <MudAlert Severity="Severity.Warning">
-            @Loc["Roles.List.UnauthorizedSystem"]
-        </MudAlert>
-    }
-    else
-    {
-        <MudText Typo="Typo.h5" Class="mb-4">@Loc["Roles.New.Title"]</MudText>
-
-        <RoleForm Model="_model"
-                  OnSubmit="@SubmitAsync"
-                  IsSubmitting="@_busy"
-                  SubmitButtonText="@Loc["Roles.New.SubmitButton"]"
-                  CancelHref="/system/roles" />
-    }
-</MudContainer>
+    <RoleForm Model="_model"
+              OnSubmit="@SubmitAsync"
+              IsSubmitting="@_busy"
+              SubmitButtonText="@Loc["Roles.New.SubmitButton"]"
+              CancelHref="/system/roles" />
+}
 
 @code {
     private readonly RoleFormModel _model = new();
     private bool _busy;
     private bool _unauthorized;
 
-    private List<BreadcrumbItem> _breadcrumbs = [];
-
     protected override async Task OnInitializedAsync()
     {
-        _breadcrumbs =
-        [
-            new(Loc["Roles.List.Title"].Value, "/system/roles"),
-            new(Loc["Roles.New.Title"].Value, null, disabled: true),
-        ];
-
         var authState = await AuthProvider.GetAuthenticationStateAsync();
         var user = authState.User;
         _unauthorized = user?.Identity?.IsAuthenticated != true

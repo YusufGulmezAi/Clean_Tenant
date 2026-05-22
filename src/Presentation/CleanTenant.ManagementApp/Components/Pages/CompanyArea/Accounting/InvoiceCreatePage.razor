@@ -1,0 +1,344 @@
+@page "/company/accounting/invoices/new"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject AuthenticationStateProvider AuthProvider
+@inject MediatR.IMediator Mediator
+@inject ISnackbar Snackbar
+@inject IStringLocalizer Loc
+@inject NavigationManager Nav
+@using CleanTenant.SharedKernel.Common.Results
+@using CleanTenant.Application.Features.Main.Accounting.Invoices
+@using CleanTenant.Application.Features.Main.Accounting.AccountCodes
+@using CleanTenant.Application.Features.Main.Accounting.FiscalYears
+@using CleanTenant.Application.Features.Main.Accounting.Periods
+@using CleanTenant.Domain.Tenant.Accounting.Enums
+
+<PageTitle>Yeni Fatura</PageTitle>
+
+@if (_unauthorized)
+{
+    <MudAlert Severity="Severity.Warning" Class="my-3">
+        Bu sayfaya erişim yetkiniz bulunmuyor. Şirket kapsamında giriş yapınız.
+    </MudAlert>
+}
+else if (!_initialized)
+{
+    <MudText Typo="Typo.h6" Class="my-3">Yükleniyor...</MudText>
+}
+else
+{
+    <div class="d-flex align-center gap-2 mb-4">
+        <MudIconButton Icon="@Icons.Material.Filled.ArrowBack"
+                       OnClick="@(() => Nav.NavigateTo("/company/accounting/invoices"))" />
+        <MudText Typo="Typo.h5">Yeni Fatura</MudText>
+    </div>
+
+    <MudPaper Class="pa-4" Elevation="1">
+        <MudForm @ref="_invoiceForm">
+            <MudGrid Spacing="2">
+
+                <MudItem xs="12">
+                    <MudText Typo="Typo.subtitle1" Class="mb-1">Dönem Seçimi</MudText>
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="FiscalYearListItem?" Value="_selectedFiscalYear"
+                               Label="Mali Yıl" Required="true"
+                               ToStringFunc="@(fy => fy?.Label ?? "")"
+                               ValueChanged="@OnFiscalYearChanged">
+                        @foreach (var fy in _fiscalYears)
+                        {
+                            <MudSelectItem Value="fy">@fy.Label</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="PeriodListItem?" @bind-Value="_selectedPeriod"
+                               Label="Muhasebe Dönemi" Required="true"
+                               ToStringFunc="@(p => p is null ? "" : $"{GetMonthName(p.Month)} {p.Year}")"
+                               Disabled="@(_periods.Count == 0)">
+                        @foreach (var p in _periods)
+                        {
+                            <MudSelectItem Value="p">@GetMonthName(p.Month) @p.Year</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudDivider Class="my-2" />
+                    <MudText Typo="Typo.subtitle1" Class="mb-1">Fatura Bilgileri</MudText>
+                </MudItem>
+
+                <MudItem xs="12" sm="4">
+                    <MudTextField @bind-Value="_form.InvoiceNumber"
+                                  Label="Fatura Numarası"
+                                  Required="true"
+                                  MaxLength="50" />
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudDatePicker @bind-Date="_form.InvoiceDateDt"
+                                   Label="Fatura Tarihi"
+                                   DateFormat="dd.MM.yyyy"
+                                   Required="true" />
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudDatePicker @bind-Date="_form.DueDateDt"
+                                   Label="Vade Tarihi"
+                                   DateFormat="dd.MM.yyyy" />
+                </MudItem>
+
+                <MudItem xs="12" sm="4">
+                    <MudSelect T="InvoiceDirection" @bind-Value="_form.Direction" Label="Yön">
+                        @foreach (InvoiceDirection d in Enum.GetValues<InvoiceDirection>())
+                        {
+                            <MudSelectItem Value="d">@GetDirectionLabel(d)</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudTextField @bind-Value="_form.CounterpartyName"
+                                  Label="Karşı Taraf Adı"
+                                  Required="true"
+                                  MaxLength="200" />
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudTextField @bind-Value="_form.CounterpartyTaxId"
+                                  Label="Vergi No / TC Kimlik No"
+                                  MaxLength="20" />
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudDivider Class="my-2" />
+                    <MudText Typo="Typo.subtitle1" Class="mb-1">Hesap &amp; Tutar</MudText>
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="Guid?" @bind-Value="_form.AccountCodeId"
+                               Label="Muhasebe Hesabı"
+                               ToStringFunc="@(id => GetAccountLabel(id))">
+                        <MudSelectItem Value="@((Guid?)null)">— Seçiniz —</MudSelectItem>
+                        @foreach (var ac in _accountCodes)
+                        {
+                            <MudSelectItem Value="@((Guid?)ac.Id)">@ac.Code — @ac.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="3">
+                    <MudNumericField T="decimal" @bind-Value="_form.SubTotal"
+                                     Label="Ara Toplam (KDV Hariç)"
+                                     Format="N2"
+                                     Min="0" />
+                </MudItem>
+                <MudItem xs="12" sm="3">
+                    <MudSelect T="VatCategory" @bind-Value="_form.VatCategory" Label="KDV Oranı">
+                        @foreach (VatCategory c in Enum.GetValues<VatCategory>())
+                        {
+                            <MudSelectItem Value="c">@GetVatLabel(c)</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="3">
+                    <MudTextField Value="@(_form.VatAmount.ToString("N2") + " TL")"
+                                  Label="KDV Tutarı"
+                                  ReadOnly="true" />
+                </MudItem>
+                <MudItem xs="12" sm="3">
+                    <MudTextField Value="@(_form.TotalAmount.ToString("N2") + " TL")"
+                                  Label="Toplam"
+                                  ReadOnly="true" />
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_form.Notes"
+                                  Label="Notlar"
+                                  Lines="3"
+                                  MaxLength="1000" />
+                </MudItem>
+            </MudGrid>
+
+            <div class="d-flex gap-2 mt-4">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                           OnClick="@SaveAsync" Disabled="@_saving">
+                    @if (_saving)
+                    {
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                    }
+                    Kaydet
+                </MudButton>
+                <MudButton Variant="Variant.Text"
+                           OnClick="@(() => Nav.NavigateTo("/company/accounting/invoices"))">
+                    İptal
+                </MudButton>
+            </div>
+        </MudForm>
+    </MudPaper>
+}
+
+@code {
+    private Guid _companyId;
+    private Guid? _tenantId;
+    private bool _unauthorized;
+    private bool _initialized;
+    private bool _saving;
+
+    private IReadOnlyList<FiscalYearListItem> _fiscalYears = [];
+    private IReadOnlyList<PeriodListItem> _periods = [];
+    private IReadOnlyList<AccountCodeListItem> _accountCodes = [];
+
+    private FiscalYearListItem? _selectedFiscalYear;
+    private PeriodListItem? _selectedPeriod;
+
+    private MudForm? _invoiceForm;
+    private InvoiceForm _form = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user?.Identity?.IsAuthenticated != true) { _unauthorized = true; _initialized = true; return; }
+        var scope = user.FindFirst("scope")?.Value;
+        if (!string.Equals(scope, "Company", StringComparison.OrdinalIgnoreCase)) { _unauthorized = true; _initialized = true; return; }
+        if (user.FindFirst("company_id") is { Value: var cid } && Guid.TryParseExact(cid, "N", out var cGuid))
+            _companyId = cGuid;
+        else { _unauthorized = true; _initialized = true; return; }
+        if (user.FindFirst("tenant_id") is { Value: var tid } && Guid.TryParseExact(tid, "N", out var tGuid))
+            _tenantId = tGuid;
+        await LoadDataAsync();
+        _initialized = true;
+    }
+
+    private async Task LoadDataAsync()
+    {
+        var fyResult = await Mediator.Send(new GetFiscalYearsQuery(_companyId));
+        if (fyResult.IsSuccess) _fiscalYears = fyResult.Value!;
+
+        var acResult = await Mediator.Send(new GetAccountCodesQuery(_companyId, OnlyActive: true, OnlyDetail: true));
+        if (acResult.IsSuccess) _accountCodes = acResult.Value!;
+    }
+
+    private async Task OnFiscalYearChanged(FiscalYearListItem? fy)
+    {
+        _selectedFiscalYear = fy;
+        _selectedPeriod = null;
+        _periods = [];
+        if (fy is null) return;
+
+        var result = await Mediator.Send(new GetPeriodsQuery(_companyId, fy.Id));
+        if (result.IsSuccess)
+            _periods = result.Value!;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_invoiceForm is null) return;
+        await _invoiceForm.Validate();
+        if (!_invoiceForm.IsValid) return;
+
+        if (_selectedPeriod is null)
+        {
+            Snackbar.Add("Muhasebe dönemi seçilmedi.", Severity.Warning);
+            return;
+        }
+
+        if (_form.AccountCodeId is null)
+        {
+            Snackbar.Add("Muhasebe hesabı seçilmedi.", Severity.Warning);
+            return;
+        }
+
+        if (_tenantId is null)
+        {
+            Snackbar.Add("Kiracı bilgisi bulunamadı.", Severity.Error);
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            var cmd = new RegisterInvoiceCommand(
+                _companyId,
+                _tenantId.Value,
+                _selectedPeriod.Id,
+                _form.InvoiceNumber,
+                _form.InvoiceDate,
+                _form.DueDate,
+                _form.Direction,
+                _form.CounterpartyName,
+                _form.CounterpartyTaxId,
+                _form.AccountCodeId.Value,
+                _form.SubTotal,
+                _form.VatCategory,
+                _form.VatAmount,
+                _form.Notes);
+
+            var result = await Mediator.Send(cmd);
+            if (result.IsFailure)
+            {
+                Snackbar.Add(result.FirstError.Message, Severity.Error);
+                return;
+            }
+
+            Snackbar.Add("Fatura kaydedildi.", Severity.Success);
+            Nav.NavigateTo("/company/accounting/invoices");
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private string GetAccountLabel(Guid? id)
+    {
+        if (id is null) return "— Seçiniz —";
+        var ac = _accountCodes.FirstOrDefault(a => a.Id == id);
+        return ac is null ? id.ToString()! : $"{ac.Code} — {ac.Name}";
+    }
+
+    private static string GetVatLabel(VatCategory c) => c switch
+    {
+        VatCategory.NoVat => "%0 KDV Yok",
+        VatCategory.Vat1 => "%1 KDV",
+        VatCategory.Vat10 => "%10 KDV",
+        VatCategory.Vat20 => "%20 KDV",
+        _ => c.ToString()
+    };
+
+    private static string GetDirectionLabel(InvoiceDirection d) => d switch
+    {
+        InvoiceDirection.Incoming => "Gelen",
+        InvoiceDirection.Outgoing => "Giden",
+        _ => d.ToString()
+    };
+
+    private static string GetMonthName(int month) => month switch
+    {
+        1 => "Ocak", 2 => "Şubat", 3 => "Mart", 4 => "Nisan",
+        5 => "Mayıs", 6 => "Haziran", 7 => "Temmuz", 8 => "Ağustos",
+        9 => "Eylül", 10 => "Ekim", 11 => "Kasım", 12 => "Aralık",
+        _ => month.ToString()
+    };
+
+    private class InvoiceForm
+    {
+        public string InvoiceNumber { get; set; } = "";
+        public DateTime? InvoiceDateDt { get; set; } = DateTime.Today;
+        public DateTime? DueDateDt { get; set; }
+        public DateOnly InvoiceDate => DateOnly.FromDateTime(InvoiceDateDt ?? DateTime.Today);
+        public DateOnly? DueDate => DueDateDt.HasValue ? DateOnly.FromDateTime(DueDateDt.Value) : null;
+        public InvoiceDirection Direction { get; set; } = InvoiceDirection.Incoming;
+        public string CounterpartyName { get; set; } = "";
+        public string? CounterpartyTaxId { get; set; }
+        public Guid? AccountCodeId { get; set; }
+        public decimal SubTotal { get; set; }
+        public VatCategory VatCategory { get; set; } = VatCategory.Vat20;
+        public string? Notes { get; set; }
+
+        public decimal VatRate => VatCategory switch
+        {
+            VatCategory.Vat1 => 0.01m,
+            VatCategory.Vat10 => 0.10m,
+            VatCategory.Vat20 => 0.20m,
+            _ => 0m
+        };
+        public decimal VatAmount => Math.Round(SubTotal * VatRate, 2);
+        public decimal TotalAmount => SubTotal + VatAmount;
+    }
+}

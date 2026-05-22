@@ -53,28 +53,22 @@
         var systemTenantsLabel = Loc["NavMenu.Tenants"].Value;
         var systemCompaniesLabel = Loc["NavMenu.Companies"].Value;
 
-        var systemMgmtChildren = new[] { systemTenantsLabel, systemCompaniesLabel };
-        @if (AnyMatch(systemMgmtChildren))
+        @if (Matches(systemTenantsLabel))
         {
-            <MudNavGroup Title="@systemTenantsLabel" Icon="@Icons.Material.Filled.Domain" Expanded="@IsSearching">
-                @if (Matches(systemTenantsLabel))
-                {
-                    <MudNavLink Href="/system/tenants" Icon="@Icons.Material.Filled.FormatListBulleted">
-                        @systemTenantsLabel
-                    </MudNavLink>
-                }
-                @if (Matches(systemCompaniesLabel))
-                {
-                    <MudNavLink Href="/system/companies" Icon="@Icons.Material.Filled.Apartment">
-                        @systemCompaniesLabel
-                    </MudNavLink>
-                }
-            </MudNavGroup>
+            <MudNavLink Href="/system/tenants" Icon="@Icons.Material.Filled.Domain">
+                @systemTenantsLabel
+            </MudNavLink>
+        }
+        @if (Matches(systemCompaniesLabel))
+        {
+            <MudNavLink Href="/system/companies" Icon="@Icons.Material.Filled.Apartment">
+                @systemCompaniesLabel
+            </MudNavLink>
         }
 
         var systemAdminChildren = new[]
         {
-            (Loc["NavMenu.SystemUsers"].Value, "/system/users", Icons.Material.Filled.ManageAccounts, "", false),
+            (Loc["NavMenu.SystemUsers"].Value, "/users", Icons.Material.Filled.ManageAccounts, "", false),
             (Loc["NavMenu.LookUpTables"].Value, "/system/lookup-tables", Icons.Material.Filled.DataObject, "", false),
             (Loc["NavMenu.Banks"].Value, "/system/banks", Icons.Material.Filled.AccountBalance, "", false),
             (Loc["NavMenu.AuditExplorer"].Value, "/system/audit", Icons.Material.Filled.History, "", false),
@@ -111,6 +105,7 @@
         var tenantCompaniesLabel = Loc["NavMenu.Companies"].Value;
         var tenantUsersLabel = Loc["NavMenu.Users"].Value;
         var tenantRolesLabel = Loc["NavMenu.RolesAndPermissions"].Value;
+        var tenantRolesUsersLabel = Loc["NavMenu.RolesAndUsers"].Value;
 
         @if (Matches(tenantCompaniesLabel))
         {
@@ -119,18 +114,22 @@
             </MudNavLink>
         }
 
-        @if (_canManageUsers && Matches(tenantUsersLabel))
+        @if (AnyMatch(_canManageUsers ? new[] { tenantUsersLabel, tenantRolesLabel } : new[] { tenantRolesLabel }))
         {
-            <MudNavLink Href="/tenant/users" Icon="@Icons.Material.Filled.People">
-                @tenantUsersLabel
-            </MudNavLink>
-        }
-
-        @if (Matches(tenantRolesLabel))
-        {
-            <MudNavLink Href="/tenant/roles" Icon="@Icons.Material.Filled.Security">
-                @tenantRolesLabel
-            </MudNavLink>
+            <MudNavGroup Title="@tenantRolesUsersLabel" Icon="@Icons.Material.Filled.ManageAccounts" Expanded="@IsSearching">
+                @if (_canManageUsers && Matches(tenantUsersLabel))
+                {
+                    <MudNavLink Href="/users" Icon="@Icons.Material.Filled.People">
+                        @tenantUsersLabel
+                    </MudNavLink>
+                }
+                @if (Matches(tenantRolesLabel))
+                {
+                    <MudNavLink Href="/tenant/roles" Icon="@Icons.Material.Filled.Security">
+                        @tenantRolesLabel
+                    </MudNavLink>
+                }
+            </MudNavGroup>
         }
 
         var tenantAdminChildren = new[]
@@ -187,6 +186,32 @@
                 }
             </MudNavGroup>
         }
+
+        @* ── Muhasebe Grubu ─────────────────────────────────────────── *@
+        var accountingChildren = new[]
+        {
+            (Loc["NavMenu.Accounting.ChartOfAccounts"].Value, "/company/accounting/chart-of-accounts", Icons.Material.Filled.AccountTree),
+            (Loc["NavMenu.Accounting.Journal"].Value,         "/company/accounting/journal",             Icons.Material.Filled.EditNote),
+            (Loc["NavMenu.Accounting.FiscalYears"].Value,     "/company/accounting/fiscal-years",        Icons.Material.Filled.CalendarMonth),
+            (Loc["NavMenu.Accounting.Banks"].Value,            "/company/accounting/bank-accounts",       Icons.Material.Filled.AccountBalance),
+            (Loc["NavMenu.Accounting.Invoices"].Value,         "/company/accounting/invoices",            Icons.Material.Filled.ReceiptLong),
+            (Loc["NavMenu.Accounting.Budget"].Value,           "/company/accounting/budget",              Icons.Material.Filled.BarChart),
+            (Loc["NavMenu.Accounting.Reports"].Value,          "/company/accounting/reports/trial-balance", Icons.Material.Filled.TableChart),
+            (Loc["NavMenu.Accounting.Settings"].Value,         "/company/accounting/settings",            Icons.Material.Filled.Tune),
+        };
+        var accountingVisible = AnyMatch(accountingChildren.Select(c => c.Item1));
+        @if (accountingVisible)
+        {
+            <MudNavGroup Title="@Loc["NavMenu.Accounting"]" Icon="@Icons.Material.Filled.Calculate" Expanded="@IsSearching">
+                @foreach (var (title, href, icon) in accountingChildren)
+                {
+                    if (Matches(title))
+                    {
+                        <MudNavLink Href="@href" Icon="@icon">@title</MudNavLink>
+                    }
+                }
+            </MudNavGroup>
+        }
     }
 
     <MudDivider Class="my-2" />
@@ -213,6 +238,12 @@
         </MudNavGroup>
     }
 </MudNavMenu>
+
+<div class="pa-3 d-flex justify-center">
+    <MudText Typo="Typo.caption" Color="Color.Default">
+        @Loc["Layout.Footer.Copyright"]
+    </MudText>
+</div>
 
 @code {
     private string _search = string.Empty;
@@ -261,15 +292,20 @@
         StateHasChanged();
     }
 
+    private static readonly System.Globalization.CultureInfo _trCulture =
+        System.Globalization.CultureInfo.GetCultureInfo("tr-TR");
+
     private bool Matches(string title)
     {
         if (!IsSearching) return true;
-        return title.Contains(_search, StringComparison.OrdinalIgnoreCase);
+        return _trCulture.CompareInfo.IndexOf(title, _search,
+            System.Globalization.CompareOptions.IgnoreCase) >= 0;
     }
 
     private bool AnyMatch(IEnumerable<string> titles)
     {
         if (!IsSearching) return true;
-        return titles.Any(t => t.Contains(_search, StringComparison.OrdinalIgnoreCase));
+        return titles.Any(t => _trCulture.CompareInfo.IndexOf(t, _search,
+            System.Globalization.CompareOptions.IgnoreCase) >= 0);
     }
 }

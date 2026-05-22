@@ -18,43 +18,31 @@
     v0.2.10.e.4 — Tenants.New.* anahtarlarıyla lokalize edildi.
 *@
 
-<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
-    <MudBreadcrumbs Items="_breadcrumbs" Class="mb-4" />
+@if (_unauthorized)
+{
+    <MudAlert Severity="Severity.Warning">
+        @Loc["Tenants.List.UnauthorizedSystem"]
+    </MudAlert>
+}
+else
+{
+    <MudText Typo="Typo.h5" Class="mb-4">@Loc["Tenants.New.Title"]</MudText>
 
-    @if (_unauthorized)
-    {
-        <MudAlert Severity="Severity.Warning">
-            @Loc["Tenants.List.UnauthorizedSystem"]
-        </MudAlert>
-    }
-    else
-    {
-        <MudText Typo="Typo.h5" Class="mb-4">@Loc["Tenants.New.Title"]</MudText>
-
-        <TenantForm Model="_model"
-                    Mode="TenantFormMode.Create"
-                    OnValidSubmit="@SubmitAsync"
-                    IsSubmitting="@_busy"
-                    SubmitButtonText="@Loc["Tenants.New.SubmitButton"]"
-                    CancelHref="/system/tenants" />
-    }
-</MudContainer>
+    <TenantForm Model="_model"
+                Mode="TenantFormMode.Create"
+                OnValidSubmit="@SubmitAsync"
+                IsSubmitting="@_busy"
+                SubmitButtonText="@Loc["Tenants.New.SubmitButton"]"
+                CancelHref="/system/tenants" />
+}
 
 @code {
     private readonly TenantFormModel _model = new();
     private bool _busy;
     private bool _unauthorized;
 
-    private List<BreadcrumbItem> _breadcrumbs = [];
-
     protected override async Task OnInitializedAsync()
     {
-        _breadcrumbs =
-        [
-            new(Loc["Nav.Tenants"].Value, "/system/tenants"),
-            new(Loc["Tenants.New.Title"].Value, null, disabled: true),
-        ];
-
         var authState = await AuthProvider.GetAuthenticationStateAsync();
         var user = authState.User;
         if (user?.Identity?.IsAuthenticated != true

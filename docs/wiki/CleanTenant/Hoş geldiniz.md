@@ -21,7 +21,8 @@
 ## Başlangıç Noktaları
 
 ### Faz Geçmişi
-- [[Fazlar/v0.1/README]] — Faz 0: Backend temeli (Auth + 2FA + 146 test)
+- [[Fazlar/v0.0/Obsidian ve Claude Code Egitimi]] — Faz 0.0: Araç eğitimi (buradan başla)
+- [[Fazlar/v0.1/README]] — Faz 0.1: Backend temeli (Auth + 2FA + 146 test)
 - [[Fazlar/v0.1/CHANGELOG]] — v0.1.x değişiklik günlüğü
 - [[Fazlar/v0.2/CHANGELOG]] — v0.2.x değişiklik günlüğü (güncel)
 - [[Fazlar/v0.2/v0.2.12-oturum]] — Son oturum detayı

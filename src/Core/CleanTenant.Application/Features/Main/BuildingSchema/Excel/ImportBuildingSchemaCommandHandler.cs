@@ -48,46 +48,46 @@ public sealed class ImportBuildingSchemaCommandHandler
         var tenantId = _tenantContext.TenantId!.Value;
 
         // Mevcut hiyerarşiyi tek sorguda yükle (global query filter: TenantId + !IsDeleted)
-        var existingBlocks = await _db.Blocks
-            .Where(b => b.CompanyId == command.CompanyId)
-            .Include(b => b.Parcels)
+        var existingLands = await _db.Lands
+            .Where(l => l.CompanyId == command.CompanyId)
+            .Include(l => l.Parcels)
                 .ThenInclude(p => p.Buildings)
                     .ThenInclude(bl => bl.Units)
             .ToListAsync(cancellationToken);
 
-        var blockByName = existingBlocks.ToDictionary(
-            b => b.Name, b => b, StringComparer.OrdinalIgnoreCase);
+        var landByName = existingLands.ToDictionary(
+            l => l.Name, l => l, StringComparer.OrdinalIgnoreCase);
 
-        int blockMaxSort = existingBlocks.Count > 0 ? existingBlocks.Max(b => b.SortOrder) : 0;
+        int landMaxSort = existingLands.Count > 0 ? existingLands.Max(l => l.SortOrder) : 0;
         int unitCount = 0;
 
-        foreach (var blockGroup in parseResult.Rows.GroupBy(r => r.BlockName, StringComparer.OrdinalIgnoreCase))
+        foreach (var landGroup in parseResult.Rows.GroupBy(r => r.LandName, StringComparer.OrdinalIgnoreCase))
         {
-            if (!blockByName.TryGetValue(blockGroup.Key, out var block))
+            if (!landByName.TryGetValue(landGroup.Key, out var land))
             {
-                block = new Block
+                land = new Land
                 {
                     TenantId = tenantId,
                     CompanyId = command.CompanyId,
-                    Name = blockGroup.Key,
-                    SortOrder = ++blockMaxSort,
+                    Name = landGroup.Key,
+                    SortOrder = ++landMaxSort,
                 };
-                _db.Blocks.Add(block);
-                blockByName[blockGroup.Key] = block;
+                _db.Lands.Add(land);
+                landByName[landGroup.Key] = land;
             }
 
-            var parcelByName = block.Parcels
+            var parcelByName = land.Parcels
                 .ToDictionary(p => p.Name, p => p, StringComparer.OrdinalIgnoreCase);
-            int parcelMaxSort = block.Parcels.Count > 0 ? block.Parcels.Max(p => p.SortOrder) : 0;
+            int parcelMaxSort = land.Parcels.Count > 0 ? land.Parcels.Max(p => p.SortOrder) : 0;
 
-            foreach (var parcelGroup in blockGroup.GroupBy(r => r.ParcelName, StringComparer.OrdinalIgnoreCase))
+            foreach (var parcelGroup in landGroup.GroupBy(r => r.ParcelName, StringComparer.OrdinalIgnoreCase))
             {
                 if (!parcelByName.TryGetValue(parcelGroup.Key, out var parcel))
                 {
                     parcel = new Parcel
                     {
                         TenantId = tenantId,
-                        BlockId = block.Id,
+                        LandId = land.Id,
                         Name = parcelGroup.Key,
                         SortOrder = ++parcelMaxSort,
                     };

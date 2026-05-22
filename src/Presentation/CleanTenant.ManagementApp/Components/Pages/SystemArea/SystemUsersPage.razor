@@ -1,3 +1,4 @@
+@page "/users"
 @page "/system/users"
 @page "/tenant/users"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
@@ -7,12 +8,12 @@
 @using CleanTenant.SharedKernel.Context
 
 @*
-    Kullanıcı yönetim sayfası — System ve Tenant scope için ortak.
-    Oturum claim'lerinden scope + tenantId okunur; UserListPanel
+    Kullanıcı yönetim sayfası — System, Tenant ve Company scope için ortak.
+    Oturum claim'lerinden scope + tenantId + companyId okunur; UserListPanel
     doğru parametrelerle çağrılır.
 
-    v0.2.12 — System scope için ilk uygulama.
-    v0.2.12 — Tenant scope desteği eklendi (/tenant/users ikinci route).
+    v0.2.12 — System + Tenant scope.
+    v0.2.13 — /users birleşik route + Company scope desteği.
 *@
 
 <PageTitle>@Loc["SystemUsers.PageTitle"]</PageTitle>
@@ -33,10 +34,16 @@ else if (_scope == ScopeLevel.Tenant && _tenantId.HasValue)
     <MudText Typo="Typo.h5" Class="mb-4">@Loc["TenantUsers.PageTitle"]</MudText>
     <UserListPanel Scope="ScopeLevel.Tenant" TenantId="@_tenantId" />
 }
+else if (_scope == ScopeLevel.Company && _tenantId.HasValue && _companyId.HasValue)
+{
+    <MudText Typo="Typo.h5" Class="mb-4">@Loc["CompanyUsers.PageTitle"]</MudText>
+    <UserListPanel Scope="ScopeLevel.Company" TenantId="@_tenantId" CompanyId="@_companyId" />
+}
 
 @code {
     private ScopeLevel? _scope;
     private Guid? _tenantId;
+    private Guid? _companyId;
     private bool _unauthorized;
 
     protected override async Task OnInitializedAsync()
@@ -53,9 +60,10 @@ else if (_scope == ScopeLevel.Tenant && _tenantId.HasValue)
         var scopeClaim = user.FindFirst("scope")?.Value;
         _scope = scopeClaim switch
         {
-            "System" => ScopeLevel.System,
-            "Tenant" => ScopeLevel.Tenant,
-            _ => null,
+            "System"  => ScopeLevel.System,
+            "Tenant"  => ScopeLevel.Tenant,
+            "Company" => ScopeLevel.Company,
+            _         => null,
         };
 
         if (_scope is null)
@@ -64,12 +72,26 @@ else if (_scope == ScopeLevel.Tenant && _tenantId.HasValue)
             return;
         }
 
-        if (_scope == ScopeLevel.Tenant)
+        if (_scope is ScopeLevel.Tenant or ScopeLevel.Company)
         {
             if (user.FindFirst("tenant_id") is { Value: var tid }
                 && Guid.TryParseExact(tid, "N", out var tenantGuid))
             {
                 _tenantId = tenantGuid;
+            }
+            else
+            {
+                _unauthorized = true;
+                return;
+            }
+        }
+
+        if (_scope == ScopeLevel.Company)
+        {
+            if (user.FindFirst("company_id") is { Value: var cid }
+                && Guid.TryParseExact(cid, "N", out var companyGuid))
+            {
+                _companyId = companyGuid;
             }
             else
             {

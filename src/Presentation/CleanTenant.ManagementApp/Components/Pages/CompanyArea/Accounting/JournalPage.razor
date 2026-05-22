@@ -1,0 +1,239 @@
+@page "/company/accounting/journal"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject AuthenticationStateProvider AuthProvider
+@inject MediatR.IMediator Mediator
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject IStringLocalizer Loc
+@inject NavigationManager Nav
+@using CleanTenant.SharedKernel.Common.Results
+@using CleanTenant.Application.Features.Main.Accounting.JournalEntries
+@using CleanTenant.Domain.Tenant.Accounting.Enums
+
+<PageTitle>Yevmiye Defteri</PageTitle>
+
+@if (_unauthorized)
+{
+    <MudAlert Severity="Severity.Warning" Class="my-3">
+        Bu sayfaya erişim yetkiniz bulunmamaktadır.
+    </MudAlert>
+}
+else if (!_initialized)
+{
+    <MudText Typo="Typo.h6" Class="my-3">Yükleniyor...</MudText>
+}
+else
+{
+    <MudText Typo="Typo.h5" Class="mb-4">Yevmiye Defteri</MudText>
+
+    <MudPaper Class="pa-4 mb-4" Elevation="1">
+        <MudGrid Spacing="2">
+            <MudItem xs="12" sm="6" md="3">
+                <MudSelect T="JournalEntryStatus?" @bind-Value="_filterStatus"
+                           Label="Durum" Clearable="true">
+                    <MudSelectItem T="JournalEntryStatus?" Value="@((JournalEntryStatus?)null)">Tümü</MudSelectItem>
+                    <MudSelectItem T="JournalEntryStatus?" Value="@((JournalEntryStatus?)JournalEntryStatus.Draft)">Taslak</MudSelectItem>
+                    <MudSelectItem T="JournalEntryStatus?" Value="@((JournalEntryStatus?)JournalEntryStatus.PendingApproval)">Onay Bekliyor</MudSelectItem>
+                    <MudSelectItem T="JournalEntryStatus?" Value="@((JournalEntryStatus?)JournalEntryStatus.Posted)">Kesinleşmiş</MudSelectItem>
+                    <MudSelectItem T="JournalEntryStatus?" Value="@((JournalEntryStatus?)JournalEntryStatus.Voided)">İptal</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudSelect T="EntryType?" @bind-Value="_filterEntryType"
+                           Label="Fiş Tipi" Clearable="true">
+                    <MudSelectItem T="EntryType?" Value="@((EntryType?)null)">Tümü</MudSelectItem>
+                    @foreach (var t in Enum.GetValues<EntryType>())
+                    {
+                        <MudSelectItem T="EntryType?" Value="@((EntryType?)t)">@GetEntryTypeLabel(t)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudDatePicker @bind-Date="_fromDate"
+                               Label="Başlangıç Tarihi"
+                               DateFormat="dd.MM.yyyy"
+                               Clearable="true" />
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudDatePicker @bind-Date="_toDate"
+                               Label="Bitiş Tarihi"
+                               DateFormat="dd.MM.yyyy"
+                               Clearable="true" />
+            </MudItem>
+            <MudItem xs="12">
+                <div class="d-flex gap-2">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.Search"
+                               OnClick="@LoadDataAsync">
+                        Filtrele
+                    </MudButton>
+                    <MudButton Variant="Variant.Outlined"
+                               StartIcon="@Icons.Material.Filled.Clear"
+                               OnClick="@ClearFilters">
+                        Temizle
+                    </MudButton>
+                </div>
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    <div class="d-flex justify-end mb-3">
+        <MudButton StartIcon="@Icons.Material.Filled.Add"
+                   Color="Color.Primary"
+                   Variant="Variant.Filled"
+                   OnClick="@(() => Nav.NavigateTo("/company/accounting/journal/new"))">
+            Yeni Fiş
+        </MudButton>
+    </div>
+
+    <MudDataGrid T="JournalEntryListItem"
+                 Items="@_entries"
+                 Hover="true"
+                 Striped="true"
+                 Bordered="true"
+                 RowClick="@OnRowClick">
+        <Columns>
+            <PropertyColumn Property="@(x => x.EntryNumber)" Title="Fiş No" />
+            <PropertyColumn Property="@(x => x.EntryDate)" Title="Tarih">
+                <CellTemplate>
+                    <MudText Typo="Typo.body2">@context.Item.EntryDate.ToString("dd.MM.yyyy")</MudText>
+                </CellTemplate>
+            </PropertyColumn>
+            <PropertyColumn Property="@(x => x.EntryType)" Title="Tip">
+                <CellTemplate>
+                    <MudText Typo="Typo.body2">@GetEntryTypeLabel(context.Item.EntryType)</MudText>
+                </CellTemplate>
+            </PropertyColumn>
+            <PropertyColumn Property="@(x => x.Description)" Title="Açıklama" />
+            <PropertyColumn Property="@(x => x.TotalDebit)" Title="Borç">
+                <CellTemplate>
+                    <MudText Typo="Typo.body2" Style="font-family:monospace">
+                        @context.Item.TotalDebit.ToString("N2")
+                    </MudText>
+                </CellTemplate>
+            </PropertyColumn>
+            <PropertyColumn Property="@(x => x.TotalCredit)" Title="Alacak">
+                <CellTemplate>
+                    <MudText Typo="Typo.body2" Style="font-family:monospace">
+                        @context.Item.TotalCredit.ToString("N2")
+                    </MudText>
+                </CellTemplate>
+            </PropertyColumn>
+            <PropertyColumn Property="@(x => x.Status)" Title="Durum">
+                <CellTemplate>
+                    <MudChip T="string"
+                             Size="Size.Small"
+                             Color="@GetStatusColor(context.Item.Status)">
+                        @GetStatusLabel(context.Item.Status)
+                    </MudChip>
+                </CellTemplate>
+            </PropertyColumn>
+        </Columns>
+    </MudDataGrid>
+
+    @if (_totalCount > 0)
+    {
+        <MudText Typo="Typo.caption" Class="mt-2">
+            Toplam @_totalCount kayıt
+        </MudText>
+    }
+}
+
+@code {
+    private Guid _companyId;
+    private Guid? _tenantId;
+    private bool _unauthorized;
+    private bool _initialized;
+
+    private JournalEntryStatus? _filterStatus;
+    private EntryType? _filterEntryType;
+    private DateTime? _fromDate;
+    private DateTime? _toDate;
+
+    private DateOnly? FromDateOnly => _fromDate.HasValue ? DateOnly.FromDateTime(_fromDate.Value) : null;
+    private DateOnly? ToDateOnly => _toDate.HasValue ? DateOnly.FromDateTime(_toDate.Value) : null;
+
+    private IReadOnlyList<JournalEntryListItem> _entries = [];
+    private int _totalCount;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user?.Identity?.IsAuthenticated != true) { _unauthorized = true; _initialized = true; return; }
+        var scope = user.FindFirst("scope")?.Value;
+        if (!string.Equals(scope, "Company", StringComparison.OrdinalIgnoreCase)) { _unauthorized = true; _initialized = true; return; }
+        if (user.FindFirst("company_id") is { Value: var cid } && Guid.TryParseExact(cid, "N", out var cGuid))
+            _companyId = cGuid;
+        else { _unauthorized = true; _initialized = true; return; }
+        if (user.FindFirst("tenant_id") is { Value: var tid } && Guid.TryParseExact(tid, "N", out var tGuid))
+            _tenantId = tGuid;
+        await LoadDataAsync();
+        _initialized = true;
+    }
+
+    private async Task LoadDataAsync()
+    {
+        var query = new GetJournalEntriesQuery(
+            _companyId,
+            null,
+            _filterStatus,
+            _filterEntryType,
+            FromDateOnly,
+            ToDateOnly);
+        var result = await Mediator.Send(query);
+        if (result.IsSuccess)
+        {
+            _entries = result.Value!.Items;
+            _totalCount = result.Value.TotalCount;
+        }
+        else
+        {
+            Snackbar.Add(result.FirstError.Message, Severity.Error);
+        }
+    }
+
+    private async Task ClearFilters()
+    {
+        _filterStatus = null;
+        _filterEntryType = null;
+        _fromDate = null;
+        _toDate = null;
+        await LoadDataAsync();
+    }
+
+    private void OnRowClick(DataGridRowClickEventArgs<JournalEntryListItem> args)
+    {
+        Nav.NavigateTo($"/company/accounting/journal/{args.Item.Id}");
+    }
+
+    private static Color GetStatusColor(JournalEntryStatus s) => s switch
+    {
+        JournalEntryStatus.Draft => Color.Default,
+        JournalEntryStatus.PendingApproval => Color.Warning,
+        JournalEntryStatus.Posted => Color.Success,
+        JournalEntryStatus.Voided => Color.Error,
+        _ => Color.Default
+    };
+
+    private static string GetStatusLabel(JournalEntryStatus s) => s switch
+    {
+        JournalEntryStatus.Draft => "Taslak",
+        JournalEntryStatus.PendingApproval => "Onay Bekliyor",
+        JournalEntryStatus.Posted => "Kesinleşmiş",
+        JournalEntryStatus.Voided => "İptal",
+        _ => s.ToString()
+    };
+
+    private static string GetEntryTypeLabel(EntryType t) => t switch
+    {
+        EntryType.Normal => "Normal",
+        EntryType.Opening => "Açılış",
+        EntryType.Closing => "Kapanış",
+        EntryType.Adjustment => "Mahsup",
+        EntryType.Transfer => "Virman",
+        EntryType.Correction => "Düzeltme",
+        EntryType.InflationAdjustment => "Enflasyon Düzeltmesi",
+        _ => t.ToString()
+    };
+}

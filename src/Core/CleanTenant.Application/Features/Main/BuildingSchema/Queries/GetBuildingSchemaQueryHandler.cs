@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 namespace CleanTenant.Application.Features.Main.BuildingSchema.Queries;
 
 /// <summary>
-/// <see cref="GetBuildingSchemaQuery"/> handler. Block → Parcel → Building → Unit hiyerarşisini tek sorguda yükler.
+/// <see cref="GetBuildingSchemaQuery"/> handler. Land → Parcel → Building → (Block →) Unit hiyerarşisini tek sorguda yükler.
 /// </summary>
 public sealed class GetBuildingSchemaQueryHandler
     : IRequestHandler<GetBuildingSchemaQuery, Result<BuildingSchemaDto>>
@@ -28,23 +28,27 @@ public sealed class GetBuildingSchemaQueryHandler
             return Result<BuildingSchemaDto>.Failure(
                 Error.NotFound("COMPANY-NOT-FOUND", "Site bulunamadı."));
 
-        // Tüm hiyerarşiyi tek sorguda yükle (4 JOIN)
-        var blocks = await _db.Blocks
-            .Where(b => b.CompanyId == query.CompanyId)
-            .OrderBy(b => b.SortOrder)
-            .Include(b => b.Parcels.Where(p => !p.IsDeleted).OrderBy(p => p.SortOrder))
+        // Tüm hiyerarşiyi tek sorguda yükle
+        var lands = await _db.Lands
+            .Where(l => l.CompanyId == query.CompanyId)
+            .OrderBy(l => l.SortOrder)
+            .Include(l => l.Parcels.Where(p => !p.IsDeleted).OrderBy(p => p.SortOrder))
                 .ThenInclude(p => p.Buildings.Where(bl => !bl.IsDeleted).OrderBy(bl => bl.SortOrder))
-                    .ThenInclude(bl => bl.Units.Where(u => !u.IsDeleted).OrderBy(u => u.SortOrder))
+                    .ThenInclude(bl => bl.Blocks.Where(bk => !bk.IsDeleted).OrderBy(bk => bk.SortOrder))
+                        .ThenInclude(bk => bk.Units.Where(u => !u.IsDeleted).OrderBy(u => u.SortOrder))
+            .Include(l => l.Parcels.Where(p => !p.IsDeleted))
+                .ThenInclude(p => p.Buildings.Where(bl => !bl.IsDeleted))
+                    .ThenInclude(bl => bl.Units.Where(u => !u.IsDeleted && u.BlockId == null).OrderBy(u => u.SortOrder))
             .ToListAsync(cancellationToken);
 
         var schema = new BuildingSchemaDto(
             CompanyId: query.CompanyId,
-            Blocks: blocks.Select(b => new BlockDto(
-                Id: b.Id,
-                UrlCode: b.UrlCode,
-                Name: b.Name,
-                SortOrder: b.SortOrder,
-                Parcels: b.Parcels.Select(p => new ParcelDto(
+            Lands: lands.Select(l => new LandDto(
+                Id: l.Id,
+                UrlCode: l.UrlCode,
+                Name: l.Name,
+                SortOrder: l.SortOrder,
+                Parcels: l.Parcels.Select(p => new ParcelDto(
                     Id: p.Id,
                     UrlCode: p.UrlCode,
                     Name: p.Name,
@@ -56,18 +60,44 @@ public sealed class GetBuildingSchemaQueryHandler
                         MunicipalNo: bl.MunicipalNo,
                         Type: bl.Type,
                         SortOrder: bl.SortOrder,
-                        Units: bl.Units.Select(u => new UnitDto(
+                        Blocks: bl.Blocks.Select(bk => new BlockDto(
+                            Id: bk.Id,
+                            UrlCode: bk.UrlCode,
+                            Name: bk.Name,
+                            SortOrder: bk.SortOrder,
+                            Units: bk.Units.Select(u => new UnitDto(
+                                Id: u.Id,
+                                UrlCode: u.UrlCode,
+                                Number: u.Number,
+                                NationalAddressCode: u.NationalAddressCode,
+                                Type: u.Type,
+                                SquareMeters: u.SquareMeters,
+                                GrossSquareMeters: u.GrossSquareMeters,
+                                LandShare: u.LandShare,
+                                AllocatedArea: u.AllocatedArea,
+                                Floor: u.Floor,
+                                Orientation: u.Orientation,
+                                Layout: u.Layout,
+                                RoomCount: u.RoomCount,
+                                BlockId: u.BlockId,
+                                SortOrder: u.SortOrder
+                            )).ToList().AsReadOnly()
+                        )).ToList().AsReadOnly(),
+                        Units: bl.Units.Where(u => u.BlockId == null).Select(u => new UnitDto(
                             Id: u.Id,
                             UrlCode: u.UrlCode,
                             Number: u.Number,
                             NationalAddressCode: u.NationalAddressCode,
                             Type: u.Type,
                             SquareMeters: u.SquareMeters,
+                            GrossSquareMeters: u.GrossSquareMeters,
                             LandShare: u.LandShare,
                             AllocatedArea: u.AllocatedArea,
                             Floor: u.Floor,
                             Orientation: u.Orientation,
                             Layout: u.Layout,
+                            RoomCount: u.RoomCount,
+                            BlockId: u.BlockId,
                             SortOrder: u.SortOrder
                         )).ToList().AsReadOnly()
                     )).ToList().AsReadOnly()

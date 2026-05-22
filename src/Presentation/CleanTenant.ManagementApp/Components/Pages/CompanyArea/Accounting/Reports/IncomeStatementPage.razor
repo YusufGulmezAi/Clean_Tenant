@@ -1,0 +1,169 @@
+@page "/company/accounting/reports/income-statement"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject AuthenticationStateProvider AuthProvider
+@inject MediatR.IMediator Mediator
+@inject ISnackbar Snackbar
+@inject IStringLocalizer Loc
+@using CleanTenant.SharedKernel.Common.Results
+@using CleanTenant.Application.Features.Main.Accounting.Reports
+@using CleanTenant.Application.Features.Main.Accounting.Readers
+@using CleanTenant.Application.Features.Main.Accounting.FiscalYears
+@using CleanTenant.Application.Features.Main.Accounting.AccountCodes
+@using CleanTenant.Domain.Tenant.Accounting.Enums
+
+<PageTitle>Gelir Tablosu</PageTitle>
+
+@if (_unauthorized)
+{
+    <MudAlert Severity="Severity.Warning" Class="my-3">
+        Bu sayfaya erişim yetkiniz bulunmuyor. Şirket kapsamında giriş yapınız.
+    </MudAlert>
+}
+else if (!_initialized)
+{
+    <MudText Typo="Typo.h6" Class="my-3">Yükleniyor...</MudText>
+}
+else
+{
+    <MudText Typo="Typo.h5" Class="mb-4">Gelir Tablosu</MudText>
+
+    <MudPaper Class="pa-4 mb-4" Elevation="1">
+        <MudGrid Spacing="2">
+            <MudItem xs="12" sm="4">
+                <MudDatePicker @bind-Date="_fromDate" Label="Başlangıç Tarihi" DateFormat="dd.MM.yyyy" Required="true" />
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudDatePicker @bind-Date="_toDate" Label="Bitiş Tarihi" DateFormat="dd.MM.yyyy" Required="true" />
+            </MudItem>
+            <MudItem xs="12" sm="4" Class="d-flex align-end">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                           FullWidth="true"
+                           Disabled="@(_loading || _fromDate is null || _toDate is null)"
+                           OnClick="@LoadReportAsync">
+                    Raporu Görüntüle
+                </MudButton>
+            </MudItem>
+        </MudGrid>
+        @if (_loading)
+        {
+            <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="mt-3" />
+        }
+    </MudPaper>
+
+    @if (_hasResult)
+    {
+        <MudStack Row="true" Spacing="2" Class="mb-2">
+            <MudButton StartIcon="@Icons.Material.Filled.PictureAsPdf"
+                       Color="Color.Error" Variant="Variant.Outlined"
+                       Disabled="true">PDF</MudButton>
+            <MudButton StartIcon="@Icons.Material.Filled.TableChart"
+                       Color="Color.Success" Variant="Variant.Outlined"
+                       Disabled="true">Excel</MudButton>
+        </MudStack>
+
+        @if (_report is null || _report.Lines.Count == 0)
+        {
+            <MudAlert Severity="Severity.Info">
+                Rapor verisi bulunamadı. (Faz 6 implementasyonuyla tamamlanacak)
+            </MudAlert>
+        }
+        else
+        {
+            <MudGrid Spacing="3" Class="mb-4">
+                <MudItem xs="12" sm="4">
+                    <MudPaper Class="pa-4" Elevation="2">
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Toplam Gelir</MudText>
+                        <MudText Typo="Typo.h6" Color="Color.Success">@_report.Revenue.ToString("N2") TL</MudText>
+                    </MudPaper>
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudPaper Class="pa-4" Elevation="2">
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Toplam Gider</MudText>
+                        <MudText Typo="Typo.h6" Color="Color.Error">@_report.Expenses.ToString("N2") TL</MudText>
+                    </MudPaper>
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudPaper Class="pa-4" Elevation="2">
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Net Kâr / Zarar</MudText>
+                        <MudText Typo="Typo.h6" Color="@(_report.NetIncome >= 0 ? Color.Success : Color.Error)">
+                            @_report.NetIncome.ToString("N2") TL
+                        </MudText>
+                    </MudPaper>
+                </MudItem>
+            </MudGrid>
+
+            <MudTable Items="@_report.Lines" Hover="true" Striped="true" Bordered="true" Dense="true">
+                <HeaderContent>
+                    <MudTh>Hesap Kodu</MudTh>
+                    <MudTh>Hesap Adı</MudTh>
+                    <MudTh Style="text-align:right">Tutar</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Hesap Kodu">
+                        <MudText Typo="Typo.body2" Style="font-family:monospace">@context.AccountCode</MudText>
+                    </MudTd>
+                    <MudTd DataLabel="Hesap Adı">@context.AccountName</MudTd>
+                    <MudTd DataLabel="Tutar" Style="text-align:right">
+                        <MudText Color="@(context.Amount >= 0 ? Color.Success : Color.Error)">
+                            @context.Amount.ToString("N2")
+                        </MudText>
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
+    }
+}
+
+@code {
+    private Guid _companyId;
+    private Guid? _tenantId;
+    private bool _unauthorized;
+    private bool _initialized;
+    private bool _loading;
+    private bool _hasResult;
+
+    private DateTime? _fromDate = new DateTime(DateTime.Today.Year, 1, 1);
+    private DateTime? _toDate = DateTime.Today;
+    private IncomeStatementReport? _report;
+
+    private DateOnly? FromDateOnly => _fromDate.HasValue ? DateOnly.FromDateTime(_fromDate.Value) : null;
+    private DateOnly? ToDateOnly => _toDate.HasValue ? DateOnly.FromDateTime(_toDate.Value) : null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user?.Identity?.IsAuthenticated != true) { _unauthorized = true; _initialized = true; return; }
+        var scope = user.FindFirst("scope")?.Value;
+        if (!string.Equals(scope, "Company", StringComparison.OrdinalIgnoreCase)) { _unauthorized = true; _initialized = true; return; }
+        if (user.FindFirst("company_id") is { Value: var cid } && Guid.TryParseExact(cid, "N", out var cGuid))
+            _companyId = cGuid;
+        else { _unauthorized = true; _initialized = true; return; }
+        if (user.FindFirst("tenant_id") is { Value: var tid } && Guid.TryParseExact(tid, "N", out var tGuid))
+            _tenantId = tGuid;
+
+        _initialized = true;
+    }
+
+    private async Task LoadReportAsync()
+    {
+        if (FromDateOnly is null || ToDateOnly is null) return;
+        _loading = true;
+        _hasResult = false;
+        StateHasChanged();
+
+        var result = await Mediator.Send(new GetIncomeStatementQuery(_companyId, FromDateOnly.Value, ToDateOnly.Value));
+
+        if (result.IsFailure)
+        {
+            Snackbar.Add($"Rapor yüklenemedi: {result.FirstError.Message}", Severity.Error);
+        }
+        else
+        {
+            _report = result.Value;
+            _hasResult = true;
+        }
+
+        _loading = false;
+    }
+}

@@ -4,11 +4,11 @@
     "type": "split",
     "children": [
       {
-        "id": "54c94cf769984a88",
+        "id": "deef37887b51b4f0",
         "type": "tabs",
         "children": [
           {
-            "id": "a6e54a87beac7e58",
+            "id": "dad68fbdaaa33efc",
             "type": "leaf",
             "state": {
               "type": "kanban",
@@ -176,6 +176,7 @@
   },
   "left-ribbon": {
     "hiddenItems": {
+      "obsidian-kanban:Create new board": false,
       "switcher:Hızlı geçişi aç": false,
       "graph:Grafik görünümünü aç": false,
       "canvas:Yeni tuval oluşturun": false,
@@ -183,16 +184,37 @@
       "templates:Şablon ekle": false,
       "command-palette:Komut paletini aç": false,
       "bases:Yeni taban oluştur": false,
-      "obsidian-kanban:Create new board": false
+      "copilot:Open Copilot Chat": false
     }
   },
-  "active": "a6e54a87beac7e58",
+  "active": "dad68fbdaaa33efc",
   "lastOpenFiles": [
+    "Specs/budget-module/README.md",
+    "Hoş geldiniz.md",
+    "Proje Tahtası.md",
+    "copilot/copilot-custom-prompts/Clip Web Page.md",
+    "copilot/copilot-custom-prompts/Clip YouTube Transcript.md",
+    "copilot/copilot-custom-prompts/Rewrite as tweet thread.md",
+    "copilot/copilot-custom-prompts/Rewrite as tweet.md",
+    "copilot/copilot-custom-prompts/Remove URLs.md",
+    "copilot/copilot-custom-prompts/Generate glossary.md",
+    "copilot/copilot-custom-prompts/Generate table of contents.md",
+    "copilot/copilot-custom-prompts/Make longer.md",
+    "copilot/copilot-custom-prompts/Make shorter.md",
+    "copilot/copilot-custom-prompts/Emojify.md",
+    "copilot/copilot-custom-prompts/Explain like I am 5.md",
+    "copilot/copilot-custom-prompts/Simplify.md",
+    "copilot/copilot-custom-prompts/Summarize.md",
+    "copilot/copilot-custom-prompts/Translate to Chinese.md",
+    "copilot/copilot-custom-prompts/Fix grammar and spelling.md",
+    "copilot/copilot-custom-prompts",
+    "copilot",
+    "Specs/budget-module/04-CLAUDE-CODE-PLAYBOOK.md",
+    "Fazlar/v0.0/Obsidian ve Claude Code Egitimi.md",
+    "Fazlar/v0.0",
     "Proje Tahtası.md.tmp.69696.1779384120391",
     "Proje Tahtası.md.tmp.69696.1779384114234",
     "_prompts/cleantenant-wiki.md",
-    "Proje Tahtası.md",
-    "Hoş geldiniz.md",
     "Specs/budget-module/03-DECISIONS-OPEN.md",
     "Specs/budget-module/00-CONTEXT.md",
     "Fazlar/v0.2/v0.2.12-oturum.md",
@@ -200,29 +222,8 @@
     "Kimlik & Auth/Kimlik Mimarisi.md",
     "Kimlik & Auth/Kimlik Mimarisi.md.tmp.69696.1779382860102",
     "Kararlar/ADR-001 Hibrit JWT + Redis Session.md",
-    "Fazlar/v0.1/FINAL-ARCHITECTURE-MAP.md",
     "Fazlar/v0.2/v0.2.12-oturum.md.tmp.69696.1779382830888",
-    "Fazlar/v0.2/v0.2.10-FINAL-ARCHITECTURE-MAP.md",
-    "Fazlar/v0.2/CHANGELOG.md",
-    "Mimari/Clean Architecture Katmanları.md",
-    "Fikirler/graph-explorer.md",
     "Proje Tahtası.md.tmp.69696.1779382794650",
-    "_templates/Faz-Kapanis.md",
-    "_templates/Oturum-Notu.md",
-    "_templates/ADR.md",
-    "_templates",
-    "Kararlar/ADR-004 Elle Eşleme (AutoMapper Yok).md",
-    "Kararlar/ADR-003 EF Core ve Dapper Hibrit Okuma.md",
-    "Kararlar/ADR-003 EF Core ve Dapper Hibrit Okuma.md.tmp.20964.1779382124865",
-    "Kararlar/ADR-002 Dört Veritabanı Mimarisi.md",
-    "Fikirler",
-    "Specs/budget-module/README.md",
-    "Specs/budget-module/04-CLAUDE-CODE-PLAYBOOK.md",
-    "Specs/budget-module/02-PHASE-CARDS.md",
-    "Specs/budget-module/01-SDD-v1.0.md",
-    "Specs/budget-module",
-    "Specs",
-    "Fazlar/v0.2/v0.2.11-FINAL-ARCHITECTURE-MAP.md",
-    "Fazlar/v0.1/README.md"
+    "_templates"
   ]
 }

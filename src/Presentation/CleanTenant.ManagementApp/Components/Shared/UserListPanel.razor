@@ -1,5 +1,6 @@
 @using CleanTenant.Application.Features.System.Users
 @using CleanTenant.Application.Features.Tenant.Users
+@using CleanTenant.Application.Common.Export
 @using CleanTenant.SharedKernel.Common.Results
 @using CleanTenant.SharedKernel.Context
 @using MediatR
@@ -103,7 +104,7 @@
                Label="@Loc["SystemUsers.Filter.ActiveOnly"]"
                Class="mb-0" />
     <div class="d-flex gap-2">
-        @if (Scope == ScopeLevel.Tenant)
+        @if (Scope is ScopeLevel.Tenant or ScopeLevel.Company)
         {
             <MudButton Color="Color.Primary"
                        Variant="Variant.Filled"
@@ -137,7 +138,9 @@ else
                Groupable="false"
                ShowColumnOptions="false"
                SearchPlaceholder="@Loc["SystemUsers.List.Search"]"
-               SearchableFields="@(u => new[] { u.FullName, u.Email, string.Join(" ", u.RoleNames) })">
+               SearchableFields="@(u => new[] { u.FullName, u.Email, string.Join(" ", u.RoleNames) })"
+               ExportColumns="@_exportColumns"
+               ExportTitle="@_exportTitle">
         <Columns>
             <TemplateColumn T="UserListItem" Title="@Loc["SystemUsers.List.Col.Name"].Value" SortBy="@(u => u.LastName)">
                 <CellTemplate>
@@ -248,6 +251,8 @@ else
     [Parameter] public Guid? TenantId { get; set; }
     [Parameter] public Guid? CompanyId { get; set; }
 
+    private IReadOnlyList<ExportColumn<UserListItem>> _exportColumns = [];
+    private string _exportTitle = string.Empty;
     private IReadOnlyList<UserListItem>? _items;
     private IReadOnlyList<RoleOption> _availableRoles = [];
     private bool _loading = true;
@@ -276,6 +281,25 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        _exportTitle = Scope switch
+        {
+            ScopeLevel.System  => Loc["SystemUsers.PageTitle"].Value,
+            ScopeLevel.Tenant  => Loc["TenantUsers.PageTitle"].Value,
+            ScopeLevel.Company => Loc["CompanyUsers.PageTitle"].Value,
+            _                  => Loc["SystemUsers.PageTitle"].Value,
+        };
+
+        _exportColumns =
+        [
+            new() { Header = Loc["SystemUsers.List.Col.Name"].Value,   Selector = u => u.FullName },
+            new() { Header = Loc["UserForm.Email"].Value,               Selector = u => u.Email },
+            new() { Header = Loc["SystemUsers.List.Col.Phone"].Value,   Selector = u => u.PhoneNumber ?? string.Empty },
+            new() { Header = Loc["SystemUsers.List.Col.Roles"].Value,   Selector = u => string.Join(", ", u.RoleNames) },
+            new() { Header = Loc["SystemUsers.List.Col.Status"].Value,  Selector = u =>
+                u.IsLocked ? Loc["UserStatus.Locked"].Value :
+                u.IsActive ? Loc["UserStatus.Active"].Value :
+                             Loc["UserStatus.Inactive"].Value },
+        ];
         await LoadDataAsync();
     }
 

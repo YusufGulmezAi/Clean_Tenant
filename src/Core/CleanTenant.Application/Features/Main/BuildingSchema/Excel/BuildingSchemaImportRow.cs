@@ -4,12 +4,12 @@ namespace CleanTenant.Application.Features.Main.BuildingSchema.Excel;
 
 /// <summary>
 /// Import Excel'inden parse edilmiş tek bir BB satırı; hiyerarşi bilgisini
-/// (Block → Parcel → Building) ve BB alanlarını birlikte taşır.
+/// (Land → Parcel → Building) ve BB alanlarını birlikte taşır.
 /// </summary>
 public sealed class BuildingSchemaImportRow
 {
     /// <summary>Ada adı.</summary>
-    public string BlockName { get; init; } = "";
+    public string LandName { get; init; } = "";
 
     /// <summary>Parsel adı.</summary>
     public string ParcelName { get; init; } = "";

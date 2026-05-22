@@ -12,8 +12,6 @@
     isimler — bu fazda raw bırakıldı.
 *@
 
-<MudBreadcrumbs Items="@_breadcrumbs" Class="px-0 pb-2" />
-
 <MudText Typo="Typo.h4" Class="mb-1">@Loc["Settings.Theme.Title"]</MudText>
 <MudText Typo="Typo.body1" Color="Color.Default" Class="mb-4">
     @Loc["Settings.Theme.Description"]
@@ -64,8 +62,6 @@
 </MudPaper>
 
 @code {
-    private List<BreadcrumbItem> _breadcrumbs = [];
-
     private readonly ThemePresetId[] _presets =
     [
         ThemePresetId.KurumsalMavi,
@@ -79,13 +75,6 @@
 
     protected override void OnInitialized()
     {
-        _breadcrumbs =
-        [
-            new(Loc["Breadcrumb.Home"].Value, href: "/", icon: Icons.Material.Filled.Home),
-            new(Loc["NavMenu.Settings"].Value, href: null, disabled: true),
-            new(Loc["NavMenu.Theme"].Value, href: null, disabled: true),
-        ];
-
         ThemeService.ThemeChanged += OnThemeChanged;
         Sync();
     }

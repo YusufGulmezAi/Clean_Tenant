@@ -119,5 +119,28 @@ public static class PermissionCatalog
         new("company.payroll.write",     "Site bordro tab — düzenleme",     "CompanyParams", ScopeLevel.Tenant),
         new("company.purchasing.read",   "Site satınalma tab — okuma",      "CompanyParams", ScopeLevel.Tenant),
         new("company.purchasing.write",  "Site satınalma tab — düzenleme",  "CompanyParams", ScopeLevel.Tenant),
+
+        // ---------- Muhasebe Modülü (v0.3.x) ----------
+        new("company.accounting.account-plan.read",  "Hesap planı görüntüleme",       "Accounting", ScopeLevel.Company),
+        new("company.accounting.account-plan.write", "Hesap planı düzenleme",         "Accounting", ScopeLevel.Company),
+        new("company.accounting.journal.read",       "Yevmiye görüntüleme",           "Accounting", ScopeLevel.Company),
+        new("company.accounting.journal.write",      "Yevmiye fişi oluşturma",        "Accounting", ScopeLevel.Company),
+        new("company.accounting.journal.post",       "Yevmiye fişi kesinleştirme",    "Accounting", ScopeLevel.Company),
+        new("company.accounting.journal.approve",    "Yevmiye fişi onaylama",         "Accounting", ScopeLevel.Company),
+        new("company.accounting.journal.void",       "Yevmiye fişi iptal etme",       "Accounting", ScopeLevel.Company),
+        new("company.accounting.period.manage",      "Dönem yönetimi",                "Accounting", ScopeLevel.Company),
+        new("company.accounting.period.override",    "Dönem kilidi kaldırma",         "Accounting", ScopeLevel.Tenant),
+        new("company.accounting.fiscal-year.manage", "Mali yıl yönetimi",             "Accounting", ScopeLevel.Company),
+        new("company.accounting.bank-account.read",  "Banka hesabı görüntüleme",      "Accounting", ScopeLevel.Company),
+        new("company.accounting.bank-account.write", "Banka hesabı düzenleme",        "Accounting", ScopeLevel.Company),
+        new("company.accounting.invoice.read",       "Fatura görüntüleme",            "Accounting", ScopeLevel.Company),
+        new("company.accounting.invoice.write",      "Fatura kaydetme",               "Accounting", ScopeLevel.Company),
+        new("company.accounting.invoice.post",       "Fatura yevmiyeleştirme",        "Accounting", ScopeLevel.Company),
+        new("company.accounting.budget.read",        "Bütçe görüntüleme",             "Accounting", ScopeLevel.Company),
+        new("company.accounting.budget.write",       "Bütçe düzenleme",               "Accounting", ScopeLevel.Company),
+        new("company.accounting.reports.read",       "Rapor görüntüleme",             "Accounting", ScopeLevel.Company),
+        new("company.accounting.cost-center.read",   "Maliyet merkezi görüntüleme",   "Accounting", ScopeLevel.Company),
+        new("company.accounting.cost-center.write",  "Maliyet merkezi düzenleme",     "Accounting", ScopeLevel.Company),
+        new("company.accounting.settings.manage",    "Muhasebe ayarları",             "Accounting", ScopeLevel.Company),
     ];
 }

@@ -1,4 +1,4 @@
-# Bütçe Modülü — Spec Paketi (Claude Code'a Devir İçin)
+g# Bütçe Modülü — Spec Paketi (Claude Code'a Devir İçin)
 
 > Bu klasör, **VS Code'taki Claude Code**'a verilecek 5 doküman içerir.
 > Repo'ya `docs/specs/budget-module/` altına koyman önerilir.

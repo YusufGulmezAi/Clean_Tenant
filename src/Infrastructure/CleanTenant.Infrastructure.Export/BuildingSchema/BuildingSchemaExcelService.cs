@@ -292,7 +292,7 @@ public sealed class BuildingSchemaExcelService : IBuildingSchemaExcelService
             {
                 rows.Add(new BuildingSchemaImportRow
                 {
-                    BlockName    = blockName,
+                    LandName     = blockName,
                     ParcelName   = parcelName,
                     BuildingName = buildingName,
                     BuildingType = buildingType,

@@ -1,0 +1,292 @@
+@page "/company/accounting/bank-accounts"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject AuthenticationStateProvider AuthProvider
+@inject MediatR.IMediator Mediator
+@inject ISnackbar Snackbar
+@inject IStringLocalizer Loc
+@using CleanTenant.SharedKernel.Common.Results
+@using CleanTenant.Application.Features.Main.Accounting.BankAccounts
+@using CleanTenant.Domain.Tenant.Accounting.Enums
+
+<PageTitle>Banka Hesapları</PageTitle>
+
+@if (_unauthorized)
+{
+    <MudAlert Severity="Severity.Warning" Class="my-3">
+        Bu sayfaya erişim yetkiniz bulunmuyor. Şirket kapsamında giriş yapınız.
+    </MudAlert>
+}
+else if (!_initialized)
+{
+    <MudText Typo="Typo.h6" Class="my-3">Yükleniyor...</MudText>
+}
+else
+{
+    <div class="d-flex align-center justify-space-between mb-3">
+        <MudText Typo="Typo.h5">Banka Hesapları</MudText>
+        <MudButton StartIcon="@(_showForm ? Icons.Material.Filled.Close : Icons.Material.Filled.Add)"
+                   Color="Color.Primary" Variant="Variant.Filled"
+                   OnClick="@ToggleForm">
+            @(_showForm ? "İptal" : "Yeni Hesap")
+        </MudButton>
+    </div>
+
+    @if (_showForm)
+    {
+        <MudPaper Class="pa-4 mb-4" Elevation="1">
+            <MudForm @ref="_bankForm">
+                <MudGrid Spacing="2">
+                    <MudItem xs="12" sm="6">
+                        <MudTextField @bind-Value="_formModel.Name"
+                                      Label="Hesap Adı"
+                                      Required="true"
+                                      MaxLength="200" />
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudTextField @bind-Value="_formModel.BankName"
+                                      Label="Banka Adı"
+                                      Required="true"
+                                      MaxLength="200" />
+                    </MudItem>
+                    <MudItem xs="12" sm="4">
+                        <MudTextField @bind-Value="_formModel.BranchCode"
+                                      Label="Şube Kodu"
+                                      MaxLength="20" />
+                    </MudItem>
+                    <MudItem xs="12" sm="4">
+                        <MudTextField @bind-Value="_formModel.AccountNumber"
+                                      Label="Hesap Numarası"
+                                      Required="true"
+                                      MaxLength="50" />
+                    </MudItem>
+                    <MudItem xs="12" sm="4">
+                        <MudTextField @bind-Value="_formModel.Iban"
+                                      Label="IBAN (TR + 24 rakam)"
+                                      MaxLength="26"
+                                      HelperText="Opsiyonel — TR ile başlamalı" />
+                    </MudItem>
+                    <MudItem xs="12" sm="4">
+                        <MudSelect T="BankAccountType" @bind-Value="_formModel.AccountType" Label="Hesap Tipi">
+                            @foreach (BankAccountType t in Enum.GetValues<BankAccountType>())
+                            {
+                                <MudSelectItem Value="t">@GetAccountTypeLabel(t)</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12" sm="4">
+                        <MudTextField @bind-Value="_formModel.CurrencyCode"
+                                      Label="Para Birimi"
+                                      MaxLength="3"
+                                      Required="true" />
+                    </MudItem>
+                    @if (_editingId.HasValue)
+                    {
+                        <MudItem xs="12" sm="4">
+                            <MudSwitch T="bool" @bind-Value="_formModel.IsActive"
+                                       Label="Aktif"
+                                       Color="Color.Success" />
+                        </MudItem>
+                    }
+                </MudGrid>
+                <div class="d-flex gap-2 mt-4">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@SubmitAsync">
+                        @(_editingId.HasValue ? "Güncelle" : "Kaydet")
+                    </MudButton>
+                    <MudButton Variant="Variant.Text" OnClick="@ToggleForm">İptal</MudButton>
+                </div>
+            </MudForm>
+        </MudPaper>
+    }
+
+    <MudDataGrid T="BankAccountListItem" Items="@_accounts" Hover="true" Striped="true" Bordered="true">
+        <Columns>
+            <PropertyColumn Property="@(x => x.Name)" Title="Ad" />
+            <PropertyColumn Property="@(x => x.BankName)" Title="Banka" />
+            <TemplateColumn Title="IBAN">
+                <CellTemplate>
+                    <MudText Typo="Typo.body2" Style="font-family:monospace">
+                        @(context.Item.Iban ?? "—")
+                    </MudText>
+                </CellTemplate>
+            </TemplateColumn>
+            <TemplateColumn Title="Hesap Tipi">
+                <CellTemplate>
+                    <MudText Typo="Typo.body2">@GetAccountTypeLabel(context.Item.AccountType)</MudText>
+                </CellTemplate>
+            </TemplateColumn>
+            <PropertyColumn Property="@(x => x.CurrencyCode)" Title="Para Birimi" />
+            <TemplateColumn Title="Durum">
+                <CellTemplate>
+                    @if (context.Item.IsActive)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Success">Aktif</MudChip>
+                    }
+                    else
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Default">Pasif</MudChip>
+                    }
+                </CellTemplate>
+            </TemplateColumn>
+            <TemplateColumn CellClass="d-flex justify-end" Filterable="false" Sortable="false" Title="İşlemler">
+                <CellTemplate>
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                                   OnClick="@(() => EditAsync(context.Item))" />
+                    @if (context.Item.IsActive)
+                    {
+                        <MudIconButton Icon="@Icons.Material.Filled.Block" Size="Size.Small"
+                                       Color="Color.Warning"
+                                       OnClick="@(() => DeactivateAsync(context.Item))" />
+                    }
+                </CellTemplate>
+            </TemplateColumn>
+        </Columns>
+    </MudDataGrid>
+}
+
+@code {
+    private Guid _companyId;
+    private Guid? _tenantId;
+    private bool _unauthorized;
+    private bool _initialized;
+    private bool _showForm;
+    private Guid? _editingId;
+
+    private IReadOnlyList<BankAccountListItem> _accounts = [];
+    private MudForm? _bankForm;
+    private BankAccountForm _formModel = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user?.Identity?.IsAuthenticated != true) { _unauthorized = true; _initialized = true; return; }
+        var scope = user.FindFirst("scope")?.Value;
+        if (!string.Equals(scope, "Company", StringComparison.OrdinalIgnoreCase)) { _unauthorized = true; _initialized = true; return; }
+        if (user.FindFirst("company_id") is { Value: var cid } && Guid.TryParseExact(cid, "N", out var cGuid))
+            _companyId = cGuid;
+        else { _unauthorized = true; _initialized = true; return; }
+        if (user.FindFirst("tenant_id") is { Value: var tid } && Guid.TryParseExact(tid, "N", out var tGuid))
+            _tenantId = tGuid;
+        await LoadDataAsync();
+        _initialized = true;
+    }
+
+    private async Task LoadDataAsync()
+    {
+        var result = await Mediator.Send(new GetBankAccountsQuery(_companyId, OnlyActive: false));
+        if (result.IsSuccess)
+            _accounts = result.Value!;
+    }
+
+    private void ToggleForm()
+    {
+        _showForm = !_showForm;
+        if (!_showForm)
+        {
+            _formModel = new();
+            _editingId = null;
+        }
+    }
+
+    private void EditAsync(BankAccountListItem item)
+    {
+        _editingId = item.Id;
+        _formModel = new BankAccountForm
+        {
+            Name = item.Name,
+            BankName = item.BankName,
+            Iban = item.Iban,
+            AccountType = item.AccountType,
+            CurrencyCode = item.CurrencyCode,
+            IsActive = item.IsActive
+        };
+        _showForm = true;
+        StateHasChanged();
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (_bankForm is null) return;
+        await _bankForm.Validate();
+        if (!_bankForm.IsValid) return;
+
+        if (_tenantId is null)
+        {
+            Snackbar.Add("Kiracı bilgisi bulunamadı.", Severity.Error);
+            return;
+        }
+
+        if (_editingId.HasValue)
+        {
+            var result = await Mediator.Send(new UpdateBankAccountCommand(
+                _editingId.Value,
+                _companyId,
+                _formModel.Name,
+                _formModel.BankName,
+                _formModel.BranchCode,
+                _formModel.AccountNumber,
+                _formModel.Iban,
+                _formModel.AccountType,
+                _formModel.CurrencyCode,
+                null,
+                _formModel.IsActive));
+
+            if (result.IsFailure) { Snackbar.Add(result.FirstError.Message, Severity.Error); return; }
+            Snackbar.Add("Banka hesabı güncellendi.", Severity.Success);
+        }
+        else
+        {
+            var result = await Mediator.Send(new CreateBankAccountCommand(
+                _companyId,
+                _tenantId.Value,
+                _formModel.Name,
+                _formModel.BankName,
+                _formModel.BranchCode,
+                _formModel.AccountNumber,
+                _formModel.Iban,
+                _formModel.AccountType,
+                _formModel.CurrencyCode,
+                null));
+
+            if (result.IsFailure) { Snackbar.Add(result.FirstError.Message, Severity.Error); return; }
+            Snackbar.Add("Banka hesabı oluşturuldu.", Severity.Success);
+        }
+
+        _showForm = false;
+        _formModel = new();
+        _editingId = null;
+        await LoadDataAsync();
+    }
+
+    private async Task DeactivateAsync(BankAccountListItem item)
+    {
+        var result = await Mediator.Send(new DeactivateBankAccountCommand(item.Id, _companyId));
+        if (result.IsFailure)
+        {
+            Snackbar.Add(result.FirstError.Message, Severity.Error);
+            return;
+        }
+        Snackbar.Add($"{item.Name} hesabı pasifleştirildi.", Severity.Success);
+        await LoadDataAsync();
+    }
+
+    private static string GetAccountTypeLabel(BankAccountType t) => t switch
+    {
+        BankAccountType.Checking => "Vadesiz",
+        BankAccountType.Savings => "Vadeli",
+        BankAccountType.CreditLine => "Kredi Hattı",
+        _ => t.ToString()
+    };
+
+    private class BankAccountForm
+    {
+        public string Name { get; set; } = "";
+        public string BankName { get; set; } = "";
+        public string? BranchCode { get; set; }
+        public string AccountNumber { get; set; } = "";
+        public string? Iban { get; set; }
+        public BankAccountType AccountType { get; set; } = BankAccountType.Checking;
+        public string CurrencyCode { get; set; } = "TRY";
+        public bool IsActive { get; set; } = true;
+    }
+}

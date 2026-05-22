@@ -1,0 +1,503 @@
+@page "/company/accounting/journal/new"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject AuthenticationStateProvider AuthProvider
+@inject MediatR.IMediator Mediator
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject IStringLocalizer Loc
+@inject NavigationManager Nav
+@using CleanTenant.SharedKernel.Common.Results
+@using CleanTenant.Application.Features.Main.Accounting.JournalEntries
+@using CleanTenant.Application.Features.Main.Accounting.AccountCodes
+@using CleanTenant.Application.Features.Main.Accounting.FiscalYears
+@using CleanTenant.Domain.Tenant.Accounting.Enums
+
+<PageTitle>Yeni Yevmiye Fişi</PageTitle>
+
+@if (_unauthorized)
+{
+    <MudAlert Severity="Severity.Warning" Class="my-3">
+        Bu sayfaya erişim yetkiniz bulunmamaktadır.
+    </MudAlert>
+}
+else if (!_initialized)
+{
+    <MudText Typo="Typo.h6" Class="my-3">Yükleniyor...</MudText>
+}
+else
+{
+    <div class="d-flex align-center mb-4 gap-2">
+        <MudIconButton Icon="@Icons.Material.Filled.ArrowBack"
+                       OnClick="@(() => Nav.NavigateTo("/company/accounting/journal"))" />
+        <MudText Typo="Typo.h5">Yeni Yevmiye Fişi</MudText>
+    </div>
+
+    @* Adım göstergesi *@
+    <MudPaper Class="pa-3 mb-4" Elevation="0" Outlined="true">
+        <div class="d-flex align-center gap-4">
+            @for (int i = 0; i < _stepTitles.Length; i++)
+            {
+                var stepIndex = i;
+                var isActive = _currentStep == stepIndex;
+                var isDone = _currentStep > stepIndex;
+                <div class="d-flex align-center gap-1">
+                    <MudAvatar Size="Size.Small"
+                               Color="@(isDone ? Color.Success : isActive ? Color.Primary : Color.Default)">
+                        @if (isDone)
+                        {
+                            <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" />
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.caption">@(stepIndex + 1)</MudText>
+                        }
+                    </MudAvatar>
+                    <MudText Typo="Typo.body2"
+                             Color="@(isActive ? Color.Primary : Color.Default)">
+                        @_stepTitles[stepIndex]
+                    </MudText>
+                </div>
+                @if (stepIndex < _stepTitles.Length - 1)
+                {
+                    <MudDivider FlexItem="true" />
+                }
+            }
+        </div>
+    </MudPaper>
+
+    @* ADIM 1: Fiş Başlığı *@
+    @if (_currentStep == 0)
+    {
+        <MudPaper Class="pa-4 mb-4" Elevation="1">
+            <MudText Typo="Typo.h6" Class="mb-3">Fiş Başlığı</MudText>
+            <MudGrid Spacing="3">
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="EntryType" @bind-Value="_header.EntryType"
+                               Label="Fiş Tipi" Required="true">
+                        @foreach (var t in Enum.GetValues<EntryType>())
+                        {
+                            <MudSelectItem T="EntryType" Value="@t">@GetEntryTypeLabel(t)</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudDatePicker Date="_header.EntryDateDt"
+                                   Label="Fiş Tarihi"
+                                   Required="true"
+                                   DateFormat="dd.MM.yyyy"
+                                   DateChanged="@OnEntryDateChanged" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_header.Description"
+                                  Label="Açıklama"
+                                  Required="true"
+                                  MaxLength="500"
+                                  Lines="2" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_header.Reference"
+                                  Label="Referans (Belge/Fatura No)"
+                                  MaxLength="100" />
+                </MudItem>
+                @if (_currentPeriodId is null)
+                {
+                    <MudItem xs="12">
+                        <MudAlert Severity="Severity.Warning">
+                            Seçilen tarih için açık muhasebe dönemi bulunamadı.
+                            Lütfen farklı bir tarih seçin veya muhasebe dönemi ayarlarını kontrol edin.
+                        </MudAlert>
+                    </MudItem>
+                }
+                else
+                {
+                    <MudItem xs="12">
+                        <MudAlert Severity="Severity.Info" Icon="@Icons.Material.Filled.CheckCircle">
+                            Aktif dönem bulundu.
+                        </MudAlert>
+                    </MudItem>
+                }
+            </MudGrid>
+        </MudPaper>
+        <div class="d-flex justify-end gap-2">
+            <MudButton Variant="Variant.Text"
+                       OnClick="@(() => Nav.NavigateTo("/company/accounting/journal"))">
+                İptal
+            </MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                       Disabled="@(!CanProceedStep1)"
+                       OnClick="@(() => _currentStep = 1)">
+                Devam: Satırlar
+            </MudButton>
+        </div>
+    }
+
+    @* ADIM 2: Satırlar *@
+    @if (_currentStep == 1)
+    {
+        <MudPaper Class="pa-4 mb-4" Elevation="1">
+            <MudText Typo="Typo.h6" Class="mb-3">Yevmiye Satırları</MudText>
+
+            <MudTable Items="@_lines" Dense="true" Class="mb-4" Breakpoint="Breakpoint.Sm">
+                <HeaderContent>
+                    <MudTh>Hesap Kodu</MudTh>
+                    <MudTh>Hesap Adı</MudTh>
+                    <MudTh>Açıklama</MudTh>
+                    <MudTh>Borç</MudTh>
+                    <MudTh>Alacak</MudTh>
+                    <MudTh></MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Hesap Kodu">
+                        <MudAutocomplete T="AccountCodeListItem"
+                                         Value="@GetSelectedCode(context.LineId)"
+                                         ValueChanged="@(v => OnAccountSelected(context.LineId, v))"
+                                         SearchFunc="@SearchAccounts"
+                                         ToStringFunc="@(c => c?.Code ?? "")"
+                                         Label="Hesap Kodu"
+                                         Dense="true"
+                                         ResetValueOnEmptyText="false"
+                                         Placeholder="Kod ara..." />
+                    </MudTd>
+                    <MudTd DataLabel="Hesap Adı">
+                        <MudText Typo="Typo.body2">@(context.AccountName ?? "—")</MudText>
+                    </MudTd>
+                    <MudTd DataLabel="Açıklama">
+                        <MudTextField @bind-Value="context.LineDescription"
+                                      Placeholder="Satır açıklaması"
+                                      Dense="true" />
+                    </MudTd>
+                    <MudTd DataLabel="Borç">
+                        <MudNumericField T="decimal"
+                                         @bind-Value="context.Debit"
+                                         Format="N2"
+                                         Min="0"
+                                         Dense="true"
+                                         Placeholder="0,00" />
+                    </MudTd>
+                    <MudTd DataLabel="Alacak">
+                        <MudNumericField T="decimal"
+                                         @bind-Value="context.Credit"
+                                         Format="N2"
+                                         Min="0"
+                                         Dense="true"
+                                         Placeholder="0,00" />
+                    </MudTd>
+                    <MudTd>
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                       Color="Color.Error"
+                                       Size="Size.Small"
+                                       OnClick="@(() => RemoveLine(context.LineId))" />
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+
+            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-3">
+                <MudButton StartIcon="@Icons.Material.Filled.Add"
+                           Variant="Variant.Outlined"
+                           OnClick="@AddLine">
+                    Satır Ekle
+                </MudButton>
+                <MudStack Row="true" Spacing="4">
+                    <MudText Typo="Typo.body1">
+                        <b>Borç:</b> @_lines.Sum(l => l.Debit).ToString("N2") TL
+                    </MudText>
+                    <MudText Typo="Typo.body1" Color="@(IsBalanced ? Color.Success : Color.Error)">
+                        <b>Alacak:</b> @_lines.Sum(l => l.Credit).ToString("N2") TL
+                    </MudText>
+                </MudStack>
+            </MudStack>
+
+            @if (_lines.Count >= 2 && !IsBalanced)
+            {
+                <MudAlert Severity="Severity.Warning" Class="mb-3">
+                    Borç ve alacak toplamları eşit olmalıdır.
+                </MudAlert>
+            }
+        </MudPaper>
+
+        <div class="d-flex justify-end gap-2">
+            <MudButton Variant="Variant.Outlined"
+                       OnClick="@(() => _currentStep = 0)">
+                Geri
+            </MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                       Disabled="@(!IsBalanced)"
+                       OnClick="@(() => _currentStep = 2)">
+                Devam: Onay
+            </MudButton>
+        </div>
+    }
+
+    @* ADIM 3: Onay ve Kaydet *@
+    @if (_currentStep == 2)
+    {
+        <MudPaper Class="pa-4" Elevation="1">
+            <MudText Typo="Typo.h6" Class="mb-3">Fiş Özeti</MudText>
+            <MudSimpleTable Dense="true" Class="mb-4">
+                <tbody>
+                    <tr>
+                        <td><b>Fiş Tipi</b></td>
+                        <td>@GetEntryTypeLabel(_header.EntryType)</td>
+                    </tr>
+                    <tr>
+                        <td><b>Tarih</b></td>
+                        <td>@_header.EntryDate.ToString("dd.MM.yyyy")</td>
+                    </tr>
+                    <tr>
+                        <td><b>Açıklama</b></td>
+                        <td>@_header.Description</td>
+                    </tr>
+                    @if (!string.IsNullOrWhiteSpace(_header.Reference))
+                    {
+                        <tr>
+                            <td><b>Referans</b></td>
+                            <td>@_header.Reference</td>
+                        </tr>
+                    }
+                    <tr>
+                        <td><b>Satır Sayısı</b></td>
+                        <td>@_lines.Count</td>
+                    </tr>
+                    <tr>
+                        <td><b>Toplam Borç</b></td>
+                        <td style="font-family:monospace">@_lines.Sum(l => l.Debit).ToString("N2") TL</td>
+                    </tr>
+                    <tr>
+                        <td><b>Toplam Alacak</b></td>
+                        <td style="font-family:monospace">@_lines.Sum(l => l.Credit).ToString("N2") TL</td>
+                    </tr>
+                </tbody>
+            </MudSimpleTable>
+
+            @if (!IsBalanced)
+            {
+                <MudAlert Severity="Severity.Error" Class="mb-3">
+                    Borç ve alacak toplamları eşit değil veya satır sayısı yetersiz.
+                </MudAlert>
+            }
+            @if (_currentPeriodId is null)
+            {
+                <MudAlert Severity="Severity.Error" Class="mb-3">
+                    Açık muhasebe dönemi bulunamadı. Lütfen geri dönüp tarihi kontrol edin.
+                </MudAlert>
+            }
+
+            <MudStack Row="true" Spacing="2">
+                <MudButton Variant="Variant.Outlined"
+                           OnClick="@(() => _currentStep = 1)">
+                    Geri
+                </MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                           Disabled="@(!IsBalanced || _currentPeriodId is null || _saving)"
+                           OnClick="@SubmitAsync">
+                    @(_saving ? "Kaydediliyor..." : "Fişi Kaydet")
+                </MudButton>
+                <MudButton Variant="Variant.Text"
+                           OnClick="@(() => Nav.NavigateTo("/company/accounting/journal"))">
+                    İptal
+                </MudButton>
+            </MudStack>
+        </MudPaper>
+    }
+}
+
+@code {
+    private class EntryHeaderForm
+    {
+        public EntryType EntryType { get; set; } = EntryType.Normal;
+        public DateTime? EntryDateDt { get; set; } = DateTime.Today;
+        public DateOnly EntryDate => EntryDateDt.HasValue
+            ? DateOnly.FromDateTime(EntryDateDt.Value)
+            : DateOnly.FromDateTime(DateTime.Today);
+        public string Description { get; set; } = "";
+        public string? Reference { get; set; }
+    }
+
+    private class LineForm
+    {
+        public Guid LineId { get; set; } = Guid.NewGuid();
+        public Guid? AccountCodeId { get; set; }
+        public string? AccountName { get; set; }
+        public decimal Debit { get; set; }
+        public decimal Credit { get; set; }
+        public string? LineDescription { get; set; }
+    }
+
+    private Guid _companyId;
+    private Guid? _tenantId;
+    private bool _unauthorized;
+    private bool _initialized;
+    private bool _saving;
+
+    private int _currentStep;
+    private readonly string[] _stepTitles = ["Fiş Başlığı", "Satırlar", "Onay ve Kaydet"];
+
+    private EntryHeaderForm _header = new();
+    private List<LineForm> _lines = [new(), new()];
+
+    private Guid? _currentPeriodId;
+    private IReadOnlyList<PeriodSummary> _periods = [];
+    private IReadOnlyList<AccountCodeListItem> _accountCodes = [];
+
+    private bool CanProceedStep1 =>
+        !string.IsNullOrWhiteSpace(_header.Description) &&
+        _header.EntryDateDt.HasValue &&
+        _currentPeriodId is not null;
+
+    private bool IsBalanced => _lines.Count >= 2 &&
+        _lines.Sum(l => l.Debit) == _lines.Sum(l => l.Credit) &&
+        _lines.Sum(l => l.Debit) > 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user?.Identity?.IsAuthenticated != true) { _unauthorized = true; _initialized = true; return; }
+        var scope = user.FindFirst("scope")?.Value;
+        if (!string.Equals(scope, "Company", StringComparison.OrdinalIgnoreCase)) { _unauthorized = true; _initialized = true; return; }
+        if (user.FindFirst("company_id") is { Value: var cid } && Guid.TryParseExact(cid, "N", out var cGuid))
+            _companyId = cGuid;
+        else { _unauthorized = true; _initialized = true; return; }
+        if (user.FindFirst("tenant_id") is { Value: var tid } && Guid.TryParseExact(tid, "N", out var tGuid))
+            _tenantId = tGuid;
+        await LoadDataAsync();
+        _initialized = true;
+    }
+
+    private async Task LoadDataAsync()
+    {
+        // Hesap kodlarını yükle (sadece yaprak + aktif hesaplar)
+        var codesResult = await Mediator.Send(new GetAccountCodesQuery(_companyId, OnlyActive: true, OnlyDetail: true));
+        if (codesResult.IsSuccess)
+            _accountCodes = codesResult.Value!;
+        else
+            Snackbar.Add("Hesap kodları yüklenemedi: " + codesResult.FirstError.Message, Severity.Warning);
+
+        // Cari mali yılı ve dönemlerini yükle
+        var yearResult = await Mediator.Send(new GetCurrentFiscalYearQuery(_companyId));
+        if (yearResult.IsSuccess)
+        {
+            _periods = yearResult.Value!.Periods;
+            FindCurrentPeriod(_header.EntryDate);
+        }
+        else
+        {
+            Snackbar.Add("Mali yıl bilgisi yüklenemedi: " + yearResult.FirstError.Message, Severity.Warning);
+        }
+    }
+
+    private void FindCurrentPeriod(DateOnly entryDate)
+    {
+        var period = _periods.FirstOrDefault(p =>
+            p.Status == PeriodStatus.Open &&
+            p.StartDate <= entryDate &&
+            p.EndDate >= entryDate);
+        _currentPeriodId = period?.Id;
+    }
+
+    private void OnEntryDateChanged(DateTime? dt)
+    {
+        _header.EntryDateDt = dt;
+        if (dt.HasValue)
+            FindCurrentPeriod(DateOnly.FromDateTime(dt.Value));
+        else
+            _currentPeriodId = null;
+    }
+
+    private void AddLine()
+    {
+        _lines.Add(new LineForm());
+    }
+
+    private void RemoveLine(Guid lineId)
+    {
+        var line = _lines.FirstOrDefault(l => l.LineId == lineId);
+        if (line is not null)
+            _lines.Remove(line);
+    }
+
+    private Task<IEnumerable<AccountCodeListItem>> SearchAccounts(string? value, CancellationToken ct)
+    {
+        if (string.IsNullOrEmpty(value))
+            return Task.FromResult(_accountCodes.Take(20).AsEnumerable());
+
+        var filtered = _accountCodes.Where(c =>
+            c.Code.StartsWith(value, StringComparison.OrdinalIgnoreCase) ||
+            c.Name.Contains(value, StringComparison.OrdinalIgnoreCase));
+        return Task.FromResult(filtered.Take(20));
+    }
+
+    private AccountCodeListItem? GetSelectedCode(Guid lineId)
+    {
+        var line = _lines.FirstOrDefault(l => l.LineId == lineId);
+        return line?.AccountCodeId.HasValue == true
+            ? _accountCodes.FirstOrDefault(c => c.Id == line.AccountCodeId)
+            : null;
+    }
+
+    private void OnAccountSelected(Guid lineId, AccountCodeListItem? code)
+    {
+        var line = _lines.FirstOrDefault(l => l.LineId == lineId);
+        if (line is null || code is null) return;
+        line.AccountCodeId = code.Id;
+        line.AccountName = code.Name;
+        StateHasChanged();
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (!IsBalanced || _currentPeriodId is null || _tenantId is null) return;
+        _saving = true;
+        try
+        {
+            var cmd = new CreateJournalEntryCommand(
+                CompanyId: _companyId,
+                TenantId: _tenantId.Value,
+                AccountingPeriodId: _currentPeriodId.Value,
+                EntryType: _header.EntryType,
+                EntryDate: _header.EntryDate,
+                Description: _header.Description,
+                Reference: _header.Reference,
+                ReferenceId: null,
+                Lines: _lines.Select(l => new JournalLineRequest(
+                    AccountCodeId: l.AccountCodeId!.Value,
+                    Debit: l.Debit,
+                    Credit: l.Credit,
+                    Description: l.LineDescription,
+                    CostCenterId: null,
+                    TaxCode: null,
+                    UnitId: null,
+                    OriginalAmount: null,
+                    OriginalCurrency: null,
+                    ExchangeRate: null
+                )).ToList().AsReadOnly()
+            );
+
+            var result = await Mediator.Send(cmd);
+            if (result.IsFailure)
+            {
+                Snackbar.Add(result.FirstError.Message, Severity.Error);
+                return;
+            }
+
+            Snackbar.Add($"Fiş oluşturuldu: {result.Value!.EntryNumber}", Severity.Success);
+            Nav.NavigateTo($"/company/accounting/journal/{result.Value.Id}");
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private static string GetEntryTypeLabel(EntryType t) => t switch
+    {
+        EntryType.Normal => "Normal",
+        EntryType.Opening => "Açılış",
+        EntryType.Closing => "Kapanış",
+        EntryType.Adjustment => "Mahsup",
+        EntryType.Transfer => "Virman",
+        EntryType.Correction => "Düzeltme",
+        EntryType.InflationAdjustment => "Enflasyon Düzeltmesi",
+        _ => t.ToString()
+    };
+}

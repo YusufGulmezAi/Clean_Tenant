@@ -14,30 +14,26 @@
     v0.2.10.e.5 — Roles.* anahtarlarıyla lokalize edildi.
 *@
 
-<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
-    <MudBreadcrumbs Items="_breadcrumbs" Class="mb-4" />
+@if (_unauthorized)
+{
+    <MudAlert Severity="Severity.Warning">
+        @Loc["Roles.TenantList.Unauthorized"]
+    </MudAlert>
+}
+else
+{
+    <MudText Typo="Typo.h5" Class="mb-4">@Loc["Roles.New.Title"]</MudText>
+    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-3">
+        @Loc["Roles.TenantNew.Info"]
+    </MudAlert>
 
-    @if (_unauthorized)
-    {
-        <MudAlert Severity="Severity.Warning">
-            @Loc["Roles.TenantList.Unauthorized"]
-        </MudAlert>
-    }
-    else
-    {
-        <MudText Typo="Typo.h5" Class="mb-4">@Loc["Roles.New.Title"]</MudText>
-        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-3">
-            @Loc["Roles.TenantNew.Info"]
-        </MudAlert>
-
-        <RoleForm Model="_model"
-                  OnSubmit="@SubmitAsync"
-                  IsSubmitting="@_busy"
-                  SubmitButtonText="@Loc["Roles.New.SubmitButton"]"
-                  CancelHref="/tenant/roles"
-                  HideSystemScope="true" />
-    }
-</MudContainer>
+    <RoleForm Model="_model"
+              OnSubmit="@SubmitAsync"
+              IsSubmitting="@_busy"
+              SubmitButtonText="@Loc["Roles.New.SubmitButton"]"
+              CancelHref="/tenant/roles"
+              HideSystemScope="true" />
+}
 
 @code {
     // Tenant context'inde varsayılan scope Yönetim (Tenant=2).
@@ -45,16 +41,8 @@
     private bool _busy;
     private bool _unauthorized;
 
-    private List<BreadcrumbItem> _breadcrumbs = [];
-
     protected override async Task OnInitializedAsync()
     {
-        _breadcrumbs =
-        [
-            new(Loc["Roles.List.Title"].Value, "/tenant/roles"),
-            new(Loc["Roles.New.Title"].Value, null, disabled: true),
-        ];
-
         var authState = await AuthProvider.GetAuthenticationStateAsync();
         var tenantClaim = authState.User.FindFirst("tenant_id")?.Value;
         _unauthorized = authState.User?.Identity?.IsAuthenticated != true

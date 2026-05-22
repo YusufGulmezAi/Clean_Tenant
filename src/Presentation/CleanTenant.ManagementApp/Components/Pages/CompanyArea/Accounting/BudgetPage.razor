@@ -1,0 +1,264 @@
+@page "/company/accounting/budget"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject AuthenticationStateProvider AuthProvider
+@inject MediatR.IMediator Mediator
+@inject ISnackbar Snackbar
+@inject IStringLocalizer Loc
+@using CleanTenant.SharedKernel.Common.Results
+@using CleanTenant.Application.Features.Main.Accounting.Budgets
+@using CleanTenant.Application.Features.Main.Accounting.AccountCodes
+@using CleanTenant.Application.Features.Main.Accounting.FiscalYears
+@using CleanTenant.Application.Features.Main.Accounting.Periods
+@using CleanTenant.Domain.Tenant.Accounting.Enums
+
+<PageTitle>Bütçe</PageTitle>
+
+@if (_unauthorized)
+{
+    <MudAlert Severity="Severity.Warning" Class="my-3">
+        Bu sayfaya erişim yetkiniz bulunmuyor. Şirket kapsamında giriş yapınız.
+    </MudAlert>
+}
+else if (!_initialized)
+{
+    <MudText Typo="Typo.h6" Class="my-3">Yükleniyor...</MudText>
+}
+else
+{
+    <div class="d-flex align-center justify-space-between mb-3">
+        <MudText Typo="Typo.h5">Bütçe</MudText>
+        @if (_budgetRows.Count > 0)
+        {
+            <MudButton Color="Color.Primary" Variant="Variant.Filled"
+                       StartIcon="@Icons.Material.Filled.Save"
+                       OnClick="@SaveAllModifiedAsync">
+                Tüm Değişiklikleri Kaydet
+            </MudButton>
+        }
+    </div>
+
+    <MudPaper Class="pa-4 mb-4" Elevation="1">
+        <MudGrid Spacing="2" AlignItems="AlignItems.End">
+            <MudItem xs="12" sm="5">
+                <MudSelect T="FiscalYearListItem?" Value="_selectedFiscalYear"
+                           Label="Mali Yıl"
+                           ToStringFunc="@(fy => fy?.Label ?? "")"
+                           ValueChanged="@OnFiscalYearChanged">
+                    <MudSelectItem Value="@((FiscalYearListItem?)null)">— Seçiniz —</MudSelectItem>
+                    @foreach (var fy in _fiscalYears)
+                    {
+                        <MudSelectItem Value="fy">@fy.Label</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="5">
+                <MudSelect T="PeriodListItem?" Value="_selectedPeriod"
+                           Label="Dönem (Ay)"
+                           ToStringFunc="@(p => p is null ? "" : $"{GetMonthName(p.Month)} {p.Year}")"
+                           Disabled="@(_periods.Count == 0)"
+                           ValueChanged="@OnPeriodChanged">
+                    <MudSelectItem Value="@((PeriodListItem?)null)">— Seçiniz —</MudSelectItem>
+                    @foreach (var p in _periods)
+                    {
+                        <MudSelectItem Value="p">@GetMonthName(p.Month) @p.Year</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="2">
+                <MudButton Variant="Variant.Outlined" Color="Color.Default"
+                           OnClick="@LoadBudgetDataAsync"
+                           Disabled="@(_selectedPeriod is null)"
+                           FullWidth="true">
+                    Yükle
+                </MudButton>
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    @if (_selectedPeriod is not null && _budgetRows.Count > 0)
+    {
+        <MudText Typo="Typo.subtitle1" Class="mb-2">
+            @GetMonthName(_selectedPeriod.Month) @_selectedPeriod.Year — Bütçe Girişi
+        </MudText>
+        <MudSimpleTable Hover="true" Striped="true" Dense="false">
+            <thead>
+                <tr>
+                    <th>Hesap Kodu</th>
+                    <th>Hesap Adı</th>
+                    <th style="width:200px">Bütçe Tutarı (TL)</th>
+                    <th style="width:120px;text-align:right">İşlemler</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var row in _budgetRows)
+                {
+                    <tr style="@(row.IsModified ? "background-color:var(--mud-palette-warning-hover)" : "")">
+                        <td>
+                            <MudText Typo="Typo.body2" Style="font-family:monospace">
+                                @row.AccountCode.Code
+                            </MudText>
+                        </td>
+                        <td>
+                            <MudText Typo="Typo.body2">@row.AccountCode.Name</MudText>
+                        </td>
+                        <td>
+                            <MudNumericField T="decimal"
+                                             Value="row.Amount"
+                                             ValueChanged="@((v) => { row.Amount = v; row.IsModified = true; })"
+                                             Format="N2"
+                                             Min="0"
+                                             Margin="Margin.Dense"
+                                             HideSpinButtons="true" />
+                        </td>
+                        <td style="text-align:right">
+                            <MudButton Size="Size.Small" Variant="Variant.Text"
+                                       Color="@(row.IsModified ? Color.Primary : Color.Default)"
+                                       Disabled="@(!row.IsModified)"
+                                       OnClick="@(() => SaveBudgetRowAsync(row))">
+                                Kaydet
+                            </MudButton>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    }
+    else if (_selectedPeriod is not null && _budgetRows.Count == 0)
+    {
+        <MudAlert Severity="Severity.Info">Bütçe girilecek yaprak hesap kodu bulunamadı.</MudAlert>
+    }
+    else if (_selectedPeriod is null)
+    {
+        <MudAlert Severity="Severity.Info">Mali yıl ve dönem seçerek bütçe girişi yapabilirsiniz.</MudAlert>
+    }
+}
+
+@code {
+    private Guid _companyId;
+    private Guid? _tenantId;
+    private bool _unauthorized;
+    private bool _initialized;
+
+    private IReadOnlyList<FiscalYearListItem> _fiscalYears = [];
+    private IReadOnlyList<PeriodListItem> _periods = [];
+    private FiscalYearListItem? _selectedFiscalYear;
+    private PeriodListItem? _selectedPeriod;
+    private List<BudgetRow> _budgetRows = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user?.Identity?.IsAuthenticated != true) { _unauthorized = true; _initialized = true; return; }
+        var scope = user.FindFirst("scope")?.Value;
+        if (!string.Equals(scope, "Company", StringComparison.OrdinalIgnoreCase)) { _unauthorized = true; _initialized = true; return; }
+        if (user.FindFirst("company_id") is { Value: var cid } && Guid.TryParseExact(cid, "N", out var cGuid))
+            _companyId = cGuid;
+        else { _unauthorized = true; _initialized = true; return; }
+        if (user.FindFirst("tenant_id") is { Value: var tid } && Guid.TryParseExact(tid, "N", out var tGuid))
+            _tenantId = tGuid;
+        await LoadDataAsync();
+        _initialized = true;
+    }
+
+    private async Task LoadDataAsync()
+    {
+        var result = await Mediator.Send(new GetFiscalYearsQuery(_companyId));
+        if (result.IsSuccess) _fiscalYears = result.Value!;
+    }
+
+    private async Task OnFiscalYearChanged(FiscalYearListItem? fy)
+    {
+        _selectedFiscalYear = fy;
+        _selectedPeriod = null;
+        _periods = [];
+        _budgetRows = [];
+        if (fy is null) return;
+
+        var result = await Mediator.Send(new GetPeriodsQuery(_companyId, fy.Id));
+        if (result.IsSuccess) _periods = result.Value!;
+    }
+
+    private async Task OnPeriodChanged(PeriodListItem? p)
+    {
+        _selectedPeriod = p;
+        _budgetRows = [];
+        if (p is not null)
+            await LoadBudgetDataAsync();
+    }
+
+    private async Task LoadBudgetDataAsync()
+    {
+        if (_selectedPeriod is null) return;
+
+        var codesResult = await Mediator.Send(new GetAccountCodesQuery(_companyId, OnlyActive: true, OnlyDetail: true));
+        var budgetsResult = await Mediator.Send(new GetBudgetsQuery(_companyId, AccountingPeriodId: _selectedPeriod.Id));
+
+        if (codesResult.IsFailure)
+        {
+            Snackbar.Add(codesResult.FirstError.Message, Severity.Error);
+            return;
+        }
+        if (budgetsResult.IsFailure)
+        {
+            Snackbar.Add(budgetsResult.FirstError.Message, Severity.Error);
+            return;
+        }
+
+        var budgets = budgetsResult.Value!.ToDictionary(b => b.AccountCodeId);
+        _budgetRows = codesResult.Value!.Select(c => new BudgetRow
+        {
+            AccountCode = c,
+            BudgetId = budgets.TryGetValue(c.Id, out var b) ? b.Id : null,
+            Amount = budgets.TryGetValue(c.Id, out var b2) ? b2.BudgetedAmount : 0m
+        }).ToList();
+    }
+
+    private async Task SaveBudgetRowAsync(BudgetRow row)
+    {
+        if (_selectedPeriod is null) return;
+        if (_tenantId is null)
+        {
+            Snackbar.Add("Kiracı bilgisi bulunamadı.", Severity.Error);
+            return;
+        }
+
+        var cmd = new SetBudgetCommand(_companyId, _tenantId.Value, _selectedPeriod.Id, row.AccountCode.Id, null, row.Amount);
+        var result = await Mediator.Send(cmd);
+        if (result.IsFailure)
+        {
+            Snackbar.Add(result.FirstError.Message, Severity.Error);
+            return;
+        }
+
+        row.IsModified = false;
+        row.BudgetId = result.Value;
+        Snackbar.Add($"{row.AccountCode.Code} bütçesi kaydedildi.", Severity.Success);
+        StateHasChanged();
+    }
+
+    private async Task SaveAllModifiedAsync()
+    {
+        var modified = _budgetRows.Where(r => r.IsModified).ToList();
+        if (modified.Count == 0) return;
+
+        foreach (var row in modified)
+            await SaveBudgetRowAsync(row);
+    }
+
+    private static string GetMonthName(int month) => month switch
+    {
+        1 => "Ocak", 2 => "Şubat", 3 => "Mart", 4 => "Nisan",
+        5 => "Mayıs", 6 => "Haziran", 7 => "Temmuz", 8 => "Ağustos",
+        9 => "Eylül", 10 => "Ekim", 11 => "Kasım", 12 => "Aralık",
+        _ => month.ToString()
+    };
+
+    private class BudgetRow
+    {
+        public AccountCodeListItem AccountCode { get; init; } = null!;
+        public Guid? BudgetId { get; set; }
+        public decimal Amount { get; set; }
+        public bool IsModified { get; set; }
+    }
+}

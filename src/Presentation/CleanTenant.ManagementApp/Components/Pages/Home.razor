@@ -11,8 +11,6 @@
     bırakıldı.
 *@
 
-<MudBreadcrumbs Items="@_breadcrumbs" Class="px-0 pb-2" />
-
 <MudText Typo="Typo.h4" Class="mb-1">@Loc["NavMenu.Dashboard"]</MudText>
 <MudText Typo="Typo.body1" Color="Color.Default" Class="mb-4">
     @Loc["Home.Welcome.Full"]
@@ -80,14 +78,4 @@
 </MudPaper>
 
 @code {
-    private List<BreadcrumbItem> _breadcrumbs = [];
-
-    protected override void OnInitialized()
-    {
-        _breadcrumbs =
-        [
-            new(Loc["Breadcrumb.Home"].Value, href: "/", icon: Icons.Material.Filled.Home),
-            new(Loc["NavMenu.Dashboard"].Value, href: null, disabled: true),
-        ];
-    }
 }

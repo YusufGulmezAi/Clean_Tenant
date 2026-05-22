@@ -1,0 +1,253 @@
+@page "/company/accounting/cost-centers"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject AuthenticationStateProvider AuthProvider
+@inject MediatR.IMediator Mediator
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject IStringLocalizer Loc
+@inject NavigationManager Nav
+@using CleanTenant.SharedKernel.Common.Results
+@using CleanTenant.Application.Features.Main.Accounting.CostCenters
+
+<PageTitle>Maliyet Merkezleri</PageTitle>
+
+@if (_unauthorized)
+{
+    <MudAlert Severity="Severity.Warning" Class="my-3">
+        Bu sayfaya erişim yetkiniz bulunmuyor. Şirket kapsamında giriş yapınız.
+    </MudAlert>
+}
+else if (!_initialized)
+{
+    <MudText Typo="Typo.h6" Class="my-3">Yükleniyor...</MudText>
+}
+else
+{
+    <div class="d-flex justify-end mb-2">
+        <MudButton StartIcon="@(_showForm ? Icons.Material.Filled.Close : Icons.Material.Filled.Add)"
+                   Color="Color.Primary" Variant="Variant.Filled"
+                   OnClick="@ToggleForm">
+            @(_showForm ? "İptal" : "Yeni Maliyet Merkezi")
+        </MudButton>
+    </div>
+
+    @if (_showForm)
+    {
+        <MudPaper Class="pa-4 mb-4" Elevation="1">
+            <MudForm @ref="_costCenterForm" Model="@_formModel" Validate="true">
+                <MudGrid Spacing="2">
+                    <MudItem xs="12" sm="4">
+                        <MudTextField @bind-Value="_formModel.Code"
+                                      Label="Kod"
+                                      For="@(() => _formModel.Code)"
+                                      MaxLength="20"
+                                      Required="true" />
+                    </MudItem>
+                    <MudItem xs="12" sm="8">
+                        <MudTextField @bind-Value="_formModel.Name"
+                                      Label="Ad"
+                                      For="@(() => _formModel.Name)"
+                                      MaxLength="200"
+                                      Required="true" />
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="_formModel.Description"
+                                      Label="Açıklama"
+                                      For="@(() => _formModel.Description)"
+                                      MaxLength="500"
+                                      Lines="3" />
+                    </MudItem>
+                </MudGrid>
+                <div class="d-flex gap-2 mt-4">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@SubmitAsync">
+                        @(_editingId.HasValue ? "Güncelle" : "Ekle")
+                    </MudButton>
+                    <MudButton Variant="Variant.Text" OnClick="@ToggleForm">
+                        İptal
+                    </MudButton>
+                </div>
+            </MudForm>
+        </MudPaper>
+    }
+
+    <MudDataGrid T="CostCenterListItem" Items="@_items" Hover="true" Striped="true" Bordered="true">
+        <Columns>
+            <PropertyColumn Property="@(x => x.Code)" Title="Kod" />
+            <PropertyColumn Property="@(x => x.Name)" Title="Ad" />
+            <PropertyColumn Property="@(x => x.Description)" Title="Açıklama">
+                <CellTemplate>
+                    <MudText Typo="Typo.body2">@(context.Item.Description ?? "—")</MudText>
+                </CellTemplate>
+            </PropertyColumn>
+            <PropertyColumn Property="@(x => x.IsActive)" Title="Durum">
+                <CellTemplate>
+                    @if (context.Item.IsActive)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Success">Aktif</MudChip>
+                    }
+                    else
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Default">Pasif</MudChip>
+                    }
+                </CellTemplate>
+            </PropertyColumn>
+            <TemplateColumn CellClass="d-flex justify-end" Filterable="false" Sortable="false">
+                <CellTemplate>
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Color="Color.Default"
+                                   OnClick="@(() => EditAsync(context.Item))" />
+                    @if (context.Item.IsActive)
+                    {
+                        <MudIconButton Icon="@Icons.Material.Filled.Block" Size="Size.Small" Color="Color.Warning"
+                                       OnClick="@(() => DeactivateAsync(context.Item))" />
+                    }
+                </CellTemplate>
+            </TemplateColumn>
+        </Columns>
+    </MudDataGrid>
+}
+
+@code {
+    // ── İç tipler ──────────────────────────────────────────────────────────────
+
+    private class CostCenterForm
+    {
+        public string Code { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string? Description { get; set; }
+    }
+
+    // ── State alanları ─────────────────────────────────────────────────────────
+
+    private Guid _companyId;
+    private Guid? _tenantId;
+    private bool _unauthorized;
+    private bool _initialized;
+    private bool _showForm;
+    private Guid? _editingId;
+    private IReadOnlyList<CostCenterListItem> _items = [];
+    private MudForm? _costCenterForm;
+    private CostCenterForm _formModel = new();
+
+    // ── Yaşam döngüsü ──────────────────────────────────────────────────────────
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user?.Identity?.IsAuthenticated != true) { _unauthorized = true; _initialized = true; return; }
+        var scope = user.FindFirst("scope")?.Value;
+        if (!string.Equals(scope, "Company", StringComparison.OrdinalIgnoreCase)) { _unauthorized = true; _initialized = true; return; }
+        if (user.FindFirst("company_id") is { Value: var cid } && Guid.TryParseExact(cid, "N", out var cGuid))
+            _companyId = cGuid;
+        else { _unauthorized = true; _initialized = true; return; }
+        if (user.FindFirst("tenant_id") is { Value: var tid } && Guid.TryParseExact(tid, "N", out var tGuid))
+            _tenantId = tGuid;
+        await LoadDataAsync();
+        _initialized = true;
+    }
+
+    private async Task LoadDataAsync()
+    {
+        var result = await Mediator.Send(new GetCostCentersQuery(_companyId));
+        if (result.IsFailure)
+        {
+            Snackbar.Add(result.FirstError.Message, Severity.Error);
+            return;
+        }
+        _items = result.Value!;
+    }
+
+    // ── UI etkileşimi ──────────────────────────────────────────────────────────
+
+    private void ToggleForm()
+    {
+        _showForm = !_showForm;
+        if (!_showForm) ResetForm();
+    }
+
+    private void ResetForm()
+    {
+        _formModel = new();
+        _editingId = null;
+    }
+
+    private void EditAsync(CostCenterListItem item)
+    {
+        _editingId = item.Id;
+        _formModel = new()
+        {
+            Code = item.Code,
+            Name = item.Name,
+            Description = item.Description,
+        };
+        _showForm = true;
+        StateHasChanged();
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (_costCenterForm is null) return;
+        await _costCenterForm.Validate();
+        if (!_costCenterForm.IsValid) return;
+
+        if (_editingId.HasValue)
+        {
+            var result = await Mediator.Send(new UpdateCostCenterCommand(
+                _companyId,
+                _editingId.Value,
+                _formModel.Name,
+                string.IsNullOrWhiteSpace(_formModel.Description) ? null : _formModel.Description,
+                true
+            ));
+
+            if (result.IsFailure)
+            {
+                Snackbar.Add(result.FirstError.Message, Severity.Error);
+                return;
+            }
+            Snackbar.Add("Maliyet merkezi güncellendi.", Severity.Success);
+        }
+        else
+        {
+            if (_tenantId is null) { Snackbar.Add("Tenant bilgisi bulunamadı.", Severity.Error); return; }
+
+            var result = await Mediator.Send(new CreateCostCenterCommand(
+                _companyId,
+                _tenantId.Value,
+                _formModel.Code,
+                _formModel.Name,
+                string.IsNullOrWhiteSpace(_formModel.Description) ? null : _formModel.Description
+            ));
+
+            if (result.IsFailure)
+            {
+                Snackbar.Add(result.FirstError.Message, Severity.Error);
+                return;
+            }
+            Snackbar.Add("Maliyet merkezi eklendi.", Severity.Success);
+        }
+
+        ResetForm();
+        _showForm = false;
+        await LoadDataAsync();
+    }
+
+    private async Task DeactivateAsync(CostCenterListItem item)
+    {
+        var confirm = await DialogService.ShowMessageBox(
+            "Maliyet Merkezini Deaktif Et",
+            $"<b>{item.Code} - {item.Name}</b> maliyet merkezini pasifleştirmek istediğinize emin misiniz?",
+            yesText: "Deaktif Et",
+            cancelText: "Vazgeç");
+        if (confirm != true) return;
+
+        var result = await Mediator.Send(new DeactivateCostCenterCommand(_companyId, item.Id));
+        if (result.IsFailure)
+        {
+            Snackbar.Add(result.FirstError.Message, Severity.Error);
+            return;
+        }
+        Snackbar.Add("Maliyet merkezi pasifleştirildi.", Severity.Success);
+        await LoadDataAsync();
+    }
+}

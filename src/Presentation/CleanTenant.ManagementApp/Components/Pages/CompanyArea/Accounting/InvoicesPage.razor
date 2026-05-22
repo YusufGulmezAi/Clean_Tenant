@@ -1,0 +1,187 @@
+@page "/company/accounting/invoices"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject AuthenticationStateProvider AuthProvider
+@inject MediatR.IMediator Mediator
+@inject ISnackbar Snackbar
+@inject IStringLocalizer Loc
+@inject NavigationManager Nav
+@using CleanTenant.SharedKernel.Common.Results
+@using CleanTenant.Application.Features.Main.Accounting.Invoices
+@using CleanTenant.Domain.Tenant.Accounting.Enums
+
+<PageTitle>Faturalar</PageTitle>
+
+@if (_unauthorized)
+{
+    <MudAlert Severity="Severity.Warning" Class="my-3">
+        Bu sayfaya erişim yetkiniz bulunmuyor. Şirket kapsamında giriş yapınız.
+    </MudAlert>
+}
+else if (!_initialized)
+{
+    <MudText Typo="Typo.h6" Class="my-3">Yükleniyor...</MudText>
+}
+else
+{
+    <div class="d-flex align-center justify-space-between mb-3">
+        <MudText Typo="Typo.h5">Faturalar</MudText>
+        <MudButton StartIcon="@Icons.Material.Filled.Add"
+                   Color="Color.Primary" Variant="Variant.Filled"
+                   OnClick="@(() => Nav.NavigateTo("/company/accounting/invoices/new"))">
+            Yeni Fatura
+        </MudButton>
+    </div>
+
+    <MudPaper Class="pa-4 mb-4" Elevation="1">
+        <MudGrid Spacing="2" AlignItems="AlignItems.End">
+            <MudItem xs="12" sm="4">
+                <MudSelect T="InvoiceDirection?" @bind-Value="_filterDirection"
+                           Label="Yön" Clearable="true">
+                    <MudSelectItem Value="@((InvoiceDirection?)null)">Tümü</MudSelectItem>
+                    @foreach (InvoiceDirection d in Enum.GetValues<InvoiceDirection>())
+                    {
+                        <MudSelectItem Value="@((InvoiceDirection?)d)">@GetDirectionLabel(d)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="3">
+                <MudDatePicker @bind-Date="_filterFromDt"
+                               Label="Başlangıç Tarihi"
+                               DateFormat="dd.MM.yyyy" />
+            </MudItem>
+            <MudItem xs="12" sm="3">
+                <MudDatePicker @bind-Date="_filterToDt"
+                               Label="Bitiş Tarihi"
+                               DateFormat="dd.MM.yyyy" />
+            </MudItem>
+            <MudItem xs="12" sm="2">
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Search"
+                           OnClick="@LoadDataAsync" FullWidth="true">
+                    Filtrele
+                </MudButton>
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    <MudDataGrid T="InvoiceListItem" Items="@_invoices" Hover="true" Striped="true" Bordered="true">
+        <Columns>
+            <PropertyColumn Property="@(x => x.InvoiceNumber)" Title="Fatura No" />
+            <TemplateColumn Title="Tarih">
+                <CellTemplate>
+                    <MudText Typo="Typo.body2">@context.Item.InvoiceDate.ToString("dd.MM.yyyy")</MudText>
+                </CellTemplate>
+            </TemplateColumn>
+            <TemplateColumn Title="Yön">
+                <CellTemplate>
+                    <MudChip T="string" Size="Size.Small"
+                             Color="@(context.Item.Direction == InvoiceDirection.Incoming ? Color.Info : Color.Secondary)">
+                        @GetDirectionLabel(context.Item.Direction)
+                    </MudChip>
+                </CellTemplate>
+            </TemplateColumn>
+            <PropertyColumn Property="@(x => x.CounterpartyName)" Title="Karşı Taraf" />
+            <TemplateColumn Title="Tutar">
+                <CellTemplate>
+                    <MudText Typo="Typo.body2" Style="text-align:right;font-variant-numeric:tabular-nums">
+                        @context.Item.TotalAmount.ToString("N2")
+                    </MudText>
+                </CellTemplate>
+            </TemplateColumn>
+            <TemplateColumn Title="Durum">
+                <CellTemplate>
+                    @if (context.Item.IsPostedToJournal)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Success">Yevmiyeye Aktarıldı</MudChip>
+                    }
+                    else
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Warning">Bekliyor</MudChip>
+                    }
+                </CellTemplate>
+            </TemplateColumn>
+            <TemplateColumn CellClass="d-flex justify-end" Filterable="false" Sortable="false" Title="İşlemler">
+                <CellTemplate>
+                    @if (!context.Item.IsPostedToJournal)
+                    {
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined"
+                                   Color="Color.Primary"
+                                   OnClick="@(() => PostToJournalAsync(context.Item))">
+                            Muhasebeleştir
+                        </MudButton>
+                    }
+                </CellTemplate>
+            </TemplateColumn>
+        </Columns>
+    </MudDataGrid>
+}
+
+@code {
+    private Guid _companyId;
+    private Guid? _tenantId;
+    private bool _unauthorized;
+    private bool _initialized;
+
+    private IReadOnlyList<InvoiceListItem> _invoices = [];
+    private InvoiceDirection? _filterDirection;
+    private DateTime? _filterFromDt;
+    private DateTime? _filterToDt;
+
+    private DateOnly? FilterFrom => _filterFromDt.HasValue ? DateOnly.FromDateTime(_filterFromDt.Value) : null;
+    private DateOnly? FilterTo => _filterToDt.HasValue ? DateOnly.FromDateTime(_filterToDt.Value) : null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user?.Identity?.IsAuthenticated != true) { _unauthorized = true; _initialized = true; return; }
+        var scope = user.FindFirst("scope")?.Value;
+        if (!string.Equals(scope, "Company", StringComparison.OrdinalIgnoreCase)) { _unauthorized = true; _initialized = true; return; }
+        if (user.FindFirst("company_id") is { Value: var cid } && Guid.TryParseExact(cid, "N", out var cGuid))
+            _companyId = cGuid;
+        else { _unauthorized = true; _initialized = true; return; }
+        if (user.FindFirst("tenant_id") is { Value: var tid } && Guid.TryParseExact(tid, "N", out var tGuid))
+            _tenantId = tGuid;
+        await LoadDataAsync();
+        _initialized = true;
+    }
+
+    private async Task LoadDataAsync()
+    {
+        var result = await Mediator.Send(new GetInvoicesQuery(
+            _companyId,
+            Direction: _filterDirection,
+            From: FilterFrom,
+            To: FilterTo));
+
+        if (result.IsSuccess)
+            _invoices = result.Value!;
+        else
+            Snackbar.Add(result.FirstError.Message, Severity.Error);
+    }
+
+    private async Task PostToJournalAsync(InvoiceListItem item)
+    {
+        if (_tenantId is null)
+        {
+            Snackbar.Add("Kiracı bilgisi bulunamadı.", Severity.Error);
+            return;
+        }
+
+        var result = await Mediator.Send(new PostInvoiceToJournalCommand(item.Id, _companyId, _tenantId.Value));
+        if (result.IsFailure)
+        {
+            Snackbar.Add(result.FirstError.Message, Severity.Error);
+            return;
+        }
+        Snackbar.Add($"{item.InvoiceNumber} yevmiyeye aktarıldı.", Severity.Success);
+        await LoadDataAsync();
+    }
+
+    private static string GetDirectionLabel(InvoiceDirection d) => d switch
+    {
+        InvoiceDirection.Incoming => "Gelen",
+        InvoiceDirection.Outgoing => "Giden",
+        _ => d.ToString()
+    };
+}

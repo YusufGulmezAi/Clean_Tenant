@@ -21,8 +21,7 @@
     v0.2.10.e.5 — Tenants.Settings.* + Common.* anahtarlarıyla lokalize edildi.
 *@
 
-<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
-    @if (_unauthorized)
+@if (_unauthorized)
     {
         <MudAlert Severity="Severity.Warning">
             @Loc["Tenants.Settings.UnauthorizedTenant"]
@@ -51,7 +50,7 @@
                     IsSubmitting="@_busy"
                     SubmitButtonText="@Loc["Tenants.Save.SettingsButton"]" />
     }
-</MudContainer>
+
 
 @code {
     private TenantFormModel _model = new();

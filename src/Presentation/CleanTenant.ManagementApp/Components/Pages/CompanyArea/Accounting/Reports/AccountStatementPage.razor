@@ -1,0 +1,175 @@
+@page "/company/accounting/reports/account-statement"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject AuthenticationStateProvider AuthProvider
+@inject MediatR.IMediator Mediator
+@inject ISnackbar Snackbar
+@inject IStringLocalizer Loc
+@using CleanTenant.SharedKernel.Common.Results
+@using CleanTenant.Application.Features.Main.Accounting.Reports
+@using CleanTenant.Application.Features.Main.Accounting.Readers
+@using CleanTenant.Application.Features.Main.Accounting.FiscalYears
+@using CleanTenant.Application.Features.Main.Accounting.AccountCodes
+@using CleanTenant.Domain.Tenant.Accounting.Enums
+
+<PageTitle>Hesap Ekstresi</PageTitle>
+
+@if (_unauthorized)
+{
+    <MudAlert Severity="Severity.Warning" Class="my-3">
+        Bu sayfaya erişim yetkiniz bulunmuyor. Şirket kapsamında giriş yapınız.
+    </MudAlert>
+}
+else if (!_initialized)
+{
+    <MudText Typo="Typo.h6" Class="my-3">Yükleniyor...</MudText>
+}
+else
+{
+    <MudText Typo="Typo.h5" Class="mb-4">Hesap Ekstresi</MudText>
+
+    <MudPaper Class="pa-4 mb-4" Elevation="1">
+        <MudGrid Spacing="2">
+            <MudItem xs="12" sm="6">
+                <MudSelect T="AccountCodeListItem?" @bind-Value="_selectedAccount"
+                           Label="Hesap Kodu"
+                           AnchorOrigin="Origin.BottomLeft"
+                           Required="true"
+                           ToStringFunc="@(x => x is null ? string.Empty : $"{x.Code} - {x.Name}")">
+                    @foreach (var ac in _accountCodes)
+                    {
+                        <MudSelectItem T="AccountCodeListItem?" Value="ac">@ac.Code — @ac.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="3">
+                <MudDatePicker @bind-Date="_fromDate" Label="Başlangıç Tarihi" DateFormat="dd.MM.yyyy" Required="true" />
+            </MudItem>
+            <MudItem xs="12" sm="3">
+                <MudDatePicker @bind-Date="_toDate" Label="Bitiş Tarihi" DateFormat="dd.MM.yyyy" Required="true" />
+            </MudItem>
+            <MudItem xs="12" Class="d-flex justify-end">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                           Disabled="@(_loading || _selectedAccount is null || _fromDate is null || _toDate is null)"
+                           OnClick="@LoadReportAsync">
+                    Raporu Görüntüle
+                </MudButton>
+            </MudItem>
+        </MudGrid>
+        @if (_loading)
+        {
+            <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="mt-3" />
+        }
+    </MudPaper>
+
+    @if (_hasResult)
+    {
+        <MudStack Row="true" Spacing="2" Class="mb-2">
+            <MudButton StartIcon="@Icons.Material.Filled.PictureAsPdf"
+                       Color="Color.Error" Variant="Variant.Outlined"
+                       Disabled="true">PDF</MudButton>
+            <MudButton StartIcon="@Icons.Material.Filled.TableChart"
+                       Color="Color.Success" Variant="Variant.Outlined"
+                       Disabled="true">Excel</MudButton>
+        </MudStack>
+
+        @if (_entries is null || _entries.Count == 0)
+        {
+            <MudAlert Severity="Severity.Info">
+                Rapor verisi bulunamadı. (Faz 6 implementasyonuyla tamamlanacak)
+            </MudAlert>
+        }
+        else
+        {
+            <MudTable Items="@_entries" Hover="true" Striped="true" Bordered="true" Dense="true">
+                <HeaderContent>
+                    <MudTh>Tarih</MudTh>
+                    <MudTh>Fiş No</MudTh>
+                    <MudTh>Açıklama</MudTh>
+                    <MudTh Style="text-align:right">Borç</MudTh>
+                    <MudTh Style="text-align:right">Alacak</MudTh>
+                    <MudTh Style="text-align:right">Kümülatif Bakiye</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Tarih">@context.EntryDate.ToString("dd.MM.yyyy")</MudTd>
+                    <MudTd DataLabel="Fiş No">
+                        <MudText Typo="Typo.body2" Style="font-family:monospace">@context.EntryNumber</MudText>
+                    </MudTd>
+                    <MudTd DataLabel="Açıklama">@context.Description</MudTd>
+                    <MudTd DataLabel="Borç" Style="text-align:right">@context.Debit.ToString("N2")</MudTd>
+                    <MudTd DataLabel="Alacak" Style="text-align:right">@context.Credit.ToString("N2")</MudTd>
+                    <MudTd DataLabel="Kümülatif Bakiye" Style="text-align:right">
+                        <MudText Color="@BalanceColor(context.RunningBalance)">
+                            @context.RunningBalance.ToString("N2")
+                        </MudText>
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
+    }
+}
+
+@code {
+    private Guid _companyId;
+    private Guid? _tenantId;
+    private bool _unauthorized;
+    private bool _initialized;
+    private bool _loading;
+    private bool _hasResult;
+
+    private IReadOnlyList<AccountCodeListItem> _accountCodes = [];
+    private AccountCodeListItem? _selectedAccount;
+    private DateTime? _fromDate = new DateTime(DateTime.Today.Year, 1, 1);
+    private DateTime? _toDate = DateTime.Today;
+    private IReadOnlyList<AccountStatementEntry>? _entries;
+
+    private DateOnly? FromDateOnly => _fromDate.HasValue ? DateOnly.FromDateTime(_fromDate.Value) : null;
+    private DateOnly? ToDateOnly => _toDate.HasValue ? DateOnly.FromDateTime(_toDate.Value) : null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user?.Identity?.IsAuthenticated != true) { _unauthorized = true; _initialized = true; return; }
+        var scope = user.FindFirst("scope")?.Value;
+        if (!string.Equals(scope, "Company", StringComparison.OrdinalIgnoreCase)) { _unauthorized = true; _initialized = true; return; }
+        if (user.FindFirst("company_id") is { Value: var cid } && Guid.TryParseExact(cid, "N", out var cGuid))
+            _companyId = cGuid;
+        else { _unauthorized = true; _initialized = true; return; }
+        if (user.FindFirst("tenant_id") is { Value: var tid } && Guid.TryParseExact(tid, "N", out var tGuid))
+            _tenantId = tGuid;
+
+        var acResult = await Mediator.Send(new GetAccountCodesQuery(_companyId, OnlyActive: true, OnlyDetail: true));
+        if (acResult.IsSuccess)
+            _accountCodes = acResult.Value!;
+
+        _initialized = true;
+    }
+
+    private async Task LoadReportAsync()
+    {
+        if (_selectedAccount is null || FromDateOnly is null || ToDateOnly is null) return;
+        _loading = true;
+        _hasResult = false;
+        StateHasChanged();
+
+        var result = await Mediator.Send(new GetAccountStatementQuery(
+            _companyId, _selectedAccount.Code, FromDateOnly.Value, ToDateOnly.Value));
+
+        if (result.IsFailure)
+        {
+            Snackbar.Add($"Rapor yüklenemedi: {result.FirstError.Message}", Severity.Error);
+        }
+        else
+        {
+            _entries = result.Value;
+            _hasResult = true;
+        }
+
+        _loading = false;
+    }
+
+    private static Color BalanceColor(decimal balance) =>
+        balance > 0 ? Color.Success :
+        balance < 0 ? Color.Error :
+        Color.Default;
+}

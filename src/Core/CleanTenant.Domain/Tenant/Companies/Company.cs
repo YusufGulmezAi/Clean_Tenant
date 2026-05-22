@@ -1,3 +1,4 @@
+using CleanTenant.Domain.Tenant.BuildingSchema;
 using CleanTenant.SharedKernel.Entities;
 
 namespace CleanTenant.Domain.Tenant.Companies;
@@ -42,4 +43,7 @@ public sealed class Company : BaseEntity, IAggregateRoot, IHasUrlCode, ITenantSc
 
     /// <summary>Şirketin yaşam döngüsü durumu.</summary>
     public CompanyStatus Status { get; set; }
+
+    /// <summary>Bu Company'e ait Ada kayıtları (navigation property).</summary>
+    public ICollection<CleanTenant.Domain.Tenant.BuildingSchema.Land> Lands { get; set; } = [];
 }

@@ -33,4 +33,7 @@ public sealed class Building : BaseEntity, IAggregateRoot, IHasUrlCode, ITenantS
     public Parcel Parcel { get; set; } = null!;
     /// <summary>Bu Building'deki bağımsız bölümler (navigation property).</summary>
     public ICollection<Unit> Units { get; set; } = [];
+
+    /// <summary>Bu Building'deki bloklar/kuleler (opsiyonel; navigation property).</summary>
+    public ICollection<Block> Blocks { get; set; } = [];
 }

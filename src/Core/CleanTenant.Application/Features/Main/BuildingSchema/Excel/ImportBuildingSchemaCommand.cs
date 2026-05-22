@@ -5,7 +5,7 @@ using MediatR;
 namespace CleanTenant.Application.Features.Main.BuildingSchema.Excel;
 
 /// <summary>
-/// Excel dosyasından yapı şeması hiyerarşisini (Block → Parcel → Building → Unit)
+/// Excel dosyasından yapı şeması hiyerarşisini (Land → Parcel → Building → Unit)
 /// toplu import eder. Hata varsa error workbook döner; hata yoksa upsert yapar.
 /// </summary>
 /// <param name="CompanyId">Import hedef site.</param>

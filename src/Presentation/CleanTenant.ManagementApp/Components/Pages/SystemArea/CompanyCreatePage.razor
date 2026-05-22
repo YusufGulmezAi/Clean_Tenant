@@ -17,12 +17,9 @@
     v0.2.10.e.4 — Companies.New.* anahtarlarıyla lokalize edildi.
 *@
 
-<MudContainer MaxWidth="MaxWidth.Small" Class="py-8">
-    <MudBreadcrumbs Items="@_breadcrumbs" Class="px-0 mb-4"></MudBreadcrumbs>
-
-    @if (_initialized)
-    {
-        <MudSelect T="Guid"
+@if (_initialized)
+{
+    <MudSelect T="Guid"
                    @bind-Value="_selectedTenantId"
                    Label="@Loc["Companies.New.TenantPicker"]"
                    Variant="Variant.Outlined"
@@ -46,16 +43,14 @@
         {
             <MudAlert Severity="Severity.Error" Class="mt-4">@_errorMessage</MudAlert>
         }
-    }
-    else
-    {
-        <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="200px" Class="mb-4" />
-        <MudSkeleton SkeletonType="SkeletonType.Text" />
-    }
-</MudContainer>
+}
+else
+{
+    <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="200px" Class="mb-4" />
+    <MudSkeleton SkeletonType="SkeletonType.Text" />
+}
 
 @code {
-    private List<BreadcrumbItem> _breadcrumbs = [];
     private CompanyFormModel _model = new();
     private IReadOnlyList<TenantListItem> _tenants = [];
     private Guid _selectedTenantId;
@@ -65,13 +60,6 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _breadcrumbs =
-        [
-            new BreadcrumbItem(Loc["Breadcrumb.Management"].Value, href: "/system"),
-            new BreadcrumbItem(Loc["Companies.List.Title"].Value, href: "/system/companies"),
-            new BreadcrumbItem(Loc["Companies.New.Title"].Value, href: null, disabled: true),
-        ];
-
         _tenants = await TenantReader.GetAllActiveAsync();
         _model = new CompanyFormModel();
         _initialized = true;

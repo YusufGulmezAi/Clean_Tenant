@@ -5,9 +5,9 @@ using MediatR;
 namespace CleanTenant.Application.Features.Main.BuildingSchema.Parcels;
 
 /// <summary>
-/// Bir Block altına yeni Parcel ekler.
+/// Bir Land altına yeni Parcel ekler.
 /// </summary>
 [RequirePermission("BuildingSchema.Manage")]
 public sealed record CreateParcelCommand(
-    Guid BlockId,
+    Guid LandId,
     string Name) : IRequest<Result<Guid>>;

@@ -1,0 +1,452 @@
+@page "/company/accounting/chart-of-accounts"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject AuthenticationStateProvider AuthProvider
+@inject MediatR.IMediator Mediator
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject IStringLocalizer Loc
+@inject NavigationManager Nav
+@using CleanTenant.SharedKernel.Common.Results
+@using CleanTenant.Application.Features.Main.Accounting.AccountCodes
+@using CleanTenant.Domain.Tenant.Accounting.Enums
+
+<PageTitle>Hesap Planı</PageTitle>
+
+@if (_unauthorized)
+{
+    <MudAlert Severity="Severity.Warning" Class="my-3">
+        Bu sayfaya erişim yetkiniz bulunmuyor. Şirket kapsamında giriş yapınız.
+    </MudAlert>
+}
+else if (!_initialized)
+{
+    <MudText Typo="Typo.h6" Class="my-3">Yükleniyor...</MudText>
+}
+else
+{
+    <div class="d-flex align-center justify-space-between mb-3">
+        <MudText Typo="Typo.h5">Hesap Planı</MudText>
+        <div class="d-flex gap-2 align-center">
+            <MudTextField @bind-Value="_search"
+                          Placeholder="Kod veya ad ile ara..."
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          Immediate="true"
+                          DebounceInterval="200"
+                          Style="min-width:240px"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense" />
+            <MudButton StartIcon="@(_showForm ? Icons.Material.Filled.Close : Icons.Material.Filled.Add)"
+                       Color="Color.Primary" Variant="Variant.Filled"
+                       OnClick="@ToggleForm">
+                @(_showForm ? "İptal" : "Yeni Hesap")
+            </MudButton>
+        </div>
+    </div>
+
+    @if (_showForm)
+    {
+        <MudPaper Class="pa-4 mb-4" Elevation="1">
+            <MudText Typo="Typo.h6" Class="mb-3">Yeni Hesap Kodu</MudText>
+            <MudForm @ref="_accountForm" Model="@_formModel" Validate="true">
+                <MudGrid Spacing="2">
+                    <MudItem xs="12" sm="4">
+                        <MudTextField @bind-Value="_formModel.Code"
+                                      Label="Hesap Kodu"
+                                      For="@(() => _formModel.Code)"
+                                      MaxLength="20"
+                                      Required="true" />
+                    </MudItem>
+                    <MudItem xs="12" sm="4">
+                        <MudTextField @bind-Value="_formModel.ParentCode"
+                                      Label="Üst Hesap Kodu"
+                                      For="@(() => _formModel.ParentCode)"
+                                      MaxLength="20" />
+                    </MudItem>
+                    <MudItem xs="12" sm="4">
+                        <MudTextField @bind-Value="_formModel.Name"
+                                      Label="Hesap Adı"
+                                      For="@(() => _formModel.Name)"
+                                      MaxLength="200"
+                                      Required="true" />
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="_formModel.Description"
+                                      Label="Açıklama"
+                                      For="@(() => _formModel.Description)"
+                                      MaxLength="500"
+                                      Lines="2" />
+                    </MudItem>
+                    <MudItem xs="12" sm="4">
+                        <MudSelect T="AccountLevel" @bind-Value="_formModel.Level" Label="Hesap Seviyesi" Required="true">
+                            <MudSelectItem T="AccountLevel" Value="AccountLevel.Main">Ana Hesap</MudSelectItem>
+                            <MudSelectItem T="AccountLevel" Value="AccountLevel.Sub">Alt Hesap</MudSelectItem>
+                            <MudSelectItem T="AccountLevel" Value="AccountLevel.Detail">Yardımcı Hesap</MudSelectItem>
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12" sm="4">
+                        <MudSelect T="AccountClass" @bind-Value="_formModel.AccountClass" Label="Hesap Sınıfı" Required="true">
+                            <MudSelectItem T="AccountClass" Value="AccountClass.CurrentAsset">1 - Dönen Varlıklar</MudSelectItem>
+                            <MudSelectItem T="AccountClass" Value="AccountClass.NonCurrentAsset">2 - Duran Varlıklar</MudSelectItem>
+                            <MudSelectItem T="AccountClass" Value="AccountClass.ShortTermLiability">3 - Kısa Vadeli Yabancı Kaynaklar</MudSelectItem>
+                            <MudSelectItem T="AccountClass" Value="AccountClass.LongTermLiability">4 - Uzun Vadeli Yabancı Kaynaklar</MudSelectItem>
+                            <MudSelectItem T="AccountClass" Value="AccountClass.Equity">5 - Özkaynaklar</MudSelectItem>
+                            <MudSelectItem T="AccountClass" Value="AccountClass.IncomeStatement">6 - Gelir Tablosu</MudSelectItem>
+                            <MudSelectItem T="AccountClass" Value="AccountClass.CostAllocation">7 - Maliyet/Yansıtma</MudSelectItem>
+                            <MudSelectItem T="AccountClass" Value="AccountClass.OffBalance">9 - Nazım Hesaplar</MudSelectItem>
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12" sm="4">
+                        <MudSelect T="AccountType" @bind-Value="_formModel.AccountType" Label="Hesap Tipi" Required="true">
+                            <MudSelectItem T="AccountType" Value="AccountType.Active">Aktif (Borç Bakiyeli)</MudSelectItem>
+                            <MudSelectItem T="AccountType" Value="AccountType.Passive">Pasif (Alacak Bakiyeli)</MudSelectItem>
+                            <MudSelectItem T="AccountType" Value="AccountType.ActivePassive">Karma</MudSelectItem>
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12" sm="3">
+                        <MudSwitch T="bool" @bind-Value="_formModel.IsDetail"
+                                   Label="Yaprak Hesap (İşlem Yapılabilir)"
+                                   Color="Color.Primary" />
+                    </MudItem>
+                    <MudItem xs="12" sm="3">
+                        <MudSwitch T="bool" @bind-Value="_formModel.IsMonetary"
+                                   Label="Parasal Hesap"
+                                   Color="Color.Secondary" />
+                    </MudItem>
+                </MudGrid>
+                <div class="d-flex gap-2 mt-4">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@SubmitAccountAsync">
+                        Hesap Ekle
+                    </MudButton>
+                    <MudButton Variant="Variant.Text" OnClick="@ToggleForm">
+                        İptal
+                    </MudButton>
+                </div>
+            </MudForm>
+        </MudPaper>
+    }
+
+    <MudGrid Spacing="2">
+        <MudItem xs="12" md="4">
+            <MudPaper Elevation="1" Style="min-height:500px; overflow-y:auto; max-height:700px;">
+                <MudTreeView T="TreeNode" SelectedValueChanged="@OnNodeSelected" Dense="true">
+                    @foreach (var group in _filteredTree)
+                    {
+                        <MudTreeViewItem Value="@group" Text="@group.GroupLabel"
+                                         Icon="@Icons.Material.Filled.Folder" IconColor="Color.Primary"
+                                         Expanded="true">
+                            @foreach (var main in group.Children)
+                            {
+                                @if (main.Children.Count == 0)
+                                {
+                                    <MudTreeViewItem Value="@main"
+                                                     Text="@($"{main.Item!.Code} - {main.Item.Name}")"
+                                                     Icon="@GetIcon(main.Item)"
+                                                     IconColor="@GetIconColor(main.Item)" />
+                                }
+                                else
+                                {
+                                    <MudTreeViewItem Value="@main"
+                                                     Text="@($"{main.Item!.Code} - {main.Item.Name}")"
+                                                     Icon="@Icons.Material.Outlined.FolderOpen">
+                                        @foreach (var sub in main.Children)
+                                        {
+                                            @if (sub.Children.Count == 0)
+                                            {
+                                                <MudTreeViewItem Value="@sub"
+                                                                 Text="@($"{sub.Item!.Code} - {sub.Item.Name}")"
+                                                                 Icon="@GetIcon(sub.Item)"
+                                                                 IconColor="@GetIconColor(sub.Item)" />
+                                            }
+                                            else
+                                            {
+                                                <MudTreeViewItem Value="@sub"
+                                                                 Text="@($"{sub.Item!.Code} - {sub.Item.Name}")"
+                                                                 Icon="@Icons.Material.Outlined.SubdirectoryArrowRight">
+                                                    @foreach (var detail in sub.Children)
+                                                    {
+                                                        <MudTreeViewItem Value="@detail"
+                                                                         Text="@($"{detail.Item!.Code} - {detail.Item.Name}")"
+                                                                         Icon="@GetIcon(detail.Item)"
+                                                                         IconColor="@GetIconColor(detail.Item)" />
+                                                    }
+                                                </MudTreeViewItem>
+                                            }
+                                        }
+                                    </MudTreeViewItem>
+                                }
+                            }
+                        </MudTreeViewItem>
+                    }
+                </MudTreeView>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" md="8">
+            @if (_selectedNode?.Item is { } item)
+            {
+                <MudPaper Class="pa-4" Elevation="1">
+                    <MudText Typo="Typo.h6">@item.Code - @item.Name</MudText>
+                    <MudStack Row="true" Class="mt-2 mb-3" Wrap="Wrap.Wrap" Spacing="1">
+                        <MudChip T="string" Size="Size.Small" Color="Color.Primary">@item.Level</MudChip>
+                        <MudChip T="string" Size="Size.Small" Color="@(item.IsActive ? Color.Success : Color.Default)">@(item.IsActive ? "Aktif" : "Pasif")</MudChip>
+                        @if (item.IsDetail) { <MudChip T="string" Size="Size.Small" Color="Color.Info">Yaprak</MudChip> }
+                        @if (item.IsRequired) { <MudChip T="string" Size="Size.Small" Color="Color.Warning">Zorunlu</MudChip> }
+                        @if (item.IsMonetary) { <MudChip T="string" Size="Size.Small" Color="Color.Secondary">Parasal</MudChip> }
+                        <MudChip T="string" Size="Size.Small">@(item.Source == AccountCodeSource.Standard ? "TDHP Standart" : "Şirket Tanımlı")</MudChip>
+                    </MudStack>
+                    <MudDivider Class="mb-3" />
+                    <MudText><b>Hesap Sınıfı:</b> @item.AccountClass</MudText>
+                    <MudText><b>Hesap Tipi:</b> @item.AccountType</MudText>
+                    @if (!item.IsRequired && item.IsActive)
+                    {
+                        <MudStack Row="true" Class="mt-4" Spacing="2">
+                            <MudButton Variant="Variant.Outlined" Color="Color.Warning" Size="Size.Small"
+                                       OnClick="@(() => DeactivateAsync(item.Id))">
+                                Deaktif Et
+                            </MudButton>
+                        </MudStack>
+                    }
+                </MudPaper>
+            }
+            else
+            {
+                <MudText Typo="Typo.body2" Color="Color.Tertiary" Class="pa-4">
+                    Detayları görüntülemek için sol panelden bir hesap seçin.
+                </MudText>
+            }
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    // ── İç tipler ──────────────────────────────────────────────────────────────
+
+    private sealed class TreeNode
+    {
+        public AccountCodeListItem? Item { get; init; }
+        public string GroupLabel { get; init; } = "";
+        public List<TreeNode> Children { get; init; } = [];
+        public bool IsGroup => Item is null;
+    }
+
+    private class AccountCodeForm
+    {
+        public string Code { get; set; } = "";
+        public string? ParentCode { get; set; }
+        public string Name { get; set; } = "";
+        public string? Description { get; set; }
+        public AccountLevel Level { get; set; } = AccountLevel.Detail;
+        public AccountClass AccountClass { get; set; } = AccountClass.CurrentAsset;
+        public AccountType AccountType { get; set; } = AccountType.Active;
+        public bool IsDetail { get; set; } = true;
+        public bool IsMonetary { get; set; } = true;
+    }
+
+    // ── State alanları ─────────────────────────────────────────────────────────
+
+    private Guid _companyId;
+    private Guid? _tenantId;
+    private bool _unauthorized;
+    private bool _initialized;
+    private bool _showForm;
+    private string _search = "";
+    private IReadOnlyList<AccountCodeListItem> _allCodes = [];
+    private List<TreeNode> _tree = [];
+    private TreeNode? _selectedNode;
+    private MudForm? _accountForm;
+    private AccountCodeForm _formModel = new();
+
+    // ── Yaşam döngüsü ──────────────────────────────────────────────────────────
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user?.Identity?.IsAuthenticated != true) { _unauthorized = true; _initialized = true; return; }
+        var scope = user.FindFirst("scope")?.Value;
+        if (!string.Equals(scope, "Company", StringComparison.OrdinalIgnoreCase)) { _unauthorized = true; _initialized = true; return; }
+        if (user.FindFirst("company_id") is { Value: var cid } && Guid.TryParseExact(cid, "N", out var cGuid))
+            _companyId = cGuid;
+        else { _unauthorized = true; _initialized = true; return; }
+        if (user.FindFirst("tenant_id") is { Value: var tid } && Guid.TryParseExact(tid, "N", out var tGuid))
+            _tenantId = tGuid;
+        await LoadDataAsync();
+        _initialized = true;
+    }
+
+    private async Task LoadDataAsync()
+    {
+        var result = await Mediator.Send(new GetAccountCodesQuery(_companyId));
+        if (result.IsFailure)
+        {
+            Snackbar.Add(result.FirstError.Message, Severity.Error);
+            return;
+        }
+        _allCodes = result.Value!;
+        _tree = BuildTree(_allCodes);
+        _selectedNode = null;
+    }
+
+    // ── UI etkileşimi ──────────────────────────────────────────────────────────
+
+    private void ToggleForm()
+    {
+        _showForm = !_showForm;
+        if (!_showForm) ResetForm();
+    }
+
+    private void ResetForm()
+    {
+        _formModel = new();
+    }
+
+    private void OnNodeSelected(TreeNode? node)
+    {
+        _selectedNode = node;
+    }
+
+    private async Task SubmitAccountAsync()
+    {
+        if (_accountForm is null) return;
+        await _accountForm.Validate();
+        if (!_accountForm.IsValid) return;
+
+        if (_tenantId is null) { Snackbar.Add("Tenant bilgisi bulunamadı.", Severity.Error); return; }
+
+        var result = await Mediator.Send(new CreateAccountCodeCommand(
+            _companyId,
+            _tenantId.Value,
+            _formModel.Code,
+            string.IsNullOrWhiteSpace(_formModel.ParentCode) ? null : _formModel.ParentCode,
+            _formModel.Name,
+            string.IsNullOrWhiteSpace(_formModel.Description) ? null : _formModel.Description,
+            _formModel.Level,
+            _formModel.AccountClass,
+            _formModel.AccountType,
+            _formModel.IsDetail,
+            _formModel.IsMonetary,
+            null
+        ));
+
+        if (result.IsFailure)
+        {
+            Snackbar.Add(result.FirstError.Message, Severity.Error);
+            return;
+        }
+
+        Snackbar.Add("Hesap kodu eklendi.", Severity.Success);
+        ResetForm();
+        _showForm = false;
+        await LoadDataAsync();
+    }
+
+    private async Task DeactivateAsync(Guid accountCodeId)
+    {
+        var confirm = await DialogService.ShowMessageBox(
+            "Hesabı Deaktif Et",
+            "Bu hesap kodunu pasifleştirmek istediğinize emin misiniz?",
+            yesText: "Deaktif Et",
+            cancelText: "Vazgeç");
+        if (confirm != true) return;
+
+        var result = await Mediator.Send(new DeactivateAccountCodeCommand(_companyId, accountCodeId));
+        if (result.IsFailure)
+        {
+            Snackbar.Add(result.FirstError.Message, Severity.Error);
+            return;
+        }
+        Snackbar.Add("Hesap kodu pasifleştirildi.", Severity.Success);
+        await LoadDataAsync();
+    }
+
+    // ── Ağaç yardımcıları ──────────────────────────────────────────────────────
+
+    private IReadOnlyList<TreeNode> _filteredTree =>
+        string.IsNullOrWhiteSpace(_search)
+            ? _tree
+            : FilterTree(_tree, _search);
+
+    private static List<TreeNode> FilterTree(List<TreeNode> nodes, string search)
+    {
+        var result = new List<TreeNode>();
+        foreach (var node in nodes)
+        {
+            if (node.IsGroup)
+            {
+                var filteredChildren = FilterTree(node.Children, search);
+                if (filteredChildren.Count > 0)
+                    result.Add(new TreeNode { GroupLabel = node.GroupLabel, Children = filteredChildren });
+            }
+            else if (node.Item!.Code.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                     node.Item.Name.Contains(search, StringComparison.OrdinalIgnoreCase))
+            {
+                result.Add(node);
+            }
+            else
+            {
+                var filteredChildren = FilterTree(node.Children, search);
+                if (filteredChildren.Count > 0)
+                    result.Add(new TreeNode { Item = node.Item, GroupLabel = node.GroupLabel, Children = filteredChildren });
+            }
+        }
+        return result;
+    }
+
+    private static List<TreeNode> BuildTree(IReadOnlyList<AccountCodeListItem> codes)
+    {
+        var byParent = codes
+            .GroupBy(c => c.ParentCode ?? string.Empty)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        var roots = byParent.GetValueOrDefault(string.Empty, []);
+        var groups = new List<TreeNode>();
+
+        AccountClass[] classOrder = [
+            AccountClass.CurrentAsset, AccountClass.NonCurrentAsset,
+            AccountClass.ShortTermLiability, AccountClass.LongTermLiability,
+            AccountClass.Equity, AccountClass.IncomeStatement,
+            AccountClass.CostAllocation, AccountClass.OffBalance
+        ];
+
+        foreach (var cls in classOrder)
+        {
+            var classCodes = roots.Where(c => c.AccountClass == cls).OrderBy(c => c.Code).ToList();
+            if (classCodes.Count == 0) continue;
+            var group = new TreeNode { GroupLabel = GetClassLabel(cls) };
+            foreach (var main in classCodes)
+            {
+                var mainNode = new TreeNode { Item = main };
+                foreach (var sub in byParent.GetValueOrDefault(main.Code, []).OrderBy(c => c.Code))
+                {
+                    var subNode = new TreeNode { Item = sub };
+                    foreach (var detail in byParent.GetValueOrDefault(sub.Code, []).OrderBy(c => c.Code))
+                        subNode.Children.Add(new TreeNode { Item = detail });
+                    mainNode.Children.Add(subNode);
+                }
+                group.Children.Add(mainNode);
+            }
+            groups.Add(group);
+        }
+        return groups;
+    }
+
+    private static string GetClassLabel(AccountClass cls) => cls switch
+    {
+        AccountClass.CurrentAsset => "1 - Dönen Varlıklar",
+        AccountClass.NonCurrentAsset => "2 - Duran Varlıklar",
+        AccountClass.ShortTermLiability => "3 - Kısa Vadeli Yabancı Kaynaklar",
+        AccountClass.LongTermLiability => "4 - Uzun Vadeli Yabancı Kaynaklar",
+        AccountClass.Equity => "5 - Özkaynaklar",
+        AccountClass.IncomeStatement => "6 - Gelir Tablosu",
+        AccountClass.CostAllocation => "7 - Maliyet/Yansıtma",
+        AccountClass.OffBalance => "9 - Nazım Hesaplar",
+        _ => cls.ToString()
+    };
+
+    private static string GetIcon(AccountCodeListItem item) =>
+        item.IsDetail ? Icons.Material.Filled.Circle : Icons.Material.Outlined.Circle;
+
+    private static Color GetIconColor(AccountCodeListItem item) =>
+        item.IsActive ? Color.Success : Color.Default;
+}

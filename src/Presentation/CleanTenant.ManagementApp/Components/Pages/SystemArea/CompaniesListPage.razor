@@ -47,7 +47,8 @@ else
                Items="@_items"
                SearchPlaceholder="@Loc["Companies.List.Search"]"
                SearchableFields="@(row => new[] { row.Name, row.UrlCode, row.TenantName, row.LegalName })"
-               ExportColumns="@_exportColumns">
+               ExportColumns="@_exportColumns"
+               ExportTitle="@Loc["Companies.SystemList.ExportTitle"].Value">
         <ToolbarRight>
             <MudMenu Dense="true"
                      AnchorOrigin="Origin.BottomRight"
