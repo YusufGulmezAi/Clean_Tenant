@@ -1,6 +1,7 @@
 using CleanTenant.Application.Common.Auth;
 using CleanTenant.Application.Common.Caching;
 using CleanTenant.Application.Features.Catalog.Readers;
+using CleanTenant.Application.Features.Main.Accounting.Readers;
 using CleanTenant.Application.Features.Main.Readers;
 using CleanTenant.Infrastructure.Caching.Cache;
 using CleanTenant.Infrastructure.Caching.Readers;
@@ -84,6 +85,9 @@ public static class DependencyInjection
         services.AddScoped<ITenantCatalogReader, TenantCatalogReader>();
         services.AddScoped<IMainCatalogReader, MainCatalogReader>();
         services.AddScoped<IAuthorizationCatalogReader, AuthorizationCatalogReader>();
+
+        // Muhasebe rapor reader'ı — Dapper tabanlı, cache'siz
+        services.AddScoped<IAccountingReader, AccountingReader>();
 
         // CRUD handler'larının kullanacağı invalidator
         services.AddScoped<ICacheInvalidator, CacheInvalidator>();
