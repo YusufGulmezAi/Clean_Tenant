@@ -24,7 +24,7 @@ public sealed class BudgetingConstraintsTests : IClassFixture<PostgresFixture>
     }
 
     [Fact]
-    public async Task Ayni_Company_FiscalYear_icin_iki_Budget_unique_ihlali()
+    public async Task Ayni_Company_FiscalYear_Type_Title_icin_iki_Budget_unique_ihlali()
     {
         var tenantId = Guid.NewGuid();
         var companyId = Guid.NewGuid();
@@ -39,7 +39,9 @@ public sealed class BudgetingConstraintsTests : IClassFixture<PostgresFixture>
                 TenantId = tenantId,
                 CompanyId = companyId,
                 FiscalYearId = fiscalYearId,
-                Title = "2026 Bütçesi #1",
+                Type = BudgetType.Aidat,
+                Title = "2026 Ana Aidat",
+                PeriodStartYear = 2026, PeriodStartMonth = 1, PeriodEndYear = 2026, PeriodEndMonth = 12,
                 Status = BudgetStatus.Draft
             });
             await db.SaveChangesAsync();
@@ -48,12 +50,15 @@ public sealed class BudgetingConstraintsTests : IClassFixture<PostgresFixture>
         using (var scope = _fixture.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<MainDbContext>();
+            // Aynı (Company, FiscalYear, Type, Title) → unique ihlali
             db.Budgets.Add(new Budget
             {
                 TenantId = tenantId,
                 CompanyId = companyId,
                 FiscalYearId = fiscalYearId,
-                Title = "2026 Bütçesi #2 (duplicate)",
+                Type = BudgetType.Aidat,
+                Title = "2026 Ana Aidat",
+                PeriodStartYear = 2026, PeriodStartMonth = 1, PeriodEndYear = 2026, PeriodEndMonth = 12,
                 Status = BudgetStatus.Draft
             });
 
@@ -62,6 +67,34 @@ public sealed class BudgetingConstraintsTests : IClassFixture<PostgresFixture>
             assertion.Which.InnerException.Should().BeOfType<PostgresException>()
                 .Which.SqlState.Should().Be("23505"); // unique_violation
         }
+    }
+
+    [Fact]
+    public async Task Ayni_Company_FiscalYear_Type_farkli_Title_iki_Budget_kabul_edilir()
+    {
+        // v0.2.14 — Aynı yıl + tipte FARKLI isimle birden fazla bütçe olabilir (ek aidat).
+        var tenantId = Guid.NewGuid();
+        var companyId = Guid.NewGuid();
+        var fiscalYearId = Guid.NewGuid();
+        SetTenantContext(tenantId);
+
+        using var scope = _fixture.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<MainDbContext>();
+        db.Budgets.Add(new Budget
+        {
+            TenantId = tenantId, CompanyId = companyId, FiscalYearId = fiscalYearId,
+            Type = BudgetType.Aidat, Title = "2026 Ana Aidat", Status = BudgetStatus.Draft,
+            PeriodStartYear = 2026, PeriodStartMonth = 1, PeriodEndYear = 2026, PeriodEndMonth = 12
+        });
+        db.Budgets.Add(new Budget
+        {
+            TenantId = tenantId, CompanyId = companyId, FiscalYearId = fiscalYearId,
+            Type = BudgetType.Aidat, Title = "2026 Mart Ek Aidat", Status = BudgetStatus.Draft,
+            PeriodStartYear = 2026, PeriodStartMonth = 3, PeriodEndYear = 2026, PeriodEndMonth = 12
+        });
+
+        var act = async () => await db.SaveChangesAsync();
+        await act.Should().NotThrowAsync();
     }
 
     [Fact]
@@ -80,6 +113,7 @@ public sealed class BudgetingConstraintsTests : IClassFixture<PostgresFixture>
             CompanyId = Guid.NewGuid(),
             FiscalYearId = Guid.NewGuid(),
             Title = "Tutarsız",
+            PeriodStartYear = 2026, PeriodStartMonth = 1, PeriodEndYear = 2026, PeriodEndMonth = 12,
             Status = BudgetStatus.Draft
         };
         db.Budgets.Add(budget);
@@ -116,6 +150,7 @@ public sealed class BudgetingConstraintsTests : IClassFixture<PostgresFixture>
             CompanyId = Guid.NewGuid(),
             FiscalYearId = Guid.NewGuid(),
             Title = "Tarihler ters",
+            PeriodStartYear = 2026, PeriodStartMonth = 1, PeriodEndYear = 2026, PeriodEndMonth = 12,
             Status = BudgetStatus.Published
         };
         db.Budgets.Add(budget);
@@ -153,6 +188,7 @@ public sealed class BudgetingConstraintsTests : IClassFixture<PostgresFixture>
             CompanyId = Guid.NewGuid(),
             FiscalYearId = Guid.NewGuid(),
             Title = "Negatif amount",
+            PeriodStartYear = 2026, PeriodStartMonth = 1, PeriodEndYear = 2026, PeriodEndMonth = 12,
             Status = BudgetStatus.Draft
         };
         var bv = new BudgetVersion
@@ -218,7 +254,8 @@ public sealed class BudgetingConstraintsTests : IClassFixture<PostgresFixture>
         var budget = new Budget
         {
             TenantId = tenantId, CompanyId = Guid.NewGuid(),
-            FiscalYearId = Guid.NewGuid(), Title = "DueDay test", Status = BudgetStatus.Draft
+            FiscalYearId = Guid.NewGuid(), Title = "DueDay test", Status = BudgetStatus.Draft,
+            PeriodStartYear = 2026, PeriodStartMonth = 1, PeriodEndYear = 2026, PeriodEndMonth = 12
         };
         var bv = new BudgetVersion
         {
@@ -269,7 +306,8 @@ public sealed class BudgetingConstraintsTests : IClassFixture<PostgresFixture>
         var budget = new Budget
         {
             TenantId = tenantId, CompanyId = Guid.NewGuid(),
-            FiscalYearId = Guid.NewGuid(), Title = "Unique test", Status = BudgetStatus.Draft
+            FiscalYearId = Guid.NewGuid(), Title = "Unique test", Status = BudgetStatus.Draft,
+            PeriodStartYear = 2026, PeriodStartMonth = 1, PeriodEndYear = 2026, PeriodEndMonth = 12
         };
         var bv = new BudgetVersion
         {

@@ -1,5 +1,6 @@
 using CleanTenant.Application.Features.Main.Budgeting.Budgets;
 using CleanTenant.Application.UnitTests.Common;
+using CleanTenant.Domain.Tenant.Budgeting.Enums;
 
 namespace CleanTenant.Application.UnitTests.Validators;
 
@@ -15,6 +16,7 @@ public sealed class CreateBudgetCommandValidatorTests
         TenantId: Guid.NewGuid(),
         CompanyId: Guid.NewGuid(),
         FiscalYearId: Guid.NewGuid(),
+        Type: BudgetType.Aidat,
         Title: "2026 Yıllık Bütçesi",
         Notes: null);
 

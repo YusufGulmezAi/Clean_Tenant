@@ -1,4 +1,5 @@
 using CleanTenant.Application.Common.Persistence;
+using CleanTenant.Domain.Budgeting;
 using CleanTenant.Domain.Identity.Authorization;
 using CleanTenant.Domain.Identity.Support;
 using CleanTenant.Domain.Identity.Tenants;
@@ -92,6 +93,9 @@ public sealed class CatalogDbContext : IdentityDbContext<User, Role, Guid>, ICat
 
     /// <summary>TÜİK enflasyon endeksleri (TMS 29 enflasyon muhasebesi için).</summary>
     public DbSet<InflationIndex> InflationIndexes => Set<InflationIndex>();
+
+    /// <summary>Bütçe tipi sistem kataloğu (Aidat/Yatırım/Kömür/Kuruluş base hesap kodları).</summary>
+    public DbSet<BudgetTypeMetadata> BudgetTypeMetadata => Set<BudgetTypeMetadata>();
 
     /// <summary>
     /// URL kod havuzu (Infrastructure-only; <see cref="ICatalogDbContext"/>

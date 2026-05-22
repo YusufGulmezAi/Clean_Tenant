@@ -1,3 +1,4 @@
+using CleanTenant.Domain.Budgeting;
 using CleanTenant.Domain.Identity.Authorization;
 using CleanTenant.Domain.Identity.Support;
 using CleanTenant.Domain.Identity.Tenants;
@@ -88,6 +89,9 @@ public interface ICatalogDbContext
 
     /// <summary>TÜİK enflasyon endeksleri (TMS 29 enflasyon muhasebesi için).</summary>
     DbSet<InflationIndex> InflationIndexes { get; }
+
+    /// <summary>Bütçe tipi sistem kataloğu (Aidat/Yatırım/Kömür/Kuruluş base hesap kodları).</summary>
+    DbSet<BudgetTypeMetadata> BudgetTypeMetadata { get; }
 
     /// <summary>Bekleyen değişiklikleri persist eder. Cancellation desteği var.</summary>
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);

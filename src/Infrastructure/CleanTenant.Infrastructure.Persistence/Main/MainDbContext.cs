@@ -101,6 +101,9 @@ public sealed class MainDbContext : DbContext, IMainDbContext
     /// <summary>Bütçe kalemi versiyon snapshot'ları.</summary>
     public DbSet<BudgetLineVersion> BudgetLineVersions => Set<BudgetLineVersion>();
 
+    /// <summary>Taksit planı satırları.</summary>
+    public DbSet<BudgetLineInstallment> BudgetLineInstallments => Set<BudgetLineInstallment>();
+
     /// <summary>Katılım grupları.</summary>
     public DbSet<ParticipationGroup> ParticipationGroups => Set<ParticipationGroup>();
 

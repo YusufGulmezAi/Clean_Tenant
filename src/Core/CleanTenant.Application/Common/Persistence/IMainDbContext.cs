@@ -92,6 +92,9 @@ public interface IMainDbContext
     /// <summary>Bütçe kalemi versiyon snapshot'ları (planlanan tutar + dağıtım).</summary>
     DbSet<BudgetLineVersion> BudgetLineVersions { get; }
 
+    /// <summary>Taksit planı satırları (Installment kalemler için).</summary>
+    DbSet<BudgetLineInstallment> BudgetLineInstallments { get; }
+
     /// <summary>Katılım grupları (Havuz, Ticari, …).</summary>
     DbSet<ParticipationGroup> ParticipationGroups { get; }
 

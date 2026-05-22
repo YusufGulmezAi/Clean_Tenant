@@ -1,6 +1,8 @@
+using CleanTenant.Domain.Budgeting;
 using CleanTenant.Domain.Identity.Authorization;
 using CleanTenant.Domain.LookUp;
 using CleanTenant.Domain.Tenant.Accounting.Enums;
+using CleanTenant.Domain.Tenant.Budgeting.Enums;
 using CleanTenant.Infrastructure.Persistence.Catalog;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -49,6 +51,7 @@ public sealed class CatalogSeeder
         await SeedSystemAdminPermissionsAsync(cancellationToken);
         await SeedInflationIndexesAsync(cancellationToken);
         await SeedChartOfAccountsTemplatesAsync(cancellationToken);
+        await SeedBudgetTypeMetadataAsync(cancellationToken);
     }
 
     // SystemAdmin built-in rolüne her deployment'ta otomatik atanması gereken
@@ -684,4 +687,92 @@ public sealed class CatalogSeeder
             T("981",         null,    "Çal. Sağlanan Fay. İlişkin Borç. Karş.",Main, Naz, Pas, false, false, false, 9810),
         ];
     }
+
+    /// <summary>
+    /// Bütçe tipi sistem kataloğunu idempotent olarak seed eder. Her tip için
+    /// base 120/600 hesap kodları tanımlanır; ilk tahakkukta bunların altına
+    /// şirkete özel alt hesap üretilir (örn. Aidat → 120.01 → 120.01.001).
+    /// </summary>
+    private async Task SeedBudgetTypeMetadataAsync(CancellationToken cancellationToken)
+    {
+        var existing = await _db.BudgetTypeMetadata
+            .ToDictionaryAsync(m => m.Type, m => m, cancellationToken);
+
+        var added = 0;
+        var updated = 0;
+        foreach (var def in GetBudgetTypeMetadata())
+        {
+            if (existing.TryGetValue(def.Type, out var current))
+            {
+                var dirty = false;
+                if (current.DisplayName != def.DisplayName) { current.DisplayName = def.DisplayName; dirty = true; }
+                if (current.BaseReceivableCode != def.BaseReceivableCode) { current.BaseReceivableCode = def.BaseReceivableCode; dirty = true; }
+                if (current.BaseIncomeCode != def.BaseIncomeCode) { current.BaseIncomeCode = def.BaseIncomeCode; dirty = true; }
+                if (current.DefaultPaymentSchedule != def.DefaultPaymentSchedule) { current.DefaultPaymentSchedule = def.DefaultPaymentSchedule; dirty = true; }
+                if (current.AllowMultiplePerYear != def.AllowMultiplePerYear) { current.AllowMultiplePerYear = def.AllowMultiplePerYear; dirty = true; }
+                if (current.DisplayOrder != def.DisplayOrder) { current.DisplayOrder = def.DisplayOrder; dirty = true; }
+                if (dirty) updated++;
+                continue;
+            }
+
+            var entry = _db.BudgetTypeMetadata.Add(def);
+            entry.Property(nameof(BudgetTypeMetadata.Id)).CurrentValue = Guid.CreateVersion7();
+            added++;
+        }
+
+        if (added > 0 || updated > 0)
+            await _db.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation(
+            "BudgetTypeMetadata seed: {Added} eklendi, {Updated} güncellendi.", added, updated);
+    }
+
+    /// <summary>Varsayılan bütçe tipleri — base hesap kodları (120.0X / 600.0X).</summary>
+    private static IEnumerable<BudgetTypeMetadata> GetBudgetTypeMetadata() =>
+    [
+        new BudgetTypeMetadata
+        {
+            Type = BudgetType.Aidat,
+            DisplayName = "Aidat Bütçesi",
+            BaseReceivableCode = "120.01",
+            BaseIncomeCode = "600.01",
+            DefaultPaymentSchedule = PaymentSchedule.MonthlyEqual,
+            AllowMultiplePerYear = true,
+            DisplayOrder = 1,
+            IsActive = true,
+        },
+        new BudgetTypeMetadata
+        {
+            Type = BudgetType.Yatirim,
+            DisplayName = "Yatırım Bütçesi",
+            BaseReceivableCode = "120.02",
+            BaseIncomeCode = "600.02",
+            DefaultPaymentSchedule = PaymentSchedule.Installment,
+            AllowMultiplePerYear = true,
+            DisplayOrder = 2,
+            IsActive = true,
+        },
+        new BudgetTypeMetadata
+        {
+            Type = BudgetType.Komur,
+            DisplayName = "Kömür/Yakıt Bütçesi",
+            BaseReceivableCode = "120.03",
+            BaseIncomeCode = "600.03",
+            DefaultPaymentSchedule = PaymentSchedule.Installment,
+            AllowMultiplePerYear = true,
+            DisplayOrder = 3,
+            IsActive = true,
+        },
+        new BudgetTypeMetadata
+        {
+            Type = BudgetType.Kurulus,
+            DisplayName = "Kuruluş Bütçesi",
+            BaseReceivableCode = "120.04",
+            BaseIncomeCode = "600.04",
+            DefaultPaymentSchedule = PaymentSchedule.Installment,
+            AllowMultiplePerYear = true,
+            DisplayOrder = 4,
+            IsActive = true,
+        },
+    ];
 }

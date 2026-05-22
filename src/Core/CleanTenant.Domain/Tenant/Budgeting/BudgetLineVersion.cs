@@ -38,7 +38,7 @@ public sealed class BudgetLineVersion : BaseEntity, ITenantScoped
     /// </summary>
     public decimal PlannedAmount { get; set; }
 
-    /// <summary>Tahakkuk takvimi (aylık/yıllık/fatura/mevsimsel).</summary>
+    /// <summary>Tahakkuk takvimi (aylık eşit / yıllık / fatura / taksitli).</summary>
     public PaymentSchedule PaymentSchedule { get; set; } = PaymentSchedule.MonthlyEqual;
 
     /// <summary>BB'lere dağıtım modeli (eşit/m²/...).</summary>
@@ -51,11 +51,29 @@ public sealed class BudgetLineVersion : BaseEntity, ITenantScoped
     public Guid? ParticipationGroupId { get; set; }
 
     /// <summary>
-    /// Dağıtım/plan ek parametreleri (JSON). Örn. Seasonal için
-    /// <c>{"activeMonths":[6,7,8,9]}</c>, Formula için formül metni.
-    /// Null ise default davranış.
+    /// Dağıtım/plan ek parametreleri (JSON). Örn. Formula için formül metni.
+    /// Null ise default davranış. (Seasonal v0.2.14'te Installment'a taşındı.)
     /// </summary>
     public string? DistributionConfig { get; set; }
+
+    // ── Installment (PaymentSchedule == Installment için) ────────────────────
+
+    /// <summary>Taksit planı başlangıç yılı. <see cref="PaymentSchedule.Installment"/> dışında null.</summary>
+    public int? InstallmentStartYear { get; set; }
+
+    /// <summary>Taksit planı başlangıç ayı (1-12).</summary>
+    public int? InstallmentStartMonth { get; set; }
+
+    /// <summary>Taksit planı bitiş yılı.</summary>
+    public int? InstallmentEndYear { get; set; }
+
+    /// <summary>Taksit planı bitiş ayı (1-12).</summary>
+    public int? InstallmentEndMonth { get; set; }
+
+    /// <summary>Taksit periyodu (ay): 1=aylık, 2=iki aylık, 3=üç aylık … 12=yıllık.</summary>
+    public int? InstallmentIntervalMonths { get; set; }
+
+    // ─────────────────────────────────────────────────────────────────────────
 
     /// <summary>
     /// Bir önceki versiyondan kopyalanmadıysa (yeni eklenmiş veya manuel override
@@ -68,7 +86,11 @@ public sealed class BudgetLineVersion : BaseEntity, ITenantScoped
 
     /// <summary>
     /// Tahakkuk vade günü (ayın 1-31 günü). Varsayılan 15. Ayda 31 olmayan günler
-    /// için ayın son günü kullanılır (FAZ 6 mantığı).
+    /// için ayın son günü kullanılır (FAZ 6 mantığı). "Her ayın 15'i" gibi vade
+    /// kuralları bu alan ile karşılanır.
     /// </summary>
     public int DueDayOfMonth { get; set; } = 15;
+
+    /// <summary>Taksit satırları (yalnız <see cref="PaymentSchedule.Installment"/> için).</summary>
+    public ICollection<BudgetLineInstallment> Installments { get; set; } = [];
 }

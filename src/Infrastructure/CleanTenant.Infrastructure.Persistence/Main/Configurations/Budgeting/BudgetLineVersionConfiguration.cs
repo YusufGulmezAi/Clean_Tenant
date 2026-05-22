@@ -44,6 +44,13 @@ internal sealed class BudgetLineVersionConfiguration : IEntityTypeConfiguration<
         builder.Property(x => x.OverrideReason).HasMaxLength(500);
         builder.Property(x => x.DueDayOfMonth).IsRequired();
 
+        // Installment konfig (PaymentSchedule == Installment için; aksi halde null)
+        builder.Property(x => x.InstallmentStartYear);
+        builder.Property(x => x.InstallmentStartMonth);
+        builder.Property(x => x.InstallmentEndYear);
+        builder.Property(x => x.InstallmentEndMonth);
+        builder.Property(x => x.InstallmentIntervalMonths);
+
         // FK'ler — silinmeyi engelle
         builder.HasOne<BudgetVersion>()
             .WithMany()
@@ -59,6 +66,12 @@ internal sealed class BudgetLineVersionConfiguration : IEntityTypeConfiguration<
             .WithMany()
             .HasForeignKey(x => x.ParticipationGroupId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        // Installment satırları (Installment plan)
+        builder.HasMany(x => x.Installments)
+            .WithOne()
+            .HasForeignKey(i => i.BudgetLineVersionId)
+            .OnDelete(DeleteBehavior.Cascade);
 
         // Audit + soft delete
         builder.Property(x => x.CreatedAt).HasColumnType("timestamptz");

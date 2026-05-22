@@ -15,7 +15,14 @@ internal sealed class BudgetConfiguration : IEntityTypeConfiguration<Budget>
     /// <inheritdoc />
     public void Configure(EntityTypeBuilder<Budget> builder)
     {
-        builder.ToTable("budget_plans");
+        builder.ToTable("budget_plans", t =>
+        {
+            t.HasCheckConstraint("ck_budget_plans_period_months",
+                "period_start_month BETWEEN 1 AND 12 AND period_end_month BETWEEN 1 AND 12");
+            // Bitiş >= Başlangıç (yıl*12+ay karşılaştırması)
+            t.HasCheckConstraint("ck_budget_plans_period_order",
+                "(period_end_year * 12 + period_end_month) >= (period_start_year * 12 + period_start_month)");
+        });
 
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Id).HasColumnType("uuid");
@@ -28,9 +35,13 @@ internal sealed class BudgetConfiguration : IEntityTypeConfiguration<Budget>
 
         builder.Property(x => x.FiscalYearId).HasColumnType("uuid").IsRequired();
 
-        // (CompanyId, FiscalYearId) çifti benzersiz — 1 Site × 1 Mali Yıl = 1 Bütçe (Karar #2).
-        builder.HasIndex(x => new { x.CompanyId, x.FiscalYearId })
-            .HasDatabaseName("ix_budget_plans_company_fy")
+        builder.Property(x => x.Type).HasConversion<short>().IsRequired();
+
+        // v0.2.14 — (CompanyId, FiscalYearId, Type, Title) çifti benzersiz.
+        // Aynı yılda aynı tipte birden fazla bütçe olabilir (ek aidat, çoklu yatırım),
+        // ama aynı isimle iki tane olamaz.
+        builder.HasIndex(x => new { x.CompanyId, x.FiscalYearId, x.Type, x.Title })
+            .HasDatabaseName("ix_budget_plans_company_fy_type_title")
             .HasFilter("is_deleted = false")
             .IsUnique();
 
@@ -40,9 +51,19 @@ internal sealed class BudgetConfiguration : IEntityTypeConfiguration<Budget>
         builder.Property(x => x.Title).HasMaxLength(120).IsRequired();
         builder.Property(x => x.Notes).HasMaxLength(2000);
 
+        // Bütçe geçerlilik dönemi
+        builder.Property(x => x.PeriodStartYear).IsRequired();
+        builder.Property(x => x.PeriodStartMonth).IsRequired();
+        builder.Property(x => x.PeriodEndYear).IsRequired();
+        builder.Property(x => x.PeriodEndMonth).IsRequired();
+
         builder.Property(x => x.Status).HasConversion<short>().IsRequired();
 
         builder.Property(x => x.CurrentVersionId).HasColumnType("uuid");
+
+        // İlk tahakkukta otomatik üretilen alt hesap kodları (nullable)
+        builder.Property(x => x.ReceivableAccountCodeId).HasColumnType("uuid");
+        builder.Property(x => x.IncomeAccountCodeId).HasColumnType("uuid");
 
         // Versions navigation (BudgetVersion.BudgetId üzerinden)
         builder.HasMany(x => x.Versions)

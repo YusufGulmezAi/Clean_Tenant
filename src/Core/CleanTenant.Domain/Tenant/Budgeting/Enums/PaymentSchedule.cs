@@ -28,8 +28,20 @@ public enum PaymentSchedule
     InvoiceBased = 2,
 
     /// <summary>
-    /// Mevsimsel — yalnız belirli aylarda tahakkuk üretilir (örn. yaz aylarında havuz bakım).
-    /// Aktif aylar BudgetLineVersion'daki konfigürasyon alanında saklanır.
+    /// <para>
+    /// Taksitli — başlangıç/bitiş ayı + periyot (1-12 ay) ile <c>BudgetLineInstallment</c>
+    /// satırları üretilir. Her taksit kendi tutarına sahiptir.
+    /// </para>
+    /// <para>
+    /// Yatırım/Kuruluş bütçeleri için kullanılır. Mevsimsel giderler (Kömür) de
+    /// aktif aylar için birer taksit satırı olarak modellenir (v0.2.14 — Seasonal
+    /// bu tipe taşındı).
+    /// </para>
+    /// <para>
+    /// <b>Manuel düzenleme:</b> <c>DistributionModel = Equal</c> ise her taksit
+    /// tutarı elle değiştirilebilir (sum = PlannedAmount). m²/Arsa Payı dağılımda
+    /// taksitler otomatik eşit bölünür ve elle değiştirilemez.
+    /// </para>
     /// </summary>
-    Seasonal = 3
+    Installment = 3
 }

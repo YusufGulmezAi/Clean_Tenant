@@ -27,5 +27,18 @@ public sealed class CreateBudgetCommandValidator : AbstractValidator<CreateBudge
         RuleFor(x => x.Notes)
             .MaximumLength(2000).WithMessage(_ => localizer["Validation.MaxLength", "Notes", 2000].Value)
             .When(x => !string.IsNullOrWhiteSpace(x.Notes));
+
+        // Period ayları verilirse 1-12 aralığında olmalı
+        RuleFor(x => x.PeriodStartMonth!.Value)
+            .InclusiveBetween(1, 12).When(x => x.PeriodStartMonth.HasValue);
+        RuleFor(x => x.PeriodEndMonth!.Value)
+            .InclusiveBetween(1, 12).When(x => x.PeriodEndMonth.HasValue);
+
+        // Period kısmen verilmişse: start çifti birlikte, end çifti birlikte olmalı
+        RuleFor(x => x)
+            .Must(c => (c.PeriodStartYear.HasValue == c.PeriodStartMonth.HasValue))
+            .WithMessage(_ => "Başlangıç yıl ve ayı birlikte verilmelidir.")
+            .Must(c => (c.PeriodEndYear.HasValue == c.PeriodEndMonth.HasValue))
+            .WithMessage(_ => "Bitiş yıl ve ayı birlikte verilmelidir.");
     }
 }
