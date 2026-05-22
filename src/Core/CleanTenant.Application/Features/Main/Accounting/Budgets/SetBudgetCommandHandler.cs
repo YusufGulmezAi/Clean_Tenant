@@ -45,7 +45,7 @@ public sealed class SetBudgetCommandHandler
                 Error.NotFound("ACC-004", "Muhasebe dönemi bulunamadı."));
 
         // Upsert: mevcut bütçe kalemini ara
-        var existing = await _db.Budgets
+        var existing = await _db.BudgetEntries
             .FirstOrDefaultAsync(b => b.CompanyId == command.CompanyId
                                    && b.AccountingPeriodId == command.AccountingPeriodId
                                    && b.AccountCodeId == command.AccountCodeId
@@ -63,7 +63,7 @@ public sealed class SetBudgetCommandHandler
         else
         {
             // Yeni kayıt
-            var budget = new Budget
+            var budget = new BudgetEntry
             {
                 TenantId = command.TenantId,
                 CompanyId = command.CompanyId,
@@ -72,7 +72,7 @@ public sealed class SetBudgetCommandHandler
                 CostCenterId = command.CostCenterId,
                 BudgetedAmount = command.BudgetedAmount
             };
-            _db.Budgets.Add(budget);
+            _db.BudgetEntries.Add(budget);
             budgetId = budget.Id;
         }
 

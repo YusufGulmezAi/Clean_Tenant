@@ -19,7 +19,7 @@ public sealed class GetBudgetsQueryHandler
         GetBudgetsQuery query,
         CancellationToken cancellationToken)
     {
-        var q = _db.Budgets
+        var q = _db.BudgetEntries
             .Where(b => b.CompanyId == query.CompanyId && !b.IsDeleted);
 
         if (query.AccountingPeriodId.HasValue)

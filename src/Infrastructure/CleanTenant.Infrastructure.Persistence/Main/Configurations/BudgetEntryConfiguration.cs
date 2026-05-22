@@ -5,15 +5,16 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 namespace CleanTenant.Infrastructure.Persistence.Main.Configurations;
 
 /// <summary>
-/// <c>budgets</c> tablosu için EF Core map'i.
+/// <c>budgets</c> tablosu için EF Core map'i (legacy <see cref="BudgetEntry"/>).
 /// CompanyId + AccountingPeriodId + AccountCodeId + CostCenterId kombinasyonu
 /// benzersiz; negatif bütçe yasağı CHECK.
 /// IAggregateRoot değil — xmin token eklenmez.
+/// v0.2.13.a: Class Budget → BudgetEntry yeniden adlandırıldı (DB tablosu aynı).
 /// </summary>
-internal sealed class BudgetConfiguration : IEntityTypeConfiguration<Budget>
+internal sealed class BudgetEntryConfiguration : IEntityTypeConfiguration<BudgetEntry>
 {
     /// <inheritdoc />
-    public void Configure(EntityTypeBuilder<Budget> builder)
+    public void Configure(EntityTypeBuilder<BudgetEntry> builder)
     {
         builder.ToTable("budgets", t =>
         {
@@ -39,8 +40,6 @@ internal sealed class BudgetConfiguration : IEntityTypeConfiguration<Budget>
         builder.Property(x => x.CostCenterId).HasColumnType("uuid");
 
         // CompanyId + Period + AccountCode + CostCenter kombinasyonu benzersiz (soft-delete hariç)
-        // CostCenterId null olabileceğinden partial unique index için has_filter kullanmak yerine
-        // COALESCE trick gerçek bir partial unique sağlar; EF burada tüm 4 kolonu indexler.
         builder.HasIndex(x => new { x.CompanyId, x.AccountingPeriodId, x.AccountCodeId, x.CostCenterId })
             .HasDatabaseName("ix_budgets_company_period_account_costcenter")
             .HasFilter("is_deleted = false")

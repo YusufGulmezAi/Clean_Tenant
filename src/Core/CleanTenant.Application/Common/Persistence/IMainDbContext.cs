@@ -1,4 +1,5 @@
 using CleanTenant.Domain.Tenant.Accounting;
+using CleanTenant.Domain.Tenant.Budgeting;
 using CleanTenant.Domain.Tenant.BuildingSchema;
 using CleanTenant.Domain.Tenant.Companies;
 using Microsoft.EntityFrameworkCore;
@@ -66,11 +67,39 @@ public interface IMainDbContext
     /// <summary>Fatura kayıtları (gelen/giden).</summary>
     DbSet<Invoice> Invoices { get; }
 
-    /// <summary>Bütçe kalemleri (dönem + hesap kodu granülaritesi).</summary>
-    DbSet<Budget> Budgets { get; }
+    /// <summary>
+    /// Legacy bütçe kayıtları (dönem + hesap kodu granülaritesi). FAZ 5 Slice 4d'de
+    /// yeni <c>Budget</c> aggregate ile değiştirilecek; o zaman bu DbSet kaldırılır.
+    /// </summary>
+    DbSet<BudgetEntry> BudgetEntries { get; }
 
     /// <summary>Şirket muhasebe yapılandırmaları.</summary>
     DbSet<AccountingSettings> AccountingSettings { get; }
+
+    // ── Bütçe Modülü (FAZ 5+) ───────────────────────────────────────────────
+    /// <summary>Yıllık bütçe aggregate'leri.</summary>
+    DbSet<Budget> Budgets { get; }
+
+    /// <summary>Yayınlanmış bütçe versiyonları (V1, V2, …).</summary>
+    DbSet<BudgetVersion> BudgetVersions { get; }
+
+    /// <summary>Gider kategorileri (hiyerarşik).</summary>
+    DbSet<ExpenseCategory> ExpenseCategories { get; }
+
+    /// <summary>Bütçe kalemleri (line tanımları).</summary>
+    DbSet<BudgetLine> BudgetLines { get; }
+
+    /// <summary>Bütçe kalemi versiyon snapshot'ları (planlanan tutar + dağıtım).</summary>
+    DbSet<BudgetLineVersion> BudgetLineVersions { get; }
+
+    /// <summary>Katılım grupları (Havuz, Ticari, …).</summary>
+    DbSet<ParticipationGroup> ParticipationGroups { get; }
+
+    /// <summary>Bağımsız Bölüm ↔ Katılım Grubu üyelik kayıtları.</summary>
+    DbSet<UnitParticipationGroup> UnitParticipationGroups { get; }
+
+    /// <summary>Muafiyet kuralları.</summary>
+    DbSet<ExemptionRule> ExemptionRules { get; }
 
     /// <summary>Bekleyen değişiklikleri persist eder.</summary>
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);

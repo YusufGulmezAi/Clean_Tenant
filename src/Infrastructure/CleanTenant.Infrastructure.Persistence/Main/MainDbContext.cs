@@ -1,5 +1,6 @@
 using CleanTenant.Application.Common.Persistence;
 using CleanTenant.Domain.Tenant.Accounting;
+using CleanTenant.Domain.Tenant.Budgeting;
 using CleanTenant.Domain.Tenant.BuildingSchema;
 using CleanTenant.Domain.Tenant.Companies;
 using CleanTenant.SharedKernel.Context;
@@ -78,11 +79,36 @@ public sealed class MainDbContext : DbContext, IMainDbContext
     /// <summary>Fatura kayıtları (gelen/giden).</summary>
     public DbSet<Invoice> Invoices => Set<Invoice>();
 
-    /// <summary>Bütçe kalemleri (dönem + hesap kodu granülaritesi).</summary>
-    public DbSet<Budget> Budgets => Set<Budget>();
+    /// <summary>Legacy bütçe kayıtları (FAZ 5 Slice 4d'de yeni model ile değiştirilecek).</summary>
+    public DbSet<BudgetEntry> BudgetEntries => Set<BudgetEntry>();
 
     /// <summary>Şirket muhasebe yapılandırmaları.</summary>
     public DbSet<AccountingSettings> AccountingSettings => Set<AccountingSettings>();
+
+    // ── Bütçe Modülü (FAZ 5+) ───────────────────────────────────────────────
+    /// <summary>Yıllık bütçe aggregate'leri.</summary>
+    public DbSet<Budget> Budgets => Set<Budget>();
+
+    /// <summary>Yayınlanmış bütçe versiyonları.</summary>
+    public DbSet<BudgetVersion> BudgetVersions => Set<BudgetVersion>();
+
+    /// <summary>Gider kategorileri.</summary>
+    public DbSet<ExpenseCategory> ExpenseCategories => Set<ExpenseCategory>();
+
+    /// <summary>Bütçe kalemi tanımları.</summary>
+    public DbSet<BudgetLine> BudgetLines => Set<BudgetLine>();
+
+    /// <summary>Bütçe kalemi versiyon snapshot'ları.</summary>
+    public DbSet<BudgetLineVersion> BudgetLineVersions => Set<BudgetLineVersion>();
+
+    /// <summary>Katılım grupları.</summary>
+    public DbSet<ParticipationGroup> ParticipationGroups => Set<ParticipationGroup>();
+
+    /// <summary>BB ↔ katılım grubu junction.</summary>
+    public DbSet<UnitParticipationGroup> UnitParticipationGroups => Set<UnitParticipationGroup>();
+
+    /// <summary>Muafiyet kuralları.</summary>
+    public DbSet<ExemptionRule> ExemptionRules => Set<ExemptionRule>();
 
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder modelBuilder)
