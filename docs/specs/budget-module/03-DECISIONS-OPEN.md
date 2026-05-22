@@ -23,8 +23,10 @@
 - C) Hiç unique değil, sadece BB ShortCode unique (önerim daha güvenli).
 
 **Kullanıcı Kararı:**
-- [ ] Önerim onaylandı (Blok/Yapı scope unique)
+- [x] Önerim onaylandı (Blok/Yapı scope unique)
 - [ ] Diğer: ___________
+
+> **Karar tarihi:** 2026-05-22. Hiyerarşi teyit edildi: Yapı = üst kütleyi, Blok = içindeki kuleyi temsil eder.
 
 ---
 
@@ -46,8 +48,10 @@
 - C) Sadece Yapı-bazlı yönetim (anlamsız — küçük apartmanlar için overkill).
 
 **Kullanıcı Kararı:**
-- [ ] Önerim onaylandı (sadece Site-bazlı, Yapı-bazlı Wave 3'e)
+- [x] Önerim onaylandı (sadece Site-bazlı, Yapı-bazlı Wave 3'e)
 - [ ] Diğer: ___________
+
+> **Karar tarihi:** 2026-05-22.
 
 ---
 
@@ -71,7 +75,9 @@
 
 **Kullanıcı Kararı:**
 - [ ] Önerim onaylandı (Crockford Base32, 8 char, code-side generator)
-- [ ] Diğer: ___________
+- [x] Diğer: **Mevcut proje standardı korunur — `UrlCode`, 9-char Base58.** Yeni Yapı Şeması entity'lerinde de alan adı `UrlCode`, format Base58, 9 karakter.
+
+> **Karar tarihi:** 2026-05-22. Mevcut projedeki `UrlCode` (9-char Base58) standardıyla tutarlılık sağlanır.
 
 ---
 
@@ -92,8 +98,10 @@
 
 **Kullanıcı Kararı:**
 - [ ] Önerim onaylandı (Site'a dokunma, sadece FK ekle)
-- [ ] Site'a navigation property ekle ama domain logic ekleme
+- [x] Site'a navigation property ekle ama domain logic ekleme
 - [ ] Diğer: ___________
+
+> **Karar tarihi:** 2026-05-22. **NOT:** Kodda entity adı `Company`'dir (Site değil). `Ada.CompanyId` FK eklenecek; `Company` entity'sine `ICollection<Ada> Adalar` navigation property eklenecek. Domain logic eklenmeyecek.
 
 ---
 
@@ -117,8 +125,10 @@
 **Aynı soru `YapiTipi` için de geçerli — aynı karar uygulanacak.**
 
 **Kullanıcı Kararı:**
-- [ ] Önerim onaylandı (Enum + INT column)
+- [x] Önerim onaylandı (Enum + INT column)
 - [ ] Diğer: ___________
+
+> **Karar tarihi:** 2026-05-22. `YapiTipi` için de aynı karar geçerli.
 
 ---
 
@@ -138,8 +148,10 @@
 - C) Module.Onay'ı önce kur, sonra bütçe (sprint uzar 1+ hafta).
 
 **Kullanıcı Kararı:**
-- [ ] Önerim onaylandı (basit publish + yetki + interface hazır)
+- [x] Önerim onaylandı (basit publish + yetki + interface hazır)
 - [ ] Diğer: ___________
+
+> **Karar tarihi:** 2026-05-22.
 
 ---
 
