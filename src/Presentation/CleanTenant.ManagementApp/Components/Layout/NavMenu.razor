@@ -103,6 +103,7 @@
     @if (_scope == "Tenant" && _activeTenantId.HasValue)
     {
         var tenantCompaniesLabel = Loc["NavMenu.Companies"].Value;
+        var tenantBudgetLabel = Loc["NavMenu.Budget"].Value;
         var tenantUsersLabel = Loc["NavMenu.Users"].Value;
         var tenantRolesLabel = Loc["NavMenu.RolesAndPermissions"].Value;
         var tenantRolesUsersLabel = Loc["NavMenu.RolesAndUsers"].Value;
@@ -111,6 +112,14 @@
         {
             <MudNavLink Href="/tenant/companies" Icon="@Icons.Material.Filled.Apartment">
                 @tenantCompaniesLabel
+            </MudNavLink>
+        }
+
+        @* v0.2.13.a — Bütçe Tenant scope (permission-gated, izinli kullanıcı görür) *@
+        @if (_canViewBudget && Matches(tenantBudgetLabel))
+        {
+            <MudNavLink Href="/tenant/budget" Icon="@Icons.Material.Filled.AccountBalanceWallet">
+                @tenantBudgetLabel
             </MudNavLink>
         }
 
@@ -195,7 +204,7 @@
             (Loc["NavMenu.Accounting.FiscalYears"].Value,     "/company/accounting/fiscal-years",        Icons.Material.Filled.CalendarMonth),
             (Loc["NavMenu.Accounting.Banks"].Value,            "/company/accounting/bank-accounts",       Icons.Material.Filled.AccountBalance),
             (Loc["NavMenu.Accounting.Invoices"].Value,         "/company/accounting/invoices",            Icons.Material.Filled.ReceiptLong),
-            (Loc["NavMenu.Accounting.Budget"].Value,           "/company/accounting/budget",              Icons.Material.Filled.BarChart),
+            // v0.2.13.a — Bütçe Site scope'tan çıkarıldı (Tenant scope'a taşındı, tenant.budget.* permission).
             (Loc["NavMenu.Accounting.Reports"].Value,          "/company/accounting/reports/trial-balance", Icons.Material.Filled.TableChart),
             (Loc["NavMenu.Accounting.Settings"].Value,         "/company/accounting/settings",            Icons.Material.Filled.Tune),
         };
@@ -251,6 +260,7 @@
     private Guid? _activeTenantId;
     private Guid? _activeCompanyId;
     private bool _canManageUsers;
+    private bool _canViewBudget;
 
     private bool IsSearching => !string.IsNullOrWhiteSpace(_search);
 
@@ -278,11 +288,13 @@
         if (string.Equals(_scope, "System", StringComparison.OrdinalIgnoreCase))
         {
             _canManageUsers = true;
+            _canViewBudget = true;
         }
         else
         {
             var session = SessionAccessor.Current;
             _canManageUsers = session is not null && session.Permissions.Contains("Tenant.Users.Manage");
+            _canViewBudget = session is not null && session.Permissions.Contains("tenant.budget.view");
         }
     }
 

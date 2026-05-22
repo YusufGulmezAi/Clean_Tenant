@@ -136,11 +136,21 @@ public static class PermissionCatalog
         new("company.accounting.invoice.read",       "Fatura görüntüleme",            "Accounting", ScopeLevel.Company),
         new("company.accounting.invoice.write",      "Fatura kaydetme",               "Accounting", ScopeLevel.Company),
         new("company.accounting.invoice.post",       "Fatura yevmiyeleştirme",        "Accounting", ScopeLevel.Company),
-        new("company.accounting.budget.read",        "Bütçe görüntüleme",             "Accounting", ScopeLevel.Company),
-        new("company.accounting.budget.write",       "Bütçe düzenleme",               "Accounting", ScopeLevel.Company),
         new("company.accounting.reports.read",       "Rapor görüntüleme",             "Accounting", ScopeLevel.Company),
         new("company.accounting.cost-center.read",   "Maliyet merkezi görüntüleme",   "Accounting", ScopeLevel.Company),
         new("company.accounting.cost-center.write",  "Maliyet merkezi düzenleme",     "Accounting", ScopeLevel.Company),
         new("company.accounting.settings.manage",    "Muhasebe ayarları",             "Accounting", ScopeLevel.Company),
+
+        // ── Bütçe Modülü (Tenant scope — site-level erişim yok) ──────────────────
+        // v0.2.13.a — Karar 2026-05-22: Bütçe modülü Site scope'tan kaldırıldı.
+        // Yönetim seviyesinde permission'a bağlı erişim; veri Company-scoped kalır
+        // (Yönetim kullanıcısı hangi sitenin bütçesinde çalıştığını seçer).
+        new("tenant.budget.view",                    "Bütçe görüntüleme",             "Budget",     ScopeLevel.Tenant),
+        new("tenant.budget.edit",                    "Bütçe taslak düzenleme",        "Budget",     ScopeLevel.Tenant),
+        new("tenant.budget.publish",                 "Bütçe yayınlama / revize",      "Budget",     ScopeLevel.Tenant),
+        new("tenant.accrual.generate",               "Tahakkuk üretme",               "Budget",     ScopeLevel.Tenant),
+        new("tenant.collection.view",                "Tahsilat / borç görüntüleme",   "Budget",     ScopeLevel.Tenant),
+        new("tenant.collection.record",              "Tahsilat kaydetme",             "Budget",     ScopeLevel.Tenant),
+        new("tenant.latefee.configure",              "Gecikme parametre yönetimi",    "Budget",     ScopeLevel.Tenant),
     ];
 }

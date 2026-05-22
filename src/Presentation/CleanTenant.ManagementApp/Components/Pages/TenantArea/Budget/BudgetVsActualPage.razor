@@ -1,22 +1,32 @@
-@page "/company/accounting/reports/budget-vs-actual"
+@page "/tenant/budget/{CompanyId:guid}/vs-actual"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @inject AuthenticationStateProvider AuthProvider
+@inject ICurrentSessionAccessor SessionAccessor
+@inject IMainCatalogReader CompanyReader
 @inject MediatR.IMediator Mediator
+@inject NavigationManager Nav
 @inject ISnackbar Snackbar
 @inject IStringLocalizer Loc
+@using CleanTenant.Application.Common.Auth
 @using CleanTenant.SharedKernel.Common.Results
 @using CleanTenant.Application.Features.Main.Accounting.Reports
 @using CleanTenant.Application.Features.Main.Accounting.Readers
 @using CleanTenant.Application.Features.Main.Accounting.FiscalYears
-@using CleanTenant.Application.Features.Main.Accounting.AccountCodes
+@using CleanTenant.Application.Features.Main.Readers
 @using CleanTenant.Domain.Tenant.Accounting.Enums
+
+@*
+    v0.2.13.a — Bütçe / Gerçekleşen karşılaştırma raporu (Tenant scope).
+    Bütçe Adım 0 ile birlikte Site scope'tan Tenant scope'a taşındı.
+    Yetki: `tenant.budget.view`. FAZ 5+ ile veri kaynağı yeni Butce modeline bağlanacak.
+*@
 
 <PageTitle>Bütçe - Gerçekleşen Karşılaştırma</PageTitle>
 
 @if (_unauthorized)
 {
     <MudAlert Severity="Severity.Warning" Class="my-3">
-        Bu sayfaya erişim yetkiniz bulunmuyor. Şirket kapsamında giriş yapınız.
+        Bu sayfaya erişim yetkiniz bulunmuyor. Yönetim kapsamında `tenant.budget.view` izni gereklidir.
     </MudAlert>
 }
 else if (!_initialized)
@@ -25,7 +35,13 @@ else if (!_initialized)
 }
 else
 {
-    <MudText Typo="Typo.h5" Class="mb-4">Bütçe - Gerçekleşen Karşılaştırma</MudText>
+    <div class="d-flex align-center justify-space-between mb-3">
+        <MudText Typo="Typo.h5">Bütçe / Gerçekleşen — @_companyName</MudText>
+        <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.ArrowBack"
+                   OnClick="@(() => Nav.NavigateTo($"/tenant/budget/{CompanyId}"))">
+            Bütçeye Dön
+        </MudButton>
+    </div>
 
     <MudPaper Class="pa-4 mb-4" Elevation="1">
         <MudGrid Spacing="2">
@@ -81,7 +97,7 @@ else
         @if (_report is null || _report.Lines.Count == 0)
         {
             <MudAlert Severity="Severity.Info">
-                Rapor verisi bulunamadı. (Faz 6 implementasyonuyla tamamlanacak)
+                Rapor verisi bulunamadı. (FAZ 6 implementasyonuyla tamamlanacak)
             </MudAlert>
         }
         else
@@ -113,8 +129,9 @@ else
 }
 
 @code {
-    private Guid _companyId;
-    private Guid? _tenantId;
+    [Parameter] public Guid CompanyId { get; set; }
+
+    private string _companyName = "";
     private bool _unauthorized;
     private bool _initialized;
     private bool _loading;
@@ -130,15 +147,37 @@ else
         var authState = await AuthProvider.GetAuthenticationStateAsync();
         var user = authState.User;
         if (user?.Identity?.IsAuthenticated != true) { _unauthorized = true; _initialized = true; return; }
-        var scope = user.FindFirst("scope")?.Value;
-        if (!string.Equals(scope, "Company", StringComparison.OrdinalIgnoreCase)) { _unauthorized = true; _initialized = true; return; }
-        if (user.FindFirst("company_id") is { Value: var cid } && Guid.TryParseExact(cid, "N", out var cGuid))
-            _companyId = cGuid;
-        else { _unauthorized = true; _initialized = true; return; }
-        if (user.FindFirst("tenant_id") is { Value: var tid } && Guid.TryParseExact(tid, "N", out var tGuid))
-            _tenantId = tGuid;
 
-        var fyResult = await Mediator.Send(new GetFiscalYearsQuery(_companyId));
+        var scope = user.FindFirst("scope")?.Value;
+        var isSystem = string.Equals(scope, "System", StringComparison.OrdinalIgnoreCase);
+        if (!isSystem && !string.Equals(scope, "Tenant", StringComparison.OrdinalIgnoreCase))
+        {
+            _unauthorized = true;
+            _initialized = true;
+            return;
+        }
+
+        if (!isSystem)
+        {
+            var session = SessionAccessor.Current;
+            if (session is null || !session.Permissions.Contains("tenant.budget.view"))
+            {
+                _unauthorized = true;
+                _initialized = true;
+                return;
+            }
+        }
+
+        var company = await CompanyReader.GetByIdAsync(CompanyId);
+        if (company is null)
+        {
+            _unauthorized = true;
+            _initialized = true;
+            return;
+        }
+        _companyName = company.Name;
+
+        var fyResult = await Mediator.Send(new GetFiscalYearsQuery(CompanyId));
         if (fyResult.IsSuccess)
         {
             _fiscalYears = fyResult.Value!;
@@ -155,7 +194,7 @@ else
         _hasResult = false;
         StateHasChanged();
 
-        var result = await Mediator.Send(new GetBudgetVsActualQuery(_companyId, _selectedYear.Id, _selectedMonth));
+        var result = await Mediator.Send(new GetBudgetVsActualQuery(CompanyId, _selectedYear.Id, _selectedMonth));
 
         if (result.IsFailure)
         {
@@ -170,8 +209,6 @@ else
         _loading = false;
     }
 
-    // Pozitif sapma (gerçekleşen > bütçe) gider için kötü → Error
-    // Negatif sapma (gerçekleşen < bütçe) → Success
     private static Color VarianceColor(decimal variance) =>
         variance > 0 ? Color.Error :
         variance < 0 ? Color.Success :

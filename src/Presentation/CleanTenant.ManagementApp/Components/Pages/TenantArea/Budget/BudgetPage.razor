@@ -1,40 +1,94 @@
-@page "/company/accounting/budget"
+@page "/tenant/budget"
+@page "/tenant/budget/{CompanyId:guid}"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @inject AuthenticationStateProvider AuthProvider
+@inject ICurrentSessionAccessor SessionAccessor
+@inject IMainCatalogReader CompanyReader
 @inject MediatR.IMediator Mediator
+@inject NavigationManager Nav
 @inject ISnackbar Snackbar
 @inject IStringLocalizer Loc
+@using CleanTenant.Application.Common.Auth
 @using CleanTenant.SharedKernel.Common.Results
 @using CleanTenant.Application.Features.Main.Accounting.Budgets
 @using CleanTenant.Application.Features.Main.Accounting.AccountCodes
 @using CleanTenant.Application.Features.Main.Accounting.FiscalYears
 @using CleanTenant.Application.Features.Main.Accounting.Periods
+@using CleanTenant.Application.Features.Main.Readers
 @using CleanTenant.Domain.Tenant.Accounting.Enums
+
+@*
+    v0.2.13.a — Bütçe Adım 0 (Erişim Refactor).
+    Bütçe modülü Site scope'tan Tenant scope'a taşındı; data Company-scoped
+    olarak kalır (Yönetim kullanıcısı hangi sitenin bütçesinde çalışıyor seçer).
+    FAZ 5'te tamamen yeni domain model'le (Butce/ButceVersiyonu/ButceKalemi/...)
+    yeniden tasarlanacak. Bu sayfa "geçici" — eski Budget entity üzerinde çalışır.
+
+    Yetki: `tenant.budget.view` zorunlu. Edit aksiyonu `tenant.budget.edit`.
+*@
 
 <PageTitle>Bütçe</PageTitle>
 
 @if (_unauthorized)
 {
     <MudAlert Severity="Severity.Warning" Class="my-3">
-        Bu sayfaya erişim yetkiniz bulunmuyor. Şirket kapsamında giriş yapınız.
+        Bu sayfaya erişim yetkiniz bulunmuyor. Yönetim kapsamında `tenant.budget.view` izni gereklidir.
     </MudAlert>
 }
 else if (!_initialized)
 {
     <MudText Typo="Typo.h6" Class="my-3">Yükleniyor...</MudText>
 }
+else if (CompanyId is null)
+{
+    <MudText Typo="Typo.h5" Class="mb-4">Bütçe — Site Seçimi</MudText>
+    <MudPaper Class="pa-4" Elevation="1">
+        @if (_companies.Count == 0)
+        {
+            <MudAlert Severity="Severity.Info">Bu Yönetim altında erişebileceğiniz site yok.</MudAlert>
+        }
+        else
+        {
+            <MudText Typo="Typo.body2" Class="mb-3">
+                Bütçesinde çalışmak istediğiniz siteyi seçin.
+            </MudText>
+            <MudList T="CompanyListItem" Clickable="true" Dense="false">
+                @foreach (var c in _companies)
+                {
+                    <MudListItem T="CompanyListItem"
+                                 Value="@c"
+                                 Icon="@Icons.Material.Filled.Apartment"
+                                 OnClick="@(() => Nav.NavigateTo($"/tenant/budget/{c.Id}"))">
+                        @c.Name
+                    </MudListItem>
+                }
+            </MudList>
+        }
+    </MudPaper>
+}
 else
 {
     <div class="d-flex align-center justify-space-between mb-3">
-        <MudText Typo="Typo.h5">Bütçe</MudText>
-        @if (_budgetRows.Count > 0)
-        {
-            <MudButton Color="Color.Primary" Variant="Variant.Filled"
-                       StartIcon="@Icons.Material.Filled.Save"
-                       OnClick="@SaveAllModifiedAsync">
-                Tüm Değişiklikleri Kaydet
+        <MudText Typo="Typo.h5">Bütçe — @_companyName</MudText>
+        <MudStack Row="true" Spacing="2">
+            <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.SwapHoriz"
+                       OnClick="@(() => Nav.NavigateTo("/tenant/budget"))">
+                Site Değiştir
             </MudButton>
-        }
+            <MudButton Variant="Variant.Outlined"
+                       StartIcon="@Icons.Material.Filled.Compare"
+                       OnClick="@(() => Nav.NavigateTo($"/tenant/budget/{CompanyId}/vs-actual"))">
+                Bütçe / Gerçekleşen
+            </MudButton>
+            @if (_canEdit && _budgetRows.Count > 0)
+            {
+                <MudButton Color="Color.Primary" Variant="Variant.Filled"
+                           StartIcon="@Icons.Material.Filled.Save"
+                           OnClick="@SaveAllModifiedAsync">
+                    Tüm Değişiklikleri Kaydet
+                </MudButton>
+            }
+        </MudStack>
     </div>
 
     <MudPaper Class="pa-4 mb-4" Elevation="1">
@@ -108,12 +162,13 @@ else
                                              Format="N2"
                                              Min="0"
                                              Margin="Margin.Dense"
+                                             Disabled="@(!_canEdit)"
                                              HideSpinButtons="true" />
                         </td>
                         <td style="text-align:right">
                             <MudButton Size="Size.Small" Variant="Variant.Text"
                                        Color="@(row.IsModified ? Color.Primary : Color.Default)"
-                                       Disabled="@(!row.IsModified)"
+                                       Disabled="@(!_canEdit || !row.IsModified)"
                                        OnClick="@(() => SaveBudgetRowAsync(row))">
                                 Kaydet
                             </MudButton>
@@ -134,11 +189,15 @@ else
 }
 
 @code {
-    private Guid _companyId;
+    [Parameter] public Guid? CompanyId { get; set; }
+
     private Guid? _tenantId;
+    private string _companyName = "";
     private bool _unauthorized;
     private bool _initialized;
+    private bool _canEdit;
 
+    private IReadOnlyList<CompanyListItem> _companies = [];
     private IReadOnlyList<FiscalYearListItem> _fiscalYears = [];
     private IReadOnlyList<PeriodListItem> _periods = [];
     private FiscalYearListItem? _selectedFiscalYear;
@@ -150,20 +209,74 @@ else
         var authState = await AuthProvider.GetAuthenticationStateAsync();
         var user = authState.User;
         if (user?.Identity?.IsAuthenticated != true) { _unauthorized = true; _initialized = true; return; }
+
         var scope = user.FindFirst("scope")?.Value;
-        if (!string.Equals(scope, "Company", StringComparison.OrdinalIgnoreCase)) { _unauthorized = true; _initialized = true; return; }
-        if (user.FindFirst("company_id") is { Value: var cid } && Guid.TryParseExact(cid, "N", out var cGuid))
-            _companyId = cGuid;
-        else { _unauthorized = true; _initialized = true; return; }
+        // System scope bypass; aksi halde Tenant zorunlu.
+        var isSystem = string.Equals(scope, "System", StringComparison.OrdinalIgnoreCase);
+        if (!isSystem && !string.Equals(scope, "Tenant", StringComparison.OrdinalIgnoreCase))
+        {
+            _unauthorized = true;
+            _initialized = true;
+            return;
+        }
+
+        // Permission kontrolü (System bypass)
+        if (!isSystem)
+        {
+            var session = SessionAccessor.Current;
+            if (session is null || !session.Permissions.Contains("tenant.budget.view"))
+            {
+                _unauthorized = true;
+                _initialized = true;
+                return;
+            }
+            _canEdit = session.Permissions.Contains("tenant.budget.edit");
+        }
+        else
+        {
+            _canEdit = true;
+        }
+
         if (user.FindFirst("tenant_id") is { Value: var tid } && Guid.TryParseExact(tid, "N", out var tGuid))
             _tenantId = tGuid;
-        await LoadDataAsync();
+
+        await LoadCompaniesAsync();
+
+        if (CompanyId is not null)
+        {
+            await LoadCompanyContextAsync();
+        }
+
         _initialized = true;
     }
 
-    private async Task LoadDataAsync()
+    protected override async Task OnParametersSetAsync()
     {
-        var result = await Mediator.Send(new GetFiscalYearsQuery(_companyId));
+        if (_initialized && CompanyId is not null && _companyName == "")
+        {
+            await LoadCompanyContextAsync();
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadCompaniesAsync()
+    {
+        if (_tenantId is null) return;
+        _companies = await CompanyReader.GetByTenantAsync(_tenantId.Value);
+    }
+
+    private async Task LoadCompanyContextAsync()
+    {
+        if (CompanyId is null) return;
+        var company = _companies.FirstOrDefault(c => c.Id == CompanyId.Value);
+        if (company is null)
+        {
+            _unauthorized = true;
+            return;
+        }
+        _companyName = company.Name;
+
+        var result = await Mediator.Send(new GetFiscalYearsQuery(CompanyId.Value));
         if (result.IsSuccess) _fiscalYears = result.Value!;
     }
 
@@ -173,9 +286,9 @@ else
         _selectedPeriod = null;
         _periods = [];
         _budgetRows = [];
-        if (fy is null) return;
+        if (fy is null || CompanyId is null) return;
 
-        var result = await Mediator.Send(new GetPeriodsQuery(_companyId, fy.Id));
+        var result = await Mediator.Send(new GetPeriodsQuery(CompanyId.Value, fy.Id));
         if (result.IsSuccess) _periods = result.Value!;
     }
 
@@ -189,10 +302,10 @@ else
 
     private async Task LoadBudgetDataAsync()
     {
-        if (_selectedPeriod is null) return;
+        if (_selectedPeriod is null || CompanyId is null) return;
 
-        var codesResult = await Mediator.Send(new GetAccountCodesQuery(_companyId, OnlyActive: true, OnlyDetail: true));
-        var budgetsResult = await Mediator.Send(new GetBudgetsQuery(_companyId, AccountingPeriodId: _selectedPeriod.Id));
+        var codesResult = await Mediator.Send(new GetAccountCodesQuery(CompanyId.Value, OnlyActive: true, OnlyDetail: true));
+        var budgetsResult = await Mediator.Send(new GetBudgetsQuery(CompanyId.Value, AccountingPeriodId: _selectedPeriod.Id));
 
         if (codesResult.IsFailure)
         {
@@ -216,14 +329,19 @@ else
 
     private async Task SaveBudgetRowAsync(BudgetRow row)
     {
-        if (_selectedPeriod is null) return;
+        if (_selectedPeriod is null || CompanyId is null) return;
+        if (!_canEdit)
+        {
+            Snackbar.Add("Düzenleme yetkiniz yok (tenant.budget.edit).", Severity.Warning);
+            return;
+        }
         if (_tenantId is null)
         {
-            Snackbar.Add("Kiracı bilgisi bulunamadı.", Severity.Error);
+            Snackbar.Add("Yönetim bilgisi bulunamadı.", Severity.Error);
             return;
         }
 
-        var cmd = new SetBudgetCommand(_companyId, _tenantId.Value, _selectedPeriod.Id, row.AccountCode.Id, null, row.Amount);
+        var cmd = new SetBudgetCommand(CompanyId.Value, _tenantId.Value, _selectedPeriod.Id, row.AccountCode.Id, null, row.Amount);
         var result = await Mediator.Send(cmd);
         if (result.IsFailure)
         {

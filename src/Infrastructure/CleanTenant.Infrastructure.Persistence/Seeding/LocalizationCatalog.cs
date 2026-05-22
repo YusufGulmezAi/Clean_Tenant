@@ -251,6 +251,7 @@ public static class LocalizationCatalog
         new("NavMenu.Dashboard",             "Dashboard",           "Dashboard"),
         new("NavMenu.Tenants",               "Yönetimler",          "Tenants"),
         new("NavMenu.Companies",             "Siteler",             "Companies"),
+        new("NavMenu.Budget",                "Bütçe",               "Budget"),
         new("NavMenu.Roles",                 "Roller",              "Roles"),
         new("NavMenu.RolesAndPermissions",   "Roller ve İzinler",   "Roles & Permissions"),
         new("NavMenu.RolesAndUsers",         "Rol ve Kullanıcılar", "Roles & Users"),
