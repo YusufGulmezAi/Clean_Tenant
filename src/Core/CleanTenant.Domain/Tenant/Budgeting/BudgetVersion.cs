@@ -38,8 +38,11 @@ public sealed class BudgetVersion : BaseEntity, ITenantScoped
     /// </summary>
     public int VersionNumber { get; set; }
 
-    /// <summary>Versiyon geçerlilik başlangıcı (dahil).</summary>
-    public DateOnly ValidFrom { get; set; }
+    /// <summary>
+    /// Versiyon geçerlilik başlangıcı (dahil). Draft versiyonda null;
+    /// publish ile birlikte set edilir.
+    /// </summary>
+    public DateOnly? ValidFrom { get; set; }
 
     /// <summary>
     /// Versiyon geçerlilik bitişi (dahil). Açık uçlu en güncel versiyonda null.
@@ -50,10 +53,13 @@ public sealed class BudgetVersion : BaseEntity, ITenantScoped
     /// <summary>Önceki versiyonun id'si (V1 için null). Versiyon zincirini oluşturur.</summary>
     public Guid? PreviousVersionId { get; set; }
 
-    /// <summary>Yayın tarihi (UTC).</summary>
-    public DateTimeOffset PublishedAt { get; set; }
+    /// <summary>
+    /// Yayın tarihi (UTC). Null ise versiyon hâlâ Draft (kalem eklenebilir).
+    /// Publish komutu ile doldurulur ve versiyon immutable hâle gelir.
+    /// </summary>
+    public DateTimeOffset? PublishedAt { get; set; }
 
-    /// <summary>Yayınlayan kullanıcı kimliği; sistem işlemiyse null.</summary>
+    /// <summary>Yayınlayan kullanıcı kimliği; Draft veya sistem işlemiyse null.</summary>
     public Guid? PublishedBy { get; set; }
 
     /// <summary>Revizyon gerekçesi. V1 (ilk yayın) için null; V2+ için zorunlu.</summary>

@@ -16,7 +16,10 @@ internal sealed class BudgetVersionConfiguration : IEntityTypeConfiguration<Budg
         builder.ToTable("budget_versions", t =>
         {
             t.HasCheckConstraint("ck_budget_version_dates",
-                "valid_to IS NULL OR valid_to >= valid_from");
+                "valid_from IS NULL OR valid_to IS NULL OR valid_to >= valid_from");
+            // Draft (PublishedAt=NULL) versiyonda ValidFrom da NULL; Published versiyonda zorunlu.
+            t.HasCheckConstraint("ck_budget_version_publish_consistency",
+                "(published_at IS NULL AND valid_from IS NULL) OR (published_at IS NOT NULL AND valid_from IS NOT NULL)");
             t.HasCheckConstraint("ck_budget_version_number",
                 "version_number > 0");
         });
@@ -38,11 +41,11 @@ internal sealed class BudgetVersionConfiguration : IEntityTypeConfiguration<Budg
             .HasFilter("is_deleted = false")
             .IsUnique();
 
-        builder.Property(x => x.ValidFrom).IsRequired();
+        builder.Property(x => x.ValidFrom); // nullable: Draft versiyonda boş
         builder.Property(x => x.ValidTo);
 
         builder.Property(x => x.PreviousVersionId).HasColumnType("uuid");
-        builder.Property(x => x.PublishedAt).HasColumnType("timestamptz").IsRequired();
+        builder.Property(x => x.PublishedAt).HasColumnType("timestamptz"); // nullable: Draft = null
         builder.Property(x => x.PublishedBy).HasColumnType("uuid");
         builder.Property(x => x.RevisionReason).HasMaxLength(1000);
 
