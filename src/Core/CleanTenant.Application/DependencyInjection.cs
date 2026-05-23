@@ -40,6 +40,10 @@ public static class DependencyInjection
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));
 
+        // Tahakkuk dağıtım servisi (saf hesaplama, LRM yuvarlama)
+        services.AddSingleton<Features.Main.Accruals.Distribution.IDistributionService,
+            Features.Main.Accruals.Distribution.DistributionService>();
+
         return services;
     }
 }
