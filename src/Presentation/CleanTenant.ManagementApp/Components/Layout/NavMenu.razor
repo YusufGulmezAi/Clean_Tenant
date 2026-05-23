@@ -48,7 +48,7 @@
     }
 
     @* ─── SİSTEM BAĞLAMI ─────────────────────────────────────────────── *@
-    @if (_scope == "System")
+    @if (_effectiveScope == "System")
     {
         var systemTenantsLabel = Loc["NavMenu.Tenants"].Value;
         var systemCompaniesLabel = Loc["NavMenu.Companies"].Value;
@@ -100,7 +100,7 @@
     }
 
     @* ─── YÖNETİM (TENANT) BAĞLAMI ─────────────────────────────────── *@
-    @if (_scope == "Tenant" && _activeTenantId.HasValue)
+    @if (_effectiveScope == "Tenant")
     {
         var tenantCompaniesLabel = Loc["NavMenu.Companies"].Value;
         var tenantBudgetLabel = Loc["NavMenu.Budget"].Value;
@@ -169,13 +169,24 @@
     }
 
     @* ─── SİTE (COMPANY) BAĞLAMI ─────────────────────────────────── *@
-    @if (_scope == "Company" && _activeCompanyId.HasValue)
+    @if (_effectiveScope == "Company")
     {
+        @* Kullanıcılar — Company scope kullanıcı yönetimi (permission-gated). /users
+           etkin bağlamı company_id'den çözer; tek route, scope-aware panel. *@
+        var companyUsersLabel = Loc["NavMenu.Users"].Value;
+        @if (_canManageCompanyUsers && Matches(companyUsersLabel))
+        {
+            <MudNavGroup Title="@Loc["NavMenu.RolesAndUsers"]" Icon="@Icons.Material.Filled.ManageAccounts" Expanded="@IsSearching">
+                <MudNavLink Href="/users" Icon="@Icons.Material.Filled.People">
+                    @companyUsersLabel
+                </MudNavLink>
+            </MudNavGroup>
+        }
+
         var companyChildren = new[]
         {
             (Loc["NavMenu.Units"].Value, "/company/units", Icons.Material.Filled.HomeWork, "Faz 1.6"),
             (Loc["NavMenu.Residents"].Value, "/company/residents", Icons.Material.Filled.People, "Faz 1.7"),
-            (Loc["NavMenu.Users"].Value, "/company/users", Icons.Material.Filled.PersonOutline, "Faz 1.5"),
             (Loc["NavMenu.Invoices"].Value, "/company/invoices", Icons.Material.Filled.Receipt, "Faz 1.7"),
             (Loc["NavMenu.CompanySettings"].Value, "/company/settings", Icons.Material.Filled.Settings, "Faz 1.6"),
         };
@@ -257,10 +268,14 @@
 @code {
     private string _search = string.Empty;
     private string? _scope;
+    /// <summary>Etkin bağlam: System operatörü bir tenant/company'ye geçince scope
+    /// "System" kalsa da tenant_id/company_id doluysa o alt bağlamın menüsü gösterilir.</summary>
+    private string? _effectiveScope;
     private Guid? _activeTenantId;
     private Guid? _activeCompanyId;
     private bool _canManageUsers;
     private bool _canViewBudget;
+    private bool _canManageCompanyUsers;
 
     private bool IsSearching => !string.IsNullOrWhiteSpace(_search);
 
@@ -289,13 +304,21 @@
         {
             _canManageUsers = true;
             _canViewBudget = true;
+            _canManageCompanyUsers = true;
         }
         else
         {
             var session = SessionAccessor.Current;
             _canManageUsers = session is not null && session.Permissions.Contains("Tenant.Users.Manage");
             _canViewBudget = session is not null && session.Permissions.Contains("tenant.budget.view");
+            _canManageCompanyUsers = session is not null && session.Permissions.Contains("Company.Users.Manage");
         }
+
+        // Etkin bağlam: tenant_id/company_id doluysa (System operatörü destek bağlamına
+        // geçmiş olsa bile) alt bağlamın menüsü gösterilir; saf System'de Sistem menüsü.
+        _effectiveScope = _activeCompanyId.HasValue ? "Company"
+                        : _activeTenantId.HasValue ? "Tenant"
+                        : "System";
     }
 
     private void OnSearchChanged(string value)
