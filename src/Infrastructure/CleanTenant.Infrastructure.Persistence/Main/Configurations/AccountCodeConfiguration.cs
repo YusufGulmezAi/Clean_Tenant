@@ -16,9 +16,9 @@ internal sealed class AccountCodeConfiguration : IEntityTypeConfiguration<Accoun
     {
         builder.ToTable("account_codes", t =>
         {
-            // Kod formatı: Ana=3h, Yardımcı=6h, Detay=9h
+            // Kod formatı: Ana=3h, Yardımcı=6h (3-3), Detay=9h (3-3-3)
             t.HasCheckConstraint("ck_account_code_format",
-                "code ~ '^[1-9][0-9]{2}(\\.[0-9]{2}(\\.[0-9]{3})?)?$'");
+                "code ~ '^[1-9][0-9]{2}(\\.[0-9]{3}(\\.[0-9]{3})?)?$'");
             // Kademe ile kod uzunluğu tutarlılığı (nokta hariç toplam hane)
             t.HasCheckConstraint("ck_account_code_level_match",
                 "(level = 0 AND char_length(replace(code, '.', '')) = 3) OR " +

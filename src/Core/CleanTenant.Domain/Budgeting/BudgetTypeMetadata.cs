@@ -11,8 +11,8 @@ namespace CleanTenant.Domain.Budgeting;
 /// </para>
 /// <para>
 /// İlk tahakkuk anında <c>IAccountCodeAllocator</c> bu kataloğdan base kodları
-/// (örn. Aidat → 120.01 / 600.01) okuyup şirkete özel alt hesap üretir
-/// (120.01.001, 120.01.002 …).
+/// (örn. Aidat → 120.001 / 600.001) okuyup şirkete özel alt hesap üretir
+/// (120.001.001, 120.001.002 …).
 /// </para>
 /// </summary>
 public sealed class BudgetTypeMetadata : BaseEntity
@@ -24,12 +24,12 @@ public sealed class BudgetTypeMetadata : BaseEntity
     public string DisplayName { get; set; } = string.Empty;
 
     /// <summary>
-    /// 120 base alacak kodu (örn. "120.01"). İlk tahakkukta bunun altına seq eklenir.
+    /// 120 base alacak kodu (örn. "120.001"). İlk tahakkukta bunun altına seq eklenir.
     /// </summary>
     public string BaseReceivableCode { get; set; } = string.Empty;
 
     /// <summary>
-    /// 600 base gelir kodu (örn. "600.01"). İlk tahakkukta bunun altına seq eklenir.
+    /// 600 base gelir kodu (örn. "600.001"). İlk tahakkukta bunun altına seq eklenir.
     /// </summary>
     public string BaseIncomeCode { get; set; } = string.Empty;
 

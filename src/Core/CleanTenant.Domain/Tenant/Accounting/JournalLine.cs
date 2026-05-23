@@ -35,7 +35,7 @@ public sealed class JournalLine : BaseEntity, ITenantScoped
     public Guid AccountCodeId { get; set; }
 
     /// <summary>
-    /// Denormalize hesap kodu değeri (örn. "100.01.001").
+    /// Denormalize hesap kodu değeri (örn. "100.001.001").
     /// Rapor performansı için join'i ortadan kaldırır;
     /// kayıt anındaki değeri yansıtır.
     /// </summary>

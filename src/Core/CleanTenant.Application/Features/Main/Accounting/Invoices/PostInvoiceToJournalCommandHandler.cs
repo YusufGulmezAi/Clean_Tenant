@@ -67,8 +67,8 @@ public sealed class PostInvoiceToJournalCommandHandler
 
         // 5. Sabit hesap kodlarını getir (Satıcılar / Alıcılar)
         var counterpartyCode = invoice.Direction == InvoiceDirection.Incoming
-            ? "320.01.001"  // Satıcılar
-            : "120.01.001"; // Alıcılar
+            ? "320.001.001"  // Satıcılar
+            : "120.001.001"; // Alıcılar
 
         var counterpartyAccountCode = await _db.AccountCodes
             .FirstOrDefaultAsync(ac => ac.CompanyId == command.CompanyId

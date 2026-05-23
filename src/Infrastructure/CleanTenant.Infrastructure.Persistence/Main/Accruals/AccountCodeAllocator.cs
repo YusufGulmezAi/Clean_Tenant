@@ -45,15 +45,15 @@ internal sealed class AccountCodeAllocator : IAccountCodeAllocator
     }
 
     /// <summary>
-    /// Bir base kod (örn. "120.01") altında bir sonraki detay hesabı (120.01.NNN)
-    /// üretir. Parent zinciri (120, 120.01) eksikse oluşturur.
+    /// Bir base kod (örn. "120.001") altında bir sonraki detay hesabı (120.001.NNN)
+    /// üretir. Parent zinciri (120, 120.001) eksikse oluşturur.
     /// </summary>
     private async Task<Guid> AllocateOneAsync(
         Guid tenantId, Guid companyId, string baseCode,
         AccountClass cls, AccountType type, string parentName, string detailName,
         CancellationToken cancellationToken)
     {
-        // Parent zincirini garanti et: "120" (Main) + "120.01" (Sub)
+        // Parent zincirini garanti et: "120" (Main) + "120.001" (Sub)
         var mainCode = baseCode.Split('.')[0]; // "120"
         await EnsureAccountAsync(tenantId, companyId, mainCode, null, $"{parentName} (Ana)",
             AccountLevel.Main, cls, type, cancellationToken);

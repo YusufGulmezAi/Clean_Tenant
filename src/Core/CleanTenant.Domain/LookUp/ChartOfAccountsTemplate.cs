@@ -22,7 +22,7 @@ namespace CleanTenant.Domain.LookUp;
 public sealed class ChartOfAccountsTemplate : BaseEntity
 {
     /// <summary>
-    /// Hesap kodu (örn. "100", "100.01", "100.01.001").
+    /// Hesap kodu (örn. "100", "100.001", "100.001.001").
     /// Şablon içinde benzersizdir.
     /// </summary>
     public string Code { get; set; } = string.Empty;

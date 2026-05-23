@@ -27,13 +27,13 @@ public sealed class AccountCode : BaseEntity, IAggregateRoot, ITenantScoped
 
     /// <summary>
     /// Hesap kodu. Kademesine göre format:
-    /// Ana = "100", Yardımcı = "100.01", Detay = "100.01.001".
+    /// Ana = "100", Yardımcı = "100.001", Detay = "100.001.001".
     /// </summary>
     public string Code { get; set; } = string.Empty;
 
     /// <summary>
     /// Üst hesabın kodu; ana hesaplarda null.
-    /// Örn. "100.01.001" için ParentCode = "100.01".
+    /// Örn. "100.001.001" için ParentCode = "100.001".
     /// </summary>
     public string? ParentCode { get; set; }
 
