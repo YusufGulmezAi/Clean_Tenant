@@ -29,23 +29,42 @@ public sealed class GetUnitDebtStatusQueryHandler
             where d.UnitId == request.UnitId
                 && a.CompanyId == request.CompanyId
                 && !d.IsDeleted && !a.IsDeleted
-            select new { d.Amount, d.DueDate }
+            select new { d.Id, d.Amount, d.DueDate }
         ).ToListAsync(cancellationToken);
+
+        // Tahakkuk detaylarına yapılan tahsilat dağıtımları (FAZ 7)
+        var detailIds = rows.Select(r => r.Id).ToList();
+        var paidMap = (await _db.CollectionAllocations
+            .Where(al => detailIds.Contains(al.AccrualDetailId) && !al.IsDeleted)
+            .GroupBy(al => al.AccrualDetailId)
+            .Select(g => new { DetailId = g.Key, Sum = g.Sum(x => x.AllocatedAmount) })
+            .ToListAsync(cancellationToken))
+            .ToDictionary(x => x.DetailId, x => x.Sum);
 
         var today = DateOnly.FromDateTime(_clock.UtcNow.UtcDateTime);
         var totalAccrued = rows.Sum(r => r.Amount);
-        var overdue = rows.Where(r => r.DueDate < today).Sum(r => r.Amount);
-        var earliestDue = rows.Count == 0 ? (DateOnly?)null : rows.Min(r => r.DueDate);
+        var paid = rows.Sum(r => paidMap.GetValueOrDefault(r.Id, 0m));
 
-        // FAZ 7'ye kadar ödeme yok: paid = 0, kalan = toplam
+        // Kalan = her detayın (tutar - ödenen); vadesi geçen kalan ayrıca
+        decimal remaining = 0m, overdue = 0m;
+        DateOnly? earliestUnpaidDue = null;
+        foreach (var r in rows)
+        {
+            var rem = r.Amount - paidMap.GetValueOrDefault(r.Id, 0m);
+            if (rem <= 0m) continue;
+            remaining += rem;
+            if (r.DueDate < today) overdue += rem;
+            if (earliestUnpaidDue is null || r.DueDate < earliestUnpaidDue) earliestUnpaidDue = r.DueDate;
+        }
+
         var status = new UnitDebtStatus(
             request.UnitId,
             totalAccrued,
             overdue,
             rows.Count,
-            earliestDue,
-            PaidAmount: 0m,
-            RemainingAmount: totalAccrued);
+            earliestUnpaidDue,
+            PaidAmount: paid,
+            RemainingAmount: remaining);
 
         return Result<UnitDebtStatus>.Success(status);
     }
