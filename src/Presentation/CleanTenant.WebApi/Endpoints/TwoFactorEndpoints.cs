@@ -1,10 +1,14 @@
 using CleanTenant.Application.Features.Auth.TwoFactor.ConfirmTotpEnrollment;
 using CleanTenant.Application.Features.Auth.TwoFactor.DisableTotp;
+using CleanTenant.Application.Features.Auth.TwoFactor.EmailMethod;
 using CleanTenant.Application.Features.Auth.TwoFactor.EnrollTotp;
 using CleanTenant.Application.Features.Auth.TwoFactor.GetTwoFactorMethods;
+using CleanTenant.Application.Features.Auth.TwoFactor.PhoneMethod;
 using CleanTenant.Application.Features.Auth.TwoFactor.PreAuthEnrollment;
 using CleanTenant.Application.Features.Auth.TwoFactor.RegenerateRecoveryCodes;
+using CleanTenant.Application.Features.Auth.TwoFactor.RemoveMethod;
 using CleanTenant.Application.Features.Auth.TwoFactor.SendCode;
+using CleanTenant.Application.Features.Auth.TwoFactor.SetTwoFactorEnabled;
 using CleanTenant.Application.Features.Auth.TwoFactor.VerifyTwoFactor;
 using CleanTenant.SharedKernel.Common.Errors;
 using MediatR;
@@ -37,6 +41,14 @@ public static class TwoFactorEndpoints
         group.MapPost("/disable/totp", DisableTotpAsync).RequireAuthorization();
         group.MapPost("/recovery-codes/regenerate", RegenerateRecoveryAsync).RequireAuthorization();
         group.MapGet("/methods", GetMethodsAsync).RequireAuthorization();
+
+        // v0.2.13 — Profil güvenlik sekmesi: master switch + Email/Phone self-servis doğrulama.
+        group.MapPost("/enable", SetEnabledAsync).RequireAuthorization();
+        group.MapPost("/email/send-code", SendEmailCodeAsync).RequireAuthorization();
+        group.MapPost("/email/confirm", ConfirmEmailAsync).RequireAuthorization();
+        group.MapPost("/phone/send-code", SendPhoneCodeAsync).RequireAuthorization();
+        group.MapPost("/phone/confirm", ConfirmPhoneAsync).RequireAuthorization();
+        group.MapPost("/method/remove", RemoveMethodAsync).RequireAuthorization();
 
         return routes;
     }
@@ -159,6 +171,73 @@ public static class TwoFactorEndpoints
             : Results.Json(new { errors = result.Errors }, statusCode: MapErrorTypeToStatus(result.FirstError.Type));
     }
 
+    private static async Task<IResult> SetEnabledAsync(
+        [FromBody] SetTwoFactorEnabledRequest request,
+        [FromServices] IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(
+            new SetTwoFactorEnabledCommand(request.Enabled, request.Password), cancellationToken);
+        return result.IsSuccess
+            ? Results.Ok(new { message = request.Enabled ? "2FA etkinleştirildi." : "2FA devre dışı bırakıldı." })
+            : Results.Json(new { errors = result.Errors }, statusCode: MapErrorTypeToStatus(result.FirstError.Type));
+    }
+
+    private static async Task<IResult> SendEmailCodeAsync(
+        [FromServices] IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new SendEmailVerificationCodeCommand(), cancellationToken);
+        return result.IsSuccess
+            ? Results.Ok(new { message = "Kod e-postanıza gönderildi." })
+            : Results.Json(new { errors = result.Errors }, statusCode: MapErrorTypeToStatus(result.FirstError.Type));
+    }
+
+    private static async Task<IResult> ConfirmEmailAsync(
+        [FromBody] ConfirmTotpRequest request,
+        [FromServices] IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new ConfirmEmailVerificationCommand(request.Code), cancellationToken);
+        return result.IsSuccess
+            ? Results.Ok(new { message = "E-posta doğrulandı." })
+            : Results.Json(new { errors = result.Errors }, statusCode: MapErrorTypeToStatus(result.FirstError.Type));
+    }
+
+    private static async Task<IResult> SendPhoneCodeAsync(
+        [FromBody] SendPhoneCodeRequest request,
+        [FromServices] IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new SendPhoneVerificationCodeCommand(request.Phone), cancellationToken);
+        return result.IsSuccess
+            ? Results.Ok(new { message = "Kod telefonunuza gönderildi." })
+            : Results.Json(new { errors = result.Errors }, statusCode: MapErrorTypeToStatus(result.FirstError.Type));
+    }
+
+    private static async Task<IResult> ConfirmPhoneAsync(
+        [FromBody] ConfirmPhoneRequest request,
+        [FromServices] IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(
+            new ConfirmPhoneVerificationCommand(request.Phone, request.Code), cancellationToken);
+        return result.IsSuccess
+            ? Results.Ok(new { message = "Telefon doğrulandı." })
+            : Results.Json(new { errors = result.Errors }, statusCode: MapErrorTypeToStatus(result.FirstError.Type));
+    }
+
+    private static async Task<IResult> RemoveMethodAsync(
+        [FromBody] RemoveMethodRequest request,
+        [FromServices] IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new RemoveTwoFactorMethodCommand(request.Method), cancellationToken);
+        return result.IsSuccess
+            ? Results.Ok(new { message = "Yöntem kaldırıldı." })
+            : Results.Json(new { errors = result.Errors }, statusCode: MapErrorTypeToStatus(result.FirstError.Type));
+    }
+
     private static int MapErrorTypeToStatus(ErrorType type) => type switch
     {
         ErrorType.Validation => StatusCodes.Status400BadRequest,
@@ -178,8 +257,21 @@ public sealed record VerifyTwoFactorRequest(Guid ChallengeToken, string Method, 
 /// <summary>2FA send-code isteği gövdesi (yalnız Email/Phone).</summary>
 public sealed record SendTwoFactorCodeRequest(Guid ChallengeToken, string Method);
 
-/// <summary>TOTP confirm isteği gövdesi.</summary>
+/// <summary>TOTP confirm / e-posta confirm isteği gövdesi (6 haneli kod).</summary>
 public sealed record ConfirmTotpRequest(string Code);
+
+/// <summary>2FA ana açma/kapama isteği gövdesi (v0.2.13). Pasife alma (System dışı)
+/// için <c>Password</c> zorunludur.</summary>
+public sealed record SetTwoFactorEnabledRequest(bool Enabled, string? Password = null);
+
+/// <summary>Telefon doğrulama kodu gönderme isteği gövdesi (v0.2.13).</summary>
+public sealed record SendPhoneCodeRequest(string Phone);
+
+/// <summary>Telefon doğrulama onay isteği gövdesi (v0.2.13).</summary>
+public sealed record ConfirmPhoneRequest(string Phone, string Code);
+
+/// <summary>2FA yöntemi kaldırma isteği gövdesi (Email/Phone) (v0.2.13).</summary>
+public sealed record RemoveMethodRequest(string Method);
 
 /// <summary>Pre-auth enrollment start isteği gövdesi (v0.2.2.a).</summary>
 public sealed record PreAuthStartRequest(Guid ChallengeToken);

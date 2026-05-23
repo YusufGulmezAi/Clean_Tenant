@@ -15,6 +15,13 @@ services:
     ports:
       - "${REDIS_PORT:-6379}:6379"
 
+  # MinIO API (9000) + Konsol UI (9001) host'a expose edilir.
+  # Konsol: http://localhost:${MINIO_CONSOLE_PORT} (MINIO_ROOT_USER ile giriş).
+  minio:
+    ports:
+      - "${MINIO_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+
   # ----------------------------------------------------------------------
   # Seq — Yerel log inceleme arayüzü. Sadece Dev/Demo'da kullanılır.
   # Erişim: http://localhost:${SEQ_PORT}

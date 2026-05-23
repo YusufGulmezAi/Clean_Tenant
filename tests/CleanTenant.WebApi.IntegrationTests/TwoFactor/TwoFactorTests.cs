@@ -124,7 +124,7 @@ public sealed class TwoFactorTests
 
         var result = await response.Content.ReadFromJsonAsync<RecoveryShape>();
         result.Should().NotBeNull();
-        result!.RecoveryCodes.Should().HaveCount(10);
+        result!.RecoveryCodes.Should().HaveCount(12); // v0.2.13 — 10'dan 12'ye çıkarıldı.
         result.RecoveryCodes.Should().OnlyHaveUniqueItems();
     }
 

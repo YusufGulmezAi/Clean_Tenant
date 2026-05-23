@@ -229,8 +229,8 @@
     @{
         var settingsChildren = new[]
         {
+            (Loc["Layout.AppBar.Profile"].Value, "/profile", Icons.Material.Filled.Person),
             (Loc["NavMenu.Theme"].Value, "/settings/theme", Icons.Material.Filled.Palette),
-            (Loc["NavMenu.Language"].Value, "/settings/language", Icons.Material.Filled.Language),
             (Loc["NavMenu.About"].Value, "/about", Icons.Material.Filled.Info),
         };
         var settingsVisible = AnyMatch(settingsChildren.Select(c => c.Item1));

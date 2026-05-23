@@ -12,6 +12,7 @@
     <Project Path="src/Infrastructure/CleanTenant.Infrastructure.Identity/CleanTenant.Infrastructure.Identity.csproj" />
     <Project Path="src/Infrastructure/CleanTenant.Infrastructure.Logging/CleanTenant.Infrastructure.Logging.csproj" />
     <Project Path="src/Infrastructure/CleanTenant.Infrastructure.Persistence/CleanTenant.Infrastructure.Persistence.csproj" />
+    <Project Path="src/Infrastructure/CleanTenant.Infrastructure.Storage/CleanTenant.Infrastructure.Storage.csproj" />
   </Folder>
   <Folder Name="/src/Presentation/">
     <Project Path="src/Presentation/CleanTenant.ManagementApp/CleanTenant.ManagementApp.csproj" />

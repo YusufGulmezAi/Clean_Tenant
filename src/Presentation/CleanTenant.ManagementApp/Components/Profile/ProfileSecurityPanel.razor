@@ -1,0 +1,557 @@
+@using CleanTenant.Application.Features.Auth.TwoFactor.GetTwoFactorMethods
+@using CleanTenant.Application.Features.Auth.TwoFactor.EnrollTotp
+@using CleanTenant.Application.Features.Auth.TwoFactor.ConfirmTotpEnrollment
+@using CleanTenant.Application.Features.Auth.TwoFactor.DisableTotp
+@using CleanTenant.Application.Features.Auth.TwoFactor.RegenerateRecoveryCodes
+@using CleanTenant.Application.Features.Auth.TwoFactor.SetTwoFactorEnabled
+@using CleanTenant.Application.Features.Auth.TwoFactor.EmailMethod
+@using CleanTenant.Application.Features.Auth.TwoFactor.PhoneMethod
+@using CleanTenant.Application.Features.Auth.TwoFactor.RemoveMethod
+@inject IMediator Mediator
+@inject IStringLocalizer Loc
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+@*
+    Profil → Güvenlik (2FA) paneli (v0.2.13).
+      - Ana açma/kapama anahtarı (≥1 doğrulanmış yöntem şart; System'de kapatılamaz)
+      - Authenticator (TOTP): QR + kod doğrulama + kaldırma
+      - Email / SMS: kod gönder + doğrula + kaldırma
+      - Kurtarma kodları: 12 adet, TXT indir, yeniden üret
+*@
+
+@if (_state is null)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else
+{
+    @* ----------------- Ana açma/kapama ----------------- *@
+    <MudPaper Elevation="0" Outlined="true" Class="pa-4 mb-4">
+        <div class="d-flex align-center justify-space-between flex-wrap gap-2">
+            <div>
+                <MudText Typo="Typo.h6">@Loc["Profile.TwoFactor.MasterTitle"]</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Default">
+                    @(_state.TwoFactorEnabled ? Loc["Profile.TwoFactor.StatusOn"] : Loc["Profile.TwoFactor.StatusOff"])
+                </MudText>
+            </div>
+            <MudSwitch T="bool" Value="_state.TwoFactorEnabled" ValueChanged="OnToggleMasterAsync"
+                       Color="Color.Primary" Disabled="@(_busy || _state.IsSystemScope)" />
+        </div>
+        @if (_state.IsSystemScope)
+        {
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mt-2">
+                @Loc["Profile.TwoFactor.SystemMandatory"]
+            </MudAlert>
+        }
+        @if (!_state.TwoFactorEnabled && _state.AvailableMethods.Count == 0)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">
+                @Loc["Profile.TwoFactor.NeedMethod"]
+            </MudAlert>
+        }
+    </MudPaper>
+
+    @* ----------------- Yöntemler ----------------- *@
+    <MudText Typo="Typo.subtitle1" Class="mb-2">@Loc["Profile.TwoFactor.MethodsTitle"]</MudText>
+
+    @* === Authenticator (TOTP) === *@
+    <MudPaper Elevation="0" Outlined="true" Class="pa-4 mb-3">
+        <div class="d-flex align-center justify-space-between flex-wrap gap-2">
+            <div class="d-flex align-center gap-3">
+                <MudIcon Icon="@Icons.Material.Filled.Smartphone" />
+                <div>
+                    <MudText Typo="Typo.body1">@Loc["Profile.TwoFactor.Authenticator"]</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Default">@Loc["Profile.TwoFactor.AuthenticatorHint"]</MudText>
+                </div>
+            </div>
+            <div class="d-flex align-center gap-2">
+                @if (_state.AuthenticatorEnrolled)
+                {
+                    <MudChip T="string" Color="Color.Success" Size="Size.Small" Icon="@Icons.Material.Filled.CheckCircle">
+                        @Loc["Profile.TwoFactor.Verified"]
+                    </MudChip>
+                    <MudButton Color="Color.Error" Variant="Variant.Outlined" Size="Size.Small"
+                               OnClick="DisableTotpAsync" Disabled="@_busy">@Loc["Common.Remove"]</MudButton>
+                }
+                else if (_totpFlow == TotpFlow.Idle)
+                {
+                    <MudButton Color="Color.Primary" Variant="Variant.Filled" Size="Size.Small"
+                               StartIcon="@Icons.Material.Filled.QrCode2"
+                               OnClick="StartTotpEnrollAsync" Disabled="@_busy">@Loc["Profile.TwoFactor.Setup"]</MudButton>
+                }
+            </div>
+        </div>
+
+        @if (_totpFlow == TotpFlow.Qr)
+        {
+            <MudDivider Class="my-3" />
+            <MudText Typo="Typo.body2" Class="mb-2">@Loc["Profile.TwoFactor.ScanQr"]</MudText>
+            @if (_totpQrBase64 is not null)
+            {
+                <div class="d-flex justify-center mb-2">
+                    <img src="@($"data:image/png;base64,{_totpQrBase64}")" alt="QR"
+                         style="width:200px; height:200px;" />
+                </div>
+            }
+            <MudText Typo="Typo.caption" Color="Color.Default">@Loc["Profile.TwoFactor.ManualSecret"]</MudText>
+            <MudPaper Elevation="0" Outlined="true" Class="pa-2 mb-3" Style="font-family:monospace;">@_totpSecret</MudPaper>
+
+            <MudText Typo="Typo.body2" Class="mb-2">@Loc["Profile.TwoFactor.EnterCode"]</MudText>
+            <div class="mb-3">
+                <OtpCodeInput Value="@_totpCode" ValueChanged="@(v => _totpCode = v)" Disabled="@_busy" />
+            </div>
+            <div class="d-flex gap-2">
+                <MudButton Color="Color.Primary" Variant="Variant.Filled"
+                           OnClick="ConfirmTotpAsync" Disabled="@(_busy || _totpCode.Length < 6)">
+                    @Loc["Profile.TwoFactor.Confirm"]
+                </MudButton>
+                <MudButton Variant="Variant.Text" OnClick="@(() => _totpFlow = TotpFlow.Idle)" Disabled="@_busy">
+                    @Loc["Common.Cancel"]
+                </MudButton>
+            </div>
+        }
+    </MudPaper>
+
+    @* === Email === *@
+    <MudPaper Elevation="0" Outlined="true" Class="pa-4 mb-3">
+        <div class="d-flex align-center justify-space-between flex-wrap gap-2">
+            <div class="d-flex align-center gap-3">
+                <MudIcon Icon="@Icons.Material.Filled.Email" />
+                <div>
+                    <MudText Typo="Typo.body1">@Loc["Profile.TwoFactor.Email"]</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Default">
+                        @(string.IsNullOrWhiteSpace(_state.Email) ? Loc["Profile.TwoFactor.EmailMissing"].Value : _state.Email)
+                    </MudText>
+                </div>
+            </div>
+            <div class="d-flex align-center gap-2">
+                @if (_state.EmailConfirmed)
+                {
+                    <MudChip T="string" Color="Color.Success" Size="Size.Small" Icon="@Icons.Material.Filled.CheckCircle">
+                        @Loc["Profile.TwoFactor.Verified"]
+                    </MudChip>
+                    <MudButton Color="Color.Error" Variant="Variant.Outlined" Size="Size.Small"
+                               OnClick="@(() => RemoveMethodAsync("Email"))" Disabled="@_busy">@Loc["Common.Remove"]</MudButton>
+                }
+                else if (!string.IsNullOrWhiteSpace(_state.Email) && _emailFlow == SimpleFlow.Idle)
+                {
+                    <MudButton Color="Color.Primary" Variant="Variant.Filled" Size="Size.Small"
+                               OnClick="SendEmailCodeAsync" Disabled="@_busy">@Loc["Profile.TwoFactor.Verify"]</MudButton>
+                }
+            </div>
+        </div>
+
+        @if (_emailFlow == SimpleFlow.Confirm)
+        {
+            <MudDivider Class="my-3" />
+            <MudText Typo="Typo.body2" Class="mb-2">@Loc["Profile.TwoFactor.EnterEmailCode"]</MudText>
+            <div class="mb-3">
+                <OtpCodeInput Value="@_emailCode" ValueChanged="@(v => _emailCode = v)" Disabled="@_busy" />
+            </div>
+            <div class="d-flex gap-2">
+                <MudButton Color="Color.Primary" Variant="Variant.Filled"
+                           OnClick="ConfirmEmailAsync" Disabled="@(_busy || _emailCode.Length < 6)">
+                    @Loc["Profile.TwoFactor.Confirm"]
+                </MudButton>
+                <MudButton Variant="Variant.Text" OnClick="@(() => _emailFlow = SimpleFlow.Idle)" Disabled="@_busy">
+                    @Loc["Common.Cancel"]
+                </MudButton>
+            </div>
+        }
+    </MudPaper>
+
+    @* === Phone (SMS) === *@
+    <MudPaper Elevation="0" Outlined="true" Class="pa-4 mb-3">
+        <div class="d-flex align-center justify-space-between flex-wrap gap-2">
+            <div class="d-flex align-center gap-3">
+                <MudIcon Icon="@Icons.Material.Filled.Sms" />
+                <div>
+                    <MudText Typo="Typo.body1">@Loc["Profile.TwoFactor.Phone"]</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Default">
+                        @(string.IsNullOrWhiteSpace(_state.PhoneNumber) ? Loc["Profile.TwoFactor.PhoneHint"].Value : _state.PhoneNumber)
+                    </MudText>
+                </div>
+            </div>
+            <div class="d-flex align-center gap-2">
+                @if (_state.PhoneConfirmed)
+                {
+                    <MudChip T="string" Color="Color.Success" Size="Size.Small" Icon="@Icons.Material.Filled.CheckCircle">
+                        @Loc["Profile.TwoFactor.Verified"]
+                    </MudChip>
+                    <MudButton Color="Color.Error" Variant="Variant.Outlined" Size="Size.Small"
+                               OnClick="@(() => RemoveMethodAsync("Phone"))" Disabled="@_busy">@Loc["Common.Remove"]</MudButton>
+                }
+                else if (_phoneFlow == SimpleFlow.Idle)
+                {
+                    <MudButton Color="Color.Primary" Variant="Variant.Filled" Size="Size.Small"
+                               OnClick="@(() => _phoneFlow = SimpleFlow.Confirm)" Disabled="@_busy">
+                        @Loc["Profile.TwoFactor.Verify"]
+                    </MudButton>
+                }
+            </div>
+        </div>
+
+        @if (_phoneFlow == SimpleFlow.Confirm)
+        {
+            <MudDivider Class="my-3" />
+            <MudTextField @bind-Value="_phoneInput" Label="@Loc["Profile.TwoFactor.PhoneLabel"]"
+                          Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-2"
+                          Placeholder="05xx xxx xx xx" Disabled="@(_busy || _phoneCodeSent)" />
+            @if (!_phoneCodeSent)
+            {
+                <div class="d-flex gap-2">
+                    <MudButton Color="Color.Primary" Variant="Variant.Filled"
+                               OnClick="SendPhoneCodeAsync" Disabled="@(_busy || string.IsNullOrWhiteSpace(_phoneInput))">
+                        @Loc["Profile.TwoFactor.SendCode"]
+                    </MudButton>
+                    <MudButton Variant="Variant.Text" OnClick="ResetPhoneFlow" Disabled="@_busy">@Loc["Common.Cancel"]</MudButton>
+                </div>
+            }
+            else
+            {
+                <MudText Typo="Typo.body2" Class="mb-2">@Loc["Profile.TwoFactor.EnterPhoneCode"]</MudText>
+                <div class="mb-3">
+                    <OtpCodeInput Value="@_phoneCode" ValueChanged="@(v => _phoneCode = v)" Disabled="@_busy" />
+                </div>
+                <div class="d-flex gap-2">
+                    <MudButton Color="Color.Primary" Variant="Variant.Filled"
+                               OnClick="ConfirmPhoneAsync" Disabled="@(_busy || _phoneCode.Length < 6)">
+                        @Loc["Profile.TwoFactor.Confirm"]
+                    </MudButton>
+                    <MudButton Variant="Variant.Text" OnClick="ResetPhoneFlow" Disabled="@_busy">@Loc["Common.Cancel"]</MudButton>
+                </div>
+            }
+        }
+    </MudPaper>
+
+    @* ----------------- Kurtarma kodları ----------------- *@
+    @if (_state.AuthenticatorEnrolled)
+    {
+        <MudPaper Elevation="0" Outlined="true" Class="pa-4 mt-4">
+            <MudText Typo="Typo.subtitle1" Class="mb-1">@Loc["Profile.TwoFactor.RecoveryTitle"]</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Default" Class="mb-3">
+                @Loc["Profile.TwoFactor.RecoveryLeft", _state.RecoveryCodesLeft]
+            </MudText>
+
+            @if (_recoveryCodes.Count > 0)
+            {
+                <MudGrid>
+                    @foreach (var rc in _recoveryCodes)
+                    {
+                        <MudItem xs="6" sm="4">
+                            <MudPaper Elevation="0" Outlined="true" Class="pa-2 d-flex justify-center"
+                                      Style="font-family:monospace;">@rc</MudPaper>
+                        </MudItem>
+                    }
+                </MudGrid>
+                <MudButton Color="Color.Secondary" Variant="Variant.Outlined" Class="mt-3"
+                           StartIcon="@Icons.Material.Filled.Download"
+                           OnClick="DownloadRecoveryCodesAsync">@Loc["Profile.TwoFactor.DownloadCodes"]</MudButton>
+            }
+
+            <MudButton Color="Color.Primary" Variant="Variant.Text" Class="mt-3 ml-2"
+                       StartIcon="@Icons.Material.Filled.Refresh"
+                       OnClick="RegenerateRecoveryAsync" Disabled="@_busy">@Loc["Profile.TwoFactor.Regenerate"]</MudButton>
+        </MudPaper>
+    }
+}
+
+@code {
+    private enum TotpFlow { Idle, Qr }
+    private enum SimpleFlow { Idle, Confirm }
+
+    private GetTwoFactorMethodsResult? _state;
+    private bool _busy;
+
+    private TotpFlow _totpFlow = TotpFlow.Idle;
+    private string? _totpSecret;
+    private string? _totpQrBase64;
+    private string _totpCode = string.Empty;
+
+    private SimpleFlow _emailFlow = SimpleFlow.Idle;
+    private string _emailCode = string.Empty;
+
+    private SimpleFlow _phoneFlow = SimpleFlow.Idle;
+    private bool _phoneCodeSent;
+    private string _phoneInput = string.Empty;
+    private string _phoneCode = string.Empty;
+
+    private IReadOnlyList<string> _recoveryCodes = [];
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        var result = await Mediator.Send(new GetTwoFactorMethodsQuery());
+        if (result.IsSuccess)
+        {
+            _state = result.Value;
+            if (_state is not null && !string.IsNullOrWhiteSpace(_state.PhoneNumber) && string.IsNullOrEmpty(_phoneInput))
+            {
+                _phoneInput = _state.PhoneNumber;
+            }
+        }
+    }
+
+    // ---------------- Master switch ----------------
+    private async Task OnToggleMasterAsync(bool enabled)
+    {
+        string? password = null;
+
+        // Pasife alma: System scope switch zaten devre dışı; buraya yalnız System
+        // dışı kullanıcı düşer → güvenlik için hesap şifresi sorulur.
+        if (!enabled)
+        {
+            var parameters = new DialogParameters<PasswordPromptDialog>
+            {
+                { x => x.Message, Loc["Profile.TwoFactor.DisablePasswordPrompt"].Value },
+                { x => x.ConfirmText, Loc["Profile.TwoFactor.DisableConfirm"].Value },
+            };
+            var dialog = await DialogService.ShowAsync<PasswordPromptDialog>(
+                Loc["Profile.TwoFactor.DisableTitle"].Value, parameters);
+            var dr = await dialog.Result;
+
+            if (dr is null || dr.Canceled || dr.Data is not string entered || string.IsNullOrEmpty(entered))
+            {
+                await LoadAsync(); // İptal → switch'i gerçek duruma geri al
+                return;
+            }
+            password = entered;
+        }
+
+        _busy = true;
+        try
+        {
+            var result = await Mediator.Send(new SetTwoFactorEnabledCommand(enabled, password));
+            if (result.IsFailure)
+            {
+                Snackbar.Add(result.FirstError.Message, Severity.Error);
+            }
+            await LoadAsync();
+        }
+        finally { _busy = false; }
+    }
+
+    // ---------------- TOTP ----------------
+    private async Task StartTotpEnrollAsync()
+    {
+        _busy = true;
+        try
+        {
+            var result = await Mediator.Send(new EnrollTotpCommand());
+            if (result.IsFailure)
+            {
+                Snackbar.Add(result.FirstError.Message, Severity.Error);
+                return;
+            }
+            _totpSecret = result.Value!.Secret;
+            _totpQrBase64 = GenerateQrCodePngBase64(result.Value.QrCodeUri);
+            _totpCode = string.Empty;
+            _totpFlow = TotpFlow.Qr;
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task ConfirmTotpAsync()
+    {
+        _busy = true;
+        try
+        {
+            var result = await Mediator.Send(new ConfirmTotpEnrollmentCommand(_totpCode.Trim()));
+            if (result.IsFailure)
+            {
+                Snackbar.Add(result.FirstError.Message, Severity.Error);
+                return;
+            }
+            _recoveryCodes = result.Value!.RecoveryCodes;
+            _totpFlow = TotpFlow.Idle;
+            Snackbar.Add(Loc["Profile.TwoFactor.TotpEnabled"].Value, Severity.Success);
+            await LoadAsync();
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task DisableTotpAsync()
+    {
+        if (!await ConfirmRemoveAsync())
+        {
+            return;
+        }
+        _busy = true;
+        try
+        {
+            var result = await Mediator.Send(new DisableTotpCommand());
+            if (result.IsFailure)
+            {
+                Snackbar.Add(result.FirstError.Message, Severity.Error);
+                return;
+            }
+            _recoveryCodes = [];
+            await LoadAsync();
+        }
+        finally { _busy = false; }
+    }
+
+    // ---------------- Email ----------------
+    private async Task SendEmailCodeAsync()
+    {
+        _busy = true;
+        try
+        {
+            var result = await Mediator.Send(new SendEmailVerificationCodeCommand());
+            if (result.IsFailure)
+            {
+                Snackbar.Add(result.FirstError.Message, Severity.Error);
+                return;
+            }
+            _emailCode = string.Empty;
+            _emailFlow = SimpleFlow.Confirm;
+            Snackbar.Add(Loc["Profile.TwoFactor.CodeSent"].Value, Severity.Info);
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task ConfirmEmailAsync()
+    {
+        _busy = true;
+        try
+        {
+            var result = await Mediator.Send(new ConfirmEmailVerificationCommand(_emailCode.Trim()));
+            if (result.IsFailure)
+            {
+                Snackbar.Add(result.FirstError.Message, Severity.Error);
+                return;
+            }
+            _emailFlow = SimpleFlow.Idle;
+            Snackbar.Add(Loc["Profile.TwoFactor.EmailVerified"].Value, Severity.Success);
+            await LoadAsync();
+        }
+        finally { _busy = false; }
+    }
+
+    // ---------------- Phone ----------------
+    private async Task SendPhoneCodeAsync()
+    {
+        _busy = true;
+        try
+        {
+            var result = await Mediator.Send(new SendPhoneVerificationCodeCommand(_phoneInput.Trim()));
+            if (result.IsFailure)
+            {
+                Snackbar.Add(result.FirstError.Message, Severity.Error);
+                return;
+            }
+            _phoneCode = string.Empty;
+            _phoneCodeSent = true;
+            Snackbar.Add(Loc["Profile.TwoFactor.CodeSent"].Value, Severity.Info);
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task ConfirmPhoneAsync()
+    {
+        _busy = true;
+        try
+        {
+            var result = await Mediator.Send(
+                new ConfirmPhoneVerificationCommand(_phoneInput.Trim(), _phoneCode.Trim()));
+            if (result.IsFailure)
+            {
+                Snackbar.Add(result.FirstError.Message, Severity.Error);
+                return;
+            }
+            ResetPhoneFlow();
+            Snackbar.Add(Loc["Profile.TwoFactor.PhoneVerified"].Value, Severity.Success);
+            await LoadAsync();
+        }
+        finally { _busy = false; }
+    }
+
+    private void ResetPhoneFlow()
+    {
+        _phoneFlow = SimpleFlow.Idle;
+        _phoneCodeSent = false;
+        _phoneCode = string.Empty;
+    }
+
+    // ---------------- Remove (Email/Phone) ----------------
+    private async Task RemoveMethodAsync(string method)
+    {
+        if (!await ConfirmRemoveAsync())
+        {
+            return;
+        }
+        _busy = true;
+        try
+        {
+            var result = await Mediator.Send(new RemoveTwoFactorMethodCommand(method));
+            if (result.IsFailure)
+            {
+                Snackbar.Add(result.FirstError.Message, Severity.Error);
+                return;
+            }
+            await LoadAsync();
+        }
+        finally { _busy = false; }
+    }
+
+    // ---------------- Recovery codes ----------------
+    private async Task RegenerateRecoveryAsync()
+    {
+        var confirmed = await DialogService.ShowMessageBox(
+            Loc["Profile.TwoFactor.RegenerateConfirmTitle"].Value,
+            Loc["Profile.TwoFactor.RegenerateConfirmBody"].Value,
+            yesText: Loc["Profile.TwoFactor.Regenerate"].Value,
+            cancelText: Loc["Common.Cancel"].Value);
+        if (confirmed != true)
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            var result = await Mediator.Send(new RegenerateRecoveryCodesCommand());
+            if (result.IsFailure)
+            {
+                Snackbar.Add(result.FirstError.Message, Severity.Error);
+                return;
+            }
+            _recoveryCodes = result.Value!.RecoveryCodes;
+            await LoadAsync();
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task DownloadRecoveryCodesAsync()
+    {
+        if (_recoveryCodes.Count == 0)
+        {
+            return;
+        }
+        var header = $"CleanTenant — 2FA Kurtarma Kodları\nTarih: {DateTimeOffset.Now:yyyy-MM-dd HH:mm}\n\nHer kod tek kullanımlıktır. Güvenli bir yerde saklayın.\n\n";
+        var content = header + string.Join(Environment.NewLine, _recoveryCodes);
+        var filename = $"cleantenant-recovery-codes-{DateTimeOffset.Now:yyyyMMdd-HHmm}.txt";
+        await JS.InvokeVoidAsync("cleantenant.downloadTextFile", filename, content);
+    }
+
+    private async Task<bool> ConfirmRemoveAsync()
+    {
+        var confirmed = await DialogService.ShowMessageBox(
+            Loc["Profile.TwoFactor.RemoveMethodTitle"].Value,
+            Loc["Profile.TwoFactor.RemoveMethodBody"].Value,
+            yesText: Loc["Common.Remove"].Value,
+            cancelText: Loc["Common.Cancel"].Value);
+        return confirmed == true;
+    }
+
+    private static string GenerateQrCodePngBase64(string otpAuthUri)
+    {
+        using var generator = new QRCoder.QRCodeGenerator();
+        using var data = generator.CreateQrCode(otpAuthUri, QRCoder.QRCodeGenerator.ECCLevel.Q);
+        var pngBytes = new QRCoder.PngByteQRCode(data).GetGraphic(pixelsPerModule: 6);
+        return Convert.ToBase64String(pngBytes);
+    }
+}

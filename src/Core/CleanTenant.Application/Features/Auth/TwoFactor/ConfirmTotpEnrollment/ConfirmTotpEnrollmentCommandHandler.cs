@@ -13,13 +13,13 @@ namespace CleanTenant.Application.Features.Auth.TwoFactor.ConfirmTotpEnrollment;
 /// <list type="number">
 ///   <item>Kullanıcının verdiği kod authenticator key ile doğrulanır.</item>
 ///   <item>Doğru ise <c>TwoFactorEnabled=true</c>.</item>
-///   <item>10 adet tek kullanımlık recovery code üretilir, döner.</item>
+///   <item>12 adet tek kullanımlık recovery code üretilir, döner.</item>
 /// </list>
 /// </summary>
 public sealed class ConfirmTotpEnrollmentCommandHandler : IRequestHandler<ConfirmTotpEnrollmentCommand, Result<ConfirmTotpEnrollmentResult>>
 {
-    private const string AuthenticatorProvider = "Authenticator";
-    private const int RecoveryCodeCount = 10;
+    private const string AuthenticatorProvider = TwoFactorDefaults.AuthenticatorMethod;
+    private const int RecoveryCodeCount = TwoFactorDefaults.RecoveryCodeCount;
 
     private readonly UserManager<User> _userManager;
     private readonly ICurrentSessionAccessor _sessionAccessor;

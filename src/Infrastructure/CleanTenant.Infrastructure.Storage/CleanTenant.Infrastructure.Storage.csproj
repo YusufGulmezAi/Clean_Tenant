@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Object storage altyapısı (v0.2.13). S3-uyumlu MinIO üzerinden ikili dosya
+    saklama (IFileStorage) ve görsel işleme (IImageProcessor / ImageSharp).
+    Application'daki soyutlamaları implemente eder; Presentation katmanları
+    (WebApi / ManagementApp) AddObjectStorage ile kayıt eder.
+  -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Core\CleanTenant.Application\CleanTenant.Application.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Minio" />
+    <PackageReference Include="SkiaSharp" />
+    <!-- Linux container'da native Skia kütüphanesi (fontconfig bağımlılığı olmadan). -->
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

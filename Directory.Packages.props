@@ -103,6 +103,23 @@
     <PackageVersion Include="QRCoder" Version="1.6.0" />
   </ItemGroup>
 
+  <ItemGroup Label="Object Storage + Görsel İşleme (v0.2.13 — profil fotoğrafı)">
+    <!--
+      Minio: S3-uyumlu object storage .NET SDK'sı. Apache-2.0. Profil fotoğrafı
+      (ileride fatura/ek dosyaları) MinIO bucket'ında saklanır.
+
+      SkiaSharp (MIT, Google Skia / Microsoft maintained): görsel işleme.
+      SixLabors.ImageSharp YERİNE seçildi — ImageSharp 3.x "Six Labors Split
+      License" (ticari), 2.1.x ise NU1902/NU1903 güvenlik açıklarıyla işaretli
+      (TreatWarningsAsErrors → build kırılır). SkiaSharp her iki kapıyı da geçer:
+      MIT lisans + bilinen açık yok. Linux container'da çalışması için
+      NativeAssets.Linux.NoDependencies (libfontconfig bağımlılığı olmadan).
+    -->
+    <PackageVersion Include="Minio" Version="7.0.0" />
+    <PackageVersion Include="SkiaSharp" Version="3.119.2" />
+    <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="3.119.2" />
+  </ItemGroup>
+
   <ItemGroup Label="Export — Excel + PDF (v0.2.4.a — DataTable export)">
     <!--
       ClosedXML: MIT, Excel .xlsx üretimi. v0.105+ .NET 10 uyumlu.

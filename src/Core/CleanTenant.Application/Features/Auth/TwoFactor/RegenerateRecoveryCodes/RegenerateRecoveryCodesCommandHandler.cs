@@ -9,12 +9,12 @@ using MediatR;
 namespace CleanTenant.Application.Features.Auth.TwoFactor.RegenerateRecoveryCodes;
 
 /// <summary>
-/// 10 yeni recovery code üretir; eski kodları invalidate eder.
+/// 12 yeni recovery code üretir; eski kodları invalidate eder.
 /// Kullanıcı 2FA aktif olmadan recovery üretemez (anlam taşımaz).
 /// </summary>
 public sealed class RegenerateRecoveryCodesCommandHandler : IRequestHandler<RegenerateRecoveryCodesCommand, Result<RegenerateRecoveryCodesResult>>
 {
-    private const int RecoveryCodeCount = 10;
+    private const int RecoveryCodeCount = TwoFactorDefaults.RecoveryCodeCount;
 
     private readonly UserManager<User> _userManager;
     private readonly ICurrentSessionAccessor _sessionAccessor;

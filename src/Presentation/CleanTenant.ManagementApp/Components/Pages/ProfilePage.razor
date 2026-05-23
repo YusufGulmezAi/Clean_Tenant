@@ -1,0 +1,326 @@
+@page "/profile"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@rendermode InteractiveServer
+@using CleanTenant.Application.Common.Storage
+@using CleanTenant.Application.Features.Profile.GetSummary
+@using CleanTenant.Application.Features.Profile.GetPhoto
+@using CleanTenant.Application.Features.Profile.UploadPhoto
+@using CleanTenant.Application.Features.Profile.RemovePhoto
+@using CleanTenant.ManagementApp.Components.Profile
+@inject IMediator Mediator
+@inject IStringLocalizer Loc
+@inject IJSRuntime JS
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+@inject CleanTenant.ManagementApp.Services.ProfileAvatarState AvatarState
+@using Microsoft.AspNetCore.WebUtilities
+
+@*
+    Kullanıcı profil sayfası (v0.2.13). Tek sayfada üç sekme:
+      - Genel Bilgiler & Foto : ad/soyad/e-posta (salt-okunur) + profil fotoğrafı yükle/kaldır
+      - Güvenlik (2FA)        : ana açma/kapama + Authenticator/Email/SMS doğrulama + kurtarma kodları
+      - Dil & Tercihler       : varsayılan dil seçimi (kalıcı + cookie)
+      - Tema                  : renk preset + gece modu (kalıcı, DB; v0.2.13.d)
+
+    Eski /settings/language, /settings/2fa/enroll ve /settings/theme sayfaları
+    buraya yönlendirilir. ?tab=theme query'si doğrudan Tema sekmesini açar.
+*@
+
+<PageTitle>@Loc["Profile.PageTitle"]</PageTitle>
+
+<MudText Typo="Typo.h5" Class="mb-4">@Loc["Profile.Title"]</MudText>
+
+<MudTabs Elevation="1" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-4"
+         @bind-ActivePanelIndex="_activeTabIndex">
+
+    @* ====================== SEKME 1 — GENEL & FOTO ====================== *@
+    <MudTabPanel Text="@Loc["Profile.Tab.General"].Value" Icon="@Icons.Material.Filled.Person">
+
+        @if (!_helpDismissed)
+        {
+            <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-4"
+                      ShowCloseIcon="true" CloseIconClicked="DismissHelpAsync">
+                <MudText Typo="Typo.subtitle2">@Loc["Profile.Help.Title"]</MudText>
+                <MudText Typo="Typo.body2" Class="mt-1">@Loc["Profile.Help.Body"]</MudText>
+            </MudAlert>
+        }
+
+        @if (_summary is null)
+        {
+            <MudProgressLinear Indeterminate="true" />
+        }
+        else
+        {
+            <div class="d-flex flex-column align-center gap-3" style="max-width: 420px;">
+                @if (_photoDataUri is not null)
+                {
+                    <MudAvatar Style="height:100px; width:100px;">
+                        <MudImage Src="@_photoDataUri" Alt="@Loc["Profile.Photo.Alt"]" />
+                    </MudAvatar>
+                }
+                else
+                {
+                    <MudAvatar Color="Color.Primary" Style="height:100px; width:100px; font-size:2rem;">
+                        @Initials(_summary.FirstName, _summary.LastName)
+                    </MudAvatar>
+                }
+
+                <MudText Typo="Typo.h6">@_summary.FirstName @_summary.LastName</MudText>
+                @if (!string.IsNullOrWhiteSpace(_summary.Email))
+                {
+                    <MudText Typo="Typo.body2" Color="Color.Default">@_summary.Email</MudText>
+                }
+
+                @* Gizli InputFile — buton JS ile tetikler. *@
+                <InputFile id="profile-photo-input" OnChange="OnPhotoSelectedAsync"
+                           accept="image/jpeg,image/png,image/webp" style="display:none;" />
+
+                <div class="d-flex gap-2">
+                    <MudButton Color="Color.Primary" Variant="Variant.Filled"
+                               StartIcon="@Icons.Material.Filled.Upload"
+                               OnClick="TriggerPhotoPickerAsync" Disabled="@_busy">
+                        @Loc["Profile.Photo.Upload"]
+                    </MudButton>
+                    @if (_summary.HasPhoto)
+                    {
+                        <MudButton Color="Color.Error" Variant="Variant.Outlined"
+                                   StartIcon="@Icons.Material.Filled.Delete"
+                                   OnClick="RemovePhotoAsync" Disabled="@_busy">
+                            @Loc["Profile.Photo.Remove"]
+                        </MudButton>
+                    }
+                </div>
+
+                <MudText Typo="Typo.caption" Color="Color.Default" Align="Align.Center">
+                    @Loc["Profile.Photo.Hint"]
+                </MudText>
+            </div>
+        }
+    </MudTabPanel>
+
+    @* ====================== SEKME 2 — GÜVENLİK (2FA) ====================== *@
+    <MudTabPanel Text="@Loc["Profile.Tab.Security"].Value" Icon="@Icons.Material.Filled.Security">
+        <ProfileSecurityPanel />
+    </MudTabPanel>
+
+    @* ====================== SEKME 3 — DİL & TERCİHLER ====================== *@
+    <MudTabPanel Text="@Loc["Profile.Tab.Preferences"].Value" Icon="@Icons.Material.Filled.Language">
+        <MudText Typo="Typo.h6" Class="mb-2">@Loc["Profile.Language.Title"]</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Default" Class="mb-4">
+            @Loc["Profile.Language.Hint"]
+        </MudText>
+
+        <MudPaper Elevation="0" Outlined="true" Class="pa-2" Style="max-width: 360px;">
+            <MudList T="string">
+                @foreach (var lang in CleanTenant.ManagementApp.Services.LanguageService.Supported)
+                {
+                    <MudListItem T="string" OnClick="@(() => ChangeLanguageAsync(lang.Code))">
+                        <div class="d-flex align-center gap-3">
+                            <span style="font-size:1.4rem;">@lang.Flag</span>
+                            <MudText>@lang.Name</MudText>
+                            @if (IsCurrentLanguage(lang.Code))
+                            {
+                                <MudIcon Icon="@Icons.Material.Filled.Check" Color="Color.Success" Size="Size.Small" />
+                            }
+                        </div>
+                    </MudListItem>
+                }
+            </MudList>
+        </MudPaper>
+    </MudTabPanel>
+
+    @* ====================== SEKME 4 — TEMA ====================== *@
+    <MudTabPanel Text="@Loc["Profile.Tab.Theme"].Value" Icon="@Icons.Material.Filled.Palette">
+        <ProfileThemePanel />
+    </MudTabPanel>
+
+</MudTabs>
+
+@code {
+    private const string HelpDismissKey = "profile.help.dismissed";
+
+    private ProfileSummaryResult? _summary;
+    private string? _photoDataUri;
+    private bool _busy;
+    private bool _helpDismissed;
+    private int _activeTabIndex;
+
+    protected override async Task OnInitializedAsync()
+    {
+        ApplyTabFromQuery();
+        await LoadSummaryAsync();
+    }
+
+    /// <summary>
+    /// ?tab=... query'sine göre açılış sekmesini belirler (örn. üst bardaki palet
+    /// kısayolu /profile?tab=theme ile doğrudan Tema sekmesini açar).
+    /// </summary>
+    private void ApplyTabFromQuery()
+    {
+        var uri = Nav.ToAbsoluteUri(Nav.Uri);
+        if (!QueryHelpers.ParseQuery(uri.Query).TryGetValue("tab", out var tab))
+        {
+            return;
+        }
+
+        _activeTabIndex = tab.ToString().ToLowerInvariant() switch
+        {
+            "general" => 0,
+            "security" => 1,
+            "preferences" or "language" => 2,
+            "theme" => 3,
+            _ => _activeTabIndex,
+        };
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _helpDismissed = await LocalStorage.GetItemAsync<bool>(HelpDismissKey);
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadSummaryAsync()
+    {
+        var result = await Mediator.Send(new GetProfileSummaryQuery());
+        if (result.IsSuccess)
+        {
+            _summary = result.Value;
+            if (_summary!.HasPhoto)
+            {
+                await ReloadPhotoAsync();
+            }
+        }
+    }
+
+    private async Task ReloadPhotoAsync()
+    {
+        var photo = await Mediator.Send(new GetProfilePhotoQuery());
+        if (photo.IsSuccess && photo.Value is not null)
+        {
+            _photoDataUri = $"data:{photo.Value.ContentType};base64,{Convert.ToBase64String(photo.Value.Content)}";
+        }
+        else
+        {
+            _photoDataUri = null;
+        }
+    }
+
+    private async Task TriggerPhotoPickerAsync()
+        => await JS.InvokeVoidAsync("cleantenant.clickElement", "profile-photo-input");
+
+    private async Task OnPhotoSelectedAsync(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file is null)
+        {
+            return;
+        }
+
+        if (file.Size > ProfilePhotoPolicy.MaxUploadBytes)
+        {
+            Snackbar.Add(Loc["Profile.Photo.TooLarge"].Value, Severity.Error);
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            await using var stream = file.OpenReadStream(ProfilePhotoPolicy.MaxUploadBytes);
+            var result = await Mediator.Send(
+                new UploadProfilePhotoCommand(stream, file.ContentType, file.Size));
+
+            if (result.IsFailure)
+            {
+                Snackbar.Add(result.FirstError.Message, Severity.Error);
+                return;
+            }
+
+            await ReloadPhotoAsync();
+            if (_summary is not null)
+            {
+                _summary = _summary with { HasPhoto = true };
+            }
+            AvatarState.SetPhoto(_photoDataUri); // AppBar avatar'ı anında güncelle
+            Snackbar.Add(Loc["Profile.Photo.Uploaded"].Value, Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task RemovePhotoAsync()
+    {
+        var confirmed = await DialogService.ShowMessageBox(
+            Loc["Profile.Photo.RemoveConfirmTitle"].Value,
+            Loc["Profile.Photo.RemoveConfirmBody"].Value,
+            yesText: Loc["Common.Remove"].Value,
+            cancelText: Loc["Common.Cancel"].Value);
+
+        if (confirmed != true)
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            var result = await Mediator.Send(new RemoveProfilePhotoCommand());
+            if (result.IsFailure)
+            {
+                Snackbar.Add(result.FirstError.Message, Severity.Error);
+                return;
+            }
+
+            _photoDataUri = null;
+            if (_summary is not null)
+            {
+                _summary = _summary with { HasPhoto = false };
+            }
+            AvatarState.SetPhoto(null); // AppBar avatar'ı baş harf avatarına dön
+            Snackbar.Add(Loc["Profile.Photo.Removed"].Value, Severity.Success);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task DismissHelpAsync()
+    {
+        _helpDismissed = true;
+        await LocalStorage.SetItemAsync(HelpDismissKey, true);
+    }
+
+    private async Task ChangeLanguageAsync(string code)
+    {
+        // Mevcut /auth/change-culture form-post mekanizması: cookie set +
+        // User.PreferredCulture DB persist + returnUrl'e redirect (tam reload).
+        var returnUrl = "/" + Nav.ToBaseRelativePath(Nav.Uri);
+        await JS.InvokeVoidAsync("cleantenant.submitCultureChange", code, returnUrl);
+    }
+
+    private bool IsCurrentLanguage(string code)
+    {
+        var current = _summary?.PreferredCulture
+            ?? System.Globalization.CultureInfo.CurrentUICulture.Name;
+        return string.Equals(current, code, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string Initials(string first, string last)
+    {
+        var f = string.IsNullOrEmpty(first) ? "" : first[..1];
+        var l = string.IsNullOrEmpty(last) ? "" : last[..1];
+        var initials = (f + l).ToUpperInvariant();
+        return string.IsNullOrEmpty(initials) ? "?" : initials;
+    }
+}

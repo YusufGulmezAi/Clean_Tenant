@@ -69,11 +69,32 @@ services:
     networks:
       - cleantenant-net
 
+  # ----------------------------------------------------------------------
+  # MinIO — S3-uyumlu object storage (v0.2.13). Profil fotoğrafı ve ileride
+  # fatura/ek dosyaları burada saklanır. Bucket uygulama startup'ında
+  # (MinioBucketInitializer) idempotent oluşturulur. Konsol UI: :9001.
+  # ----------------------------------------------------------------------
+  minio:
+    image: minio/minio:latest
+    container_name: ${COMPOSE_PROJECT_NAME:-cleantenant}-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      TZ: UTC
+    volumes:
+      - minio-data:/data
+    restart: unless-stopped
+    networks:
+      - cleantenant-net
+
 volumes:
   postgres-data:
     name: ${COMPOSE_PROJECT_NAME:-cleantenant}-postgres-data
   redis-data:
     name: ${COMPOSE_PROJECT_NAME:-cleantenant}-redis-data
+  minio-data:
+    name: ${COMPOSE_PROJECT_NAME:-cleantenant}-minio-data
 
 networks:
   cleantenant-net:

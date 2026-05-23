@@ -1,4 +1,5 @@
 using CleanTenant.Application.Common.Auth;
+using CleanTenant.Application.Features.Auth.Login;
 using CleanTenant.Domain.Identity.Users;
 using CleanTenant.SharedKernel.Common.Errors;
 using CleanTenant.SharedKernel.Common.Results;
@@ -13,14 +14,17 @@ public sealed class GetTwoFactorMethodsQueryHandler : IRequestHandler<GetTwoFact
 {
     private readonly UserManager<User> _userManager;
     private readonly ICurrentSessionAccessor _sessionAccessor;
+    private readonly LoginFinalizer _finalizer;
 
     /// <summary>DI bağımlılıklarını alır.</summary>
     public GetTwoFactorMethodsQueryHandler(
         UserManager<User> userManager,
-        ICurrentSessionAccessor sessionAccessor)
+        ICurrentSessionAccessor sessionAccessor,
+        LoginFinalizer finalizer)
     {
         _userManager = userManager;
         _sessionAccessor = sessionAccessor;
+        _finalizer = finalizer;
     }
 
     /// <summary>Sorguyu çalıştırır.</summary>
@@ -40,8 +44,19 @@ public sealed class GetTwoFactorMethodsQueryHandler : IRequestHandler<GetTwoFact
 
         var providers = await _userManager.GetValidTwoFactorProvidersAsync(user);
         var recoveryLeft = await _userManager.CountRecoveryCodesAsync(user);
+        var authenticatorKey = await _userManager.GetAuthenticatorKeyAsync(user);
+        var isSystemScope = await _finalizer.HasSystemScopeAsync(user.Id, cancellationToken);
 
         return Result<GetTwoFactorMethodsResult>.Success(
-            new GetTwoFactorMethodsResult(user.TwoFactorEnabled, [.. providers], recoveryLeft));
+            new GetTwoFactorMethodsResult(
+                user.TwoFactorEnabled,
+                [.. providers],
+                recoveryLeft,
+                AuthenticatorEnrolled: !string.IsNullOrWhiteSpace(authenticatorKey),
+                EmailConfirmed: user.EmailConfirmed,
+                PhoneConfirmed: user.PhoneNumberConfirmed,
+                Email: user.Email,
+                PhoneNumber: user.PhoneNumber,
+                IsSystemScope: isSystemScope));
     }
 }

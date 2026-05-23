@@ -1,0 +1,23 @@
+- [User Profile](user_profile.md) — Project lead, prefers Turkish + comprehensive planning
+- [Türkçe Dokümantasyon](feedback_turkce_dokuman.md) — Tüm doküman, açıklama, yorum, memory notları Türkçe yazılır; kod ve teknik tanımlayıcılar İngilizce kalır
+- [İngilizce Kodlama Standardı](feedback_english_naming.md) — Entity, property, enum, dosya adı hepsi İngilizce; Türkçe tanımlayıcı kabul edilmez
+- [Memory Snapshot Otomasyonu](feedback_memory_snapshots.md) — Her memory güncellemesinden sonra `d:\Projeler\CleanTenant\docs\memory-snapshots\vNNN_YYYY-MM-DD_HHmm\` altına versiyonlu kopya alınır
+- [UI Tasarımı Öncesi Danışma](feedback_ui_tasarim_danisma.md) — Görsel/UX kararları (layout, renk, tema, komponent) öncesi mutlaka kullanıcıyla konuş; tek başına UI kararı verme
+- [Faz Sonu Mimari Haritası](feedback_faz_sonu_mimari_haritasi.md) — Her faz kapanışında `docs/phases/v0.X/v0.X-FINAL-ARCHITECTURE-MAP.md` (Mermaid + PNG, 18 bölüm); ilk uygulama v0.1.7 commit `7a38f2a`
+- [Project Overview](project_overview.md) — CleanTenant: multi-tenant property/site management SaaS (ManagementApp, PortalApp, MobilApp)
+- [Architecture Rules](rules_architecture.md) — Clean Architecture, file/comment conventions, CQRS with MediatR
+- [Data Access Rules](rules_data.md) — Hybrid multi-tenancy, EF Core writes + Dapper reads, UrlCode (9-char Base58), Turkish/timezone, 4 DBs (Catalog/Main/Log/Audit)
+- [Identity Rules](rules_identity.md) — Central identity in Catalog, scope System/Tenant/Company/Unit (no Building), multi-context per browser tab, per-context tokens, 2FA mandatory for System users
+- [API & Response Rules](rules_api.md) — Global response envelope, MediatR pipeline behaviors, error code catalog, FluentValidation 11.x
+- [Observability Rules](rules_observability.md) — Serilog to Log DB, audit DB schema, structured logging
+- [Localization Rules](rules_localization.md) — TR/EN/AR/RU/DE, DB-based resources, RTL for Arabic
+- [Environment & Secrets Rules](rules_environments.md) — Development/Test/Demo/Production envs, per-env compose/secrets, vault for prod
+- [Testing & Security Rules](rules_testing.md) — Per-phase mandatory test + security gate
+- [DevOps Rules](rules_devops.md) — Docker, phase-versioned docs, conventional commits, parallel agent workflow
+- [Proje Mevcut Durumu](project_current_state.md) — v0.2.12 tamamlandı (tag `b644d05`); Obsidian wiki kuruldu; sıradaki faz planlanıyor
+- [TDHP Muhasebe Modülü Planı](project_accounting_module.md) — Mimari kararlar + 10 faz planı (plan dosyası: net-10-da-clean-noble-teacup.md)
+- [NotebookLM Referans](reference_notebooklm.md) — CleanTenant için 2 NotebookLM notebook'unun (Kurallar & Karar Bağlamı, Mimari & Faz Tarihçesi) ID, URL ve amaç eşlemesi
+- [NotebookLM Kullanım Refleksi](feedback_notebooklm_kullanimi.md) — Mimari/kural/karar tonundaki sorularda önce ilgili NotebookLM notebook'unu sorgula, sonra kodla doğrula
+- [NotebookLM Güncelleme Disiplini](feedback_nlm_guncelleme_disiplini.md) — NotebookLM tazelemeden önce mutlaka `/nlm-refresh` çağır; komut git temizlik kontrolünü zorunlu kılar
+- [Build Öncesi Process Kapatma](feedback_build_kill_first.md) — Her build/run öncesi port 5081'deki ManagementApp'i kapat; env-run.ps1 ile başlat
+- [Obsidian Wiki + Claude Code Düzeni](feedback_obsidian_wiki.md) — Vault hafıza, Claude Code akıl yürütme; manuel yöntem (API anahtarı yok); vault: docs/wiki/CleanTenant/
