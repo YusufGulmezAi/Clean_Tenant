@@ -28,42 +28,12 @@ h1:focus {
     border-color: #929292;
 }
 
-/* ─── Sol NAV drawer: renkli arka planda beyaz metin ve ikonlar ─────── */
-/* Yalnızca .ct-nav-drawer ile işaretlenmiş sol drawer'a uygulanır.     */
-/* Sağ (form/wizard) drawer'lar etkilenmez.                              */
-.ct-nav-drawer .mud-drawer-content {
-    --mud-palette-text-primary: rgba(255, 255, 255, 0.9);
-    --mud-palette-text-secondary: rgba(255, 255, 255, 0.7);
-    --mud-palette-action-default: rgba(255, 255, 255, 0.8);
-    --mud-palette-action-default-hover: rgba(255, 255, 255, 0.08);
-    --mud-palette-lines-inputs: rgba(255, 255, 255, 0.35);
-    --mud-palette-lines-default: rgba(255, 255, 255, 0.15);
-    --mud-palette-divider: rgba(255, 255, 255, 0.18);
-    --mud-palette-divider-light: rgba(255, 255, 255, 0.1);
-}
-
-/* Arama kutusu: input ve caret beyaz */
-.ct-nav-drawer .mud-drawer-content input,
-.ct-nav-drawer .mud-drawer-content .mud-input input {
-    color: rgba(255, 255, 255, 0.9) !important;
-    caret-color: rgba(255, 255, 255, 0.9) !important;
-}
-
-/* Outlined input kenarlığı */
-.ct-nav-drawer .mud-drawer-content .mud-input-outlined fieldset {
-    border-color: rgba(255, 255, 255, 0.35) !important;
-}
-
-.ct-nav-drawer .mud-drawer-content .mud-input-outlined:hover fieldset {
-    border-color: rgba(255, 255, 255, 0.65) !important;
-}
-
-/* Aktif nav link: primary arka plan yerine beyaz şeffaf overlay */
-.ct-nav-drawer .mud-drawer-content .mud-nav-link.active,
-.ct-nav-drawer .mud-drawer-content .mud-nav-link-active,
-.ct-nav-drawer .mud-drawer-content a.active[href] {
-    background-color: rgba(255, 255, 255, 0.2) !important;
-}
+/* ─── Sol NAV drawer ───────────────────────────────────────────────── */
+/* Drawer renkleri tema paletinden gelir (DrawerBackground/Text/Icon):    */
+/*   Light → beyaz zemin + kontrast (koyu) metin + primary ikon/aktif vurgu */
+/*   Dark  → koyu yüzey + açık metin + primary ikon                        */
+/* Ekstra CSS override gerekmez; .ct-nav-drawer ileride özelleştirme için  */
+/* hook olarak korunur (v0.2.13).                                          */
 
 .form-floating > .form-control-plaintext::placeholder, .form-floating > .form-control::placeholder {
     color: var(--bs-secondary-color);
