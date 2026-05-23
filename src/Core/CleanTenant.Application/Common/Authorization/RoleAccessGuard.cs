@@ -29,6 +29,12 @@ public static class RoleAccessGuard
         // System tüm rolleri (built-in dahil) yönetebilir.
         if (session.ScopeLevel == ScopeLevel.System) return;
 
+        // Rol/izin yönetimi yalnız Sistem ve Yönetim (Tenant) seviyesinde yapılabilir;
+        // Site (Company) ve Birim (Unit) kullanıcıları rol/izin tanımlayamaz/düzenleyemez.
+        if (session.ScopeLevel != ScopeLevel.Tenant)
+            throw new UnauthorizedAccessException(
+                "Rol ve izin yönetimi yalnız Sistem ve Yönetim seviyesinde yapılabilir.");
+
         if (role.IsBuiltIn)
             throw new UnauthorizedAccessException("Built-in roller yalnız Sistem tarafından düzenlenebilir.");
 
@@ -38,8 +44,8 @@ public static class RoleAccessGuard
         if (role.TenantId != session.TenantId)
             throw new UnauthorizedAccessException("Bu rolü yönetme yetkiniz yok (farklı yönetim).");
 
-        if (role.CompanyId is not null && role.CompanyId != session.CompanyId)
-            throw new UnauthorizedAccessException("Bu rolü yönetme yetkiniz yok (farklı site).");
+        // Yönetim (Tenant) kullanıcısı kendi tenant'ının tüm rollerini yönetir —
+        // tenant-geneli + Site (Company) özel roller dahil.
     }
 
     /// <summary>
@@ -52,6 +58,12 @@ public static class RoleAccessGuard
             throw new UnauthorizedAccessException("Oturum bulunamadı.");
 
         if (session.ScopeLevel == ScopeLevel.System) return;
+
+        // Rol/izin tanımlama yalnız Sistem ve Yönetim (Tenant) seviyesinde yapılabilir;
+        // Site (Company) ve Birim (Unit) kullanıcıları rol oluşturamaz.
+        if (session.ScopeLevel != ScopeLevel.Tenant)
+            throw new UnauthorizedAccessException(
+                "Rol tanımlama yalnız Sistem ve Yönetim seviyesinde yapılabilir.");
 
         // newRole.Scope >= assigner.Scope (numerik) → narrower veya eşit yetki
         if ((int)newRoleScope < (int)session.ScopeLevel)
