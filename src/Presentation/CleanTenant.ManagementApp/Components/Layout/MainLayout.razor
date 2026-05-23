@@ -5,6 +5,7 @@
 @inject IJSRuntime JS
 @inject NavigationManager Nav
 @inject IStringLocalizer Loc
+@inject CleanTenant.ManagementApp.Services.ProfileAvatarState AvatarState
 @using CleanTenant.ManagementApp.Services
 @using System.Globalization
 
@@ -47,9 +48,11 @@
                        OnClick="@OnDarkToggle"
                        title="@(_isDark ? Loc["Layout.AppBar.LightMode"].Value : Loc["Layout.AppBar.DarkMode"].Value)" />
 
+        @* v0.2.13.d — Tema profil sayfasının Tema sekmesinde yönetilir; bu kısayol
+           doğrudan oraya götürür. *@
         <MudIconButton Icon="@Icons.Material.Filled.Palette"
                        Color="Color.Inherit"
-                       Href="/settings/theme"
+                       Href="/profile?tab=theme"
                        title="@Loc["Layout.AppBar.ThemeSettings"]" />
 
         <MudIconButton Icon="@Icons.Material.Filled.Notifications"
@@ -86,15 +89,28 @@
             </ChildContent>
         </MudMenu>
 
-        <MudMenu Icon="@Icons.Material.Filled.AccountCircle"
-                 Color="Color.Inherit"
-                 AnchorOrigin="Origin.BottomRight"
+        <MudMenu AnchorOrigin="Origin.BottomRight"
                  TransformOrigin="Origin.TopRight">
+            <ActivatorContent>
+                <MudAvatar Size="Size.Medium" Color="Color.Inherit"
+                           Style="cursor: pointer;" title="@Loc["Layout.AppBar.Profile"]">
+                    @if (AvatarState.PhotoDataUri is not null)
+                    {
+                        <MudImage Src="@AvatarState.PhotoDataUri" Alt="@Loc["Layout.AppBar.Profile"]" />
+                    }
+                    else
+                    {
+                        <MudIcon Icon="@Icons.Material.Filled.AccountCircle" />
+                    }
+                </MudAvatar>
+            </ActivatorContent>
+            <ChildContent>
+            @* v0.2.13.d — "2FA Yönetimi" ve "Ayarlar" alt menüleri kaldırıldı;
+               2FA profil > Güvenlik sekmesinde, tema ise profil > Tema sekmesinde. *@
             <MudMenuItem Icon="@Icons.Material.Filled.Person" Href="/profile">@Loc["Layout.AppBar.Profile"]</MudMenuItem>
-            <MudMenuItem Icon="@Icons.Material.Filled.Security" Href="/settings/2fa/enroll">@Loc["Layout.AppBar.TwoFactor"]</MudMenuItem>
-            <MudMenuItem Icon="@Icons.Material.Filled.Settings" Href="/settings/theme">@Loc["Layout.AppBar.Settings"]</MudMenuItem>
             <MudDivider />
             <MudMenuItem Icon="@Icons.Material.Filled.Logout" Href="/auth/sign-out" ForceLoad="true">@Loc["Layout.AppBar.SignOut"]</MudMenuItem>
+            </ChildContent>
         </MudMenu>
     </MudAppBar>
 
@@ -127,9 +143,12 @@
     private string? _activeCompanyName;
     private LanguageOption _currentLang = LanguageService.Supported[0];
 
+    private bool _isAuthenticated;
+
     protected override void OnInitialized()
     {
         ThemeService.ThemeChanged += OnThemeChanged;
+        AvatarState.Changed += OnAvatarChanged;
         ApplyTheme();
         _currentLang = LanguageService.Resolve(CultureInfo.CurrentUICulture.Name);
         _isRtl = _currentLang.IsRtl;
@@ -147,6 +166,7 @@
         {
             return;
         }
+        _isAuthenticated = true;
 
         if (user.FindFirst("tenant_id") is { Value: var tid } && Guid.TryParseExact(tid, "N", out var tenantGuid))
         {
@@ -174,8 +194,23 @@
             await JS.InvokeVoidAsync("cleantenant.setBodyDirection", _isRtl ? "rtl" : "ltr");
 
             await ThemeService.InitializeAsync();
+
+            // v0.2.13 — AppBar avatar'ı için profil fotoğrafını bir kez yükle.
+            if (_isAuthenticated)
+            {
+                try
+                {
+                    await AvatarState.EnsureLoadedAsync();
+                }
+                catch
+                {
+                    // Session/foto erişilemezse baş harf/ikon avatar gösterilir.
+                }
+            }
         }
     }
+
+    private void OnAvatarChanged() => InvokeAsync(StateHasChanged);
 
     private void OnThemeChanged()
     {
@@ -204,5 +239,6 @@
     public void Dispose()
     {
         ThemeService.ThemeChanged -= OnThemeChanged;
+        AvatarState.Changed -= OnAvatarChanged;
     }
 }

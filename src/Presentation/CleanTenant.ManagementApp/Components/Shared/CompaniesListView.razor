@@ -1,0 +1,186 @@
+@using CleanTenant.Application.Common.Export
+@using CleanTenant.Application.Features.Main.Companies
+@using CleanTenant.Application.Features.Main.Readers
+@using CleanTenant.Domain.Tenant.Companies
+@using MediatR
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@inject IStringLocalizer Loc
+@inject IMediator Mediator
+
+@*
+    v0.2.13.d — Site (Company) liste görünümü. Hem Sistem (/system/companies) hem
+    Tenant (/tenant/companies) bağlamında AYNI tasarımı render eden ortak komponent.
+    Tek tasarım kaynağı olduğu için bağlamlar arasında görsel ayrışma olmaz.
+
+    Bağlam farkları parametrelerle yönetilir:
+      - ShowTenantColumn: Sistemde tüm tenant'lar listelendiği için "Yönetim"
+        kolonu görünür; Tenant bağlamında tek tenant olduğundan gizlenir.
+      - ShowBuildingSchemaAction: "Bina Şeması" aksiyonu yalnız Tenant bağlamında.
+      - EditRoutePrefix: Düzenle/Yeni linkleri için /system/companies veya
+        /tenant/companies.
+
+    Veri (Items), arama/export başlıkları ve silme sonrası yeniden yükleme
+    (OnDeleted) üst sayfa tarafından sağlanır. Rol/izin ve bağlam kısıtları
+    (hangi siteler listelenecek) üst sayfada uygulanır; bu komponent yalnız
+    kendisine verilen Items'ı render eder.
+*@
+
+<div class="d-flex justify-end mb-2">
+    <MudButton Href="@($"{EditRoutePrefix}/new")"
+               Color="Color.Primary"
+               Variant="Variant.Filled"
+               StartIcon="@Icons.Material.Filled.Add">
+        @Loc["Companies.List.NewButton"]
+    </MudButton>
+</div>
+
+<DataTable TItem="CompanyListItem"
+           Items="@Items"
+           SearchPlaceholder="@SearchPlaceholder"
+           SearchableFields="@SearchSelector"
+           ExportColumns="@_exportColumns"
+           ExportTitle="@ExportTitle">
+    <ToolbarRight>
+        <MudMenu Dense="true"
+                 AnchorOrigin="Origin.BottomRight"
+                 TransformOrigin="Origin.TopRight">
+            <ActivatorContent>
+                <MudIconButton Icon="@Icons.Material.Filled.ViewColumn"
+                               Size="Size.Small"
+                               Color="Color.Default"
+                               title="@Loc["DataTable.ColumnChooser"]" />
+            </ActivatorContent>
+            <ChildContent>
+                <div class="pa-3" style="min-width: 180px;">
+                    <MudText Typo="Typo.caption" Class="mb-2 d-block">@Loc["DataTable.ColumnChooser"]</MudText>
+                    <div><MudCheckBox @bind-Value="_colUrlCode" Dense="true" Label="@Loc["Companies.List.Col.UrlCode"].Value" /></div>
+                    @if (ShowTenantColumn)
+                    {
+                        <div><MudCheckBox @bind-Value="_colTenantName" Dense="true" Label="@Loc["Companies.List.Col.Tenant"].Value" /></div>
+                    }
+                    <div><MudCheckBox @bind-Value="_colLegalName" Dense="true" Label="@Loc["Companies.List.Col.LegalName"].Value" /></div>
+                    <div><MudCheckBox @bind-Value="_colStatus" Dense="true" Label="@Loc["Companies.List.Col.Status"].Value" /></div>
+                </div>
+            </ChildContent>
+        </MudMenu>
+    </ToolbarRight>
+    <Columns>
+        <PropertyColumn T="CompanyListItem" TProperty="string" Property="@(c => c.Name)" Title="@Loc["Companies.List.Col.Name"].Value" />
+        <PropertyColumn T="CompanyListItem" TProperty="string" Property="@(c => c.UrlCode)" Title="@Loc["Companies.List.Col.UrlCode"].Value" Hidden="@(!_colUrlCode)" />
+        @if (ShowTenantColumn)
+        {
+            <PropertyColumn T="CompanyListItem" TProperty="string" Property="@(c => c.TenantName)" Title="@Loc["Companies.List.Col.Tenant"].Value" Hidden="@(!_colTenantName)" />
+        }
+        <PropertyColumn T="CompanyListItem" TProperty="string" Property="@(c => c.LegalName)" Title="@Loc["Companies.List.Col.LegalName"].Value" Hidden="@(!_colLegalName)" />
+        <PropertyColumn T="CompanyListItem" TProperty="CompanyStatus" Property="@(c => c.Status)" Title="@Loc["Companies.List.Col.Status"].Value" Hidden="@(!_colStatus)">
+            <CellTemplate>
+                <MudChip T="string" Size="Size.Small"
+                         Color="@(context.Item.Status == CompanyStatus.Active ? Color.Success : Color.Default)">
+                    @context.Item.Status
+                </MudChip>
+            </CellTemplate>
+        </PropertyColumn>
+        <TemplateColumn T="CompanyListItem" CellClass="d-flex justify-end gap-1" Filterable="false" Sortable="false">
+            <CellTemplate>
+                <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                               Size="Size.Small"
+                               Color="Color.Info"
+                               Title="@Loc["Common.Edit"]"
+                               Href="@($"{EditRoutePrefix}/{context.Item.UrlCode}/edit")" />
+                @if (ShowBuildingSchemaAction)
+                {
+                    <MudIconButton Icon="@Icons.Material.Filled.AccountTree"
+                                   Size="Size.Small"
+                                   Color="Color.Secondary"
+                                   Title="@Loc["Companies.List.Action.BuildingSchema"]"
+                                   Href="@($"/tenant/building-schema/{context.Item.Id}")" />
+                }
+                <MudIconButton Icon="@Icons.Material.Filled.Login"
+                               Size="Size.Small"
+                               Color="Color.Primary"
+                               Title="@Loc["Companies.List.Action.Switch"]"
+                               OnClick="@(() => SwitchAsync(context.Item))" />
+                <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                               Size="Size.Small"
+                               Color="Color.Error"
+                               Title="@Loc["Common.Delete"]"
+                               OnClick="@(() => DeleteAsync(context.Item))" />
+            </CellTemplate>
+        </TemplateColumn>
+    </Columns>
+</DataTable>
+
+@code {
+    /// <summary>Listelenecek siteler. Bağlam kısıtı üst sayfada uygulanır.</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<CompanyListItem>? Items { get; set; }
+
+    /// <summary>Düzenle/Yeni linkleri için route ön eki (örn. "/system/companies").</summary>
+    [Parameter, EditorRequired] public string EditRoutePrefix { get; set; } = "/system/companies";
+
+    /// <summary>"Yönetim" (Tenant) kolonu görünsün mü (Sistem: true, Tenant: false).</summary>
+    [Parameter] public bool ShowTenantColumn { get; set; } = true;
+
+    /// <summary>"Bina Şeması" aksiyonu görünsün mü (yalnız Tenant bağlamı).</summary>
+    [Parameter] public bool ShowBuildingSchemaAction { get; set; }
+
+    /// <summary>Arama kutusu placeholder metni.</summary>
+    [Parameter] public string? SearchPlaceholder { get; set; }
+
+    /// <summary>Export dosya başlığı.</summary>
+    [Parameter] public string? ExportTitle { get; set; }
+
+    /// <summary>Silme başarılı olduğunda üst sayfanın listeyi yenilemesi için.</summary>
+    [Parameter] public EventCallback OnDeleted { get; set; }
+
+    private bool _colUrlCode = true;
+    private bool _colTenantName = true;
+    private bool _colLegalName = true;
+    private bool _colStatus = true;
+
+    private IReadOnlyList<ExportColumn<CompanyListItem>> _exportColumns = [];
+
+    private Func<CompanyListItem, IEnumerable<string?>> SearchSelector =>
+        ShowTenantColumn
+            ? (row => new[] { row.Name, row.UrlCode, row.TenantName, row.LegalName })
+            : (row => new[] { row.Name, row.UrlCode, row.LegalName, row.Vkn });
+
+    protected override void OnInitialized()
+    {
+        var cols = new List<ExportColumn<CompanyListItem>>
+        {
+            new() { Header = Loc["Companies.List.Col.Name"].Value, Selector = r => r.Name },
+            new() { Header = Loc["Companies.List.Col.UrlCode"].Value, Selector = r => r.UrlCode },
+        };
+        if (ShowTenantColumn)
+        {
+            cols.Add(new() { Header = Loc["Companies.List.Col.Tenant"].Value, Selector = r => r.TenantName });
+        }
+        cols.Add(new() { Header = Loc["Companies.List.Col.LegalName"].Value, Selector = r => r.LegalName });
+        cols.Add(new() { Header = Loc["CompanyForm.Vkn"].Value, Selector = r => r.Vkn });
+        cols.Add(new() { Header = Loc["Companies.List.Col.Status"].Value, Selector = r => r.Status.ToString() });
+        _exportColumns = cols;
+    }
+
+    private async Task SwitchAsync(CompanyListItem item)
+    {
+        var returnUrl = "/" + Nav.ToBaseRelativePath(Nav.Uri);
+        await JS.InvokeVoidAsync(
+            "cleantenant.submitTenantSwitch",
+            item.TenantId.ToString(),
+            returnUrl,
+            item.Id.ToString());
+    }
+
+    private async Task DeleteAsync(CompanyListItem item)
+    {
+        var confirmed = await JS.InvokeAsync<bool>("confirm", Loc["Companies.List.Delete.Confirm"].Value);
+        if (!confirmed) return;
+
+        var result = await Mediator.Send(new DeleteCompanyCommand(item.Id));
+        if (result.IsSuccess)
+        {
+            await OnDeleted.InvokeAsync();
+        }
+    }
+}

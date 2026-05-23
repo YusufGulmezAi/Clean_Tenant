@@ -80,6 +80,54 @@
                                   Immediate="true" />
                 </MudItem>
 
+                @* ── Site Yöneticisi (CompanyAdmin) — yalnız Create modu (v0.2.13.e) ── *@
+                @if (Mode == CompanyFormMode.Create)
+                {
+                    <MudItem xs="12">
+                        <MudDivider Class="my-2" />
+                        <MudText Typo="Typo.h6">@Loc["CompanyForm.Section.Admin"]</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Default">@Loc["CompanyForm.Admin.Hint"]</MudText>
+                    </MudItem>
+
+                    <MudItem xs="12" sm="6">
+                        <MudTextField @bind-Value="Model.AdminFirstName"
+                                      For="@(() => Model.AdminFirstName)"
+                                      Label="@Loc["CompanyForm.AdminFirstName"]"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      MaxLength="128"
+                                      Immediate="true" />
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudTextField @bind-Value="Model.AdminLastName"
+                                      For="@(() => Model.AdminLastName)"
+                                      Label="@Loc["CompanyForm.AdminLastName"]"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      MaxLength="128"
+                                      Immediate="true" />
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudTextField @bind-Value="Model.AdminEmail"
+                                      For="@(() => Model.AdminEmail)"
+                                      Label="@Loc["CompanyForm.AdminEmail"]"
+                                      InputType="InputType.Email"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      MaxLength="256"
+                                      Immediate="true" />
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudTextField @bind-Value="Model.AdminPhone"
+                                      For="@(() => Model.AdminPhone)"
+                                      Label="@Loc["CompanyForm.AdminPhone"]"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      MaxLength="20"
+                                      Immediate="true" />
+                    </MudItem>
+                }
+
                 @* ── Durum ────────────────────────────────────────────────── *@
                 @if (Mode == CompanyFormMode.Edit)
                 {

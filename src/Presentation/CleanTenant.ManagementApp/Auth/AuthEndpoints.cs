@@ -374,9 +374,11 @@ public static class AuthEndpoints
         await httpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
         await SignInWithSessionAsync(httpContext, result.Value!, rememberMe: false);
 
-        // Tenant değiştirildiğinde dashboard'a dön — hangi sayfada olduğu önemli değil
-        // çünkü tenant-scoped sayfalarda data yenilenir (full reload).
-        return Results.Redirect(string.IsNullOrEmpty(returnUrl) ? "/" : returnUrl);
+        // v0.2.13.d — Bağlam değiştiğinde her zaman ilgili bağlamın dashboard'ına
+        // ("/") dön. Dashboard yeni bağlam claim'lerine göre içerik render eder.
+        // returnUrl yalnız hata durumunda (kullanıcı geldiği yerde kalsın diye)
+        // kullanılır.
+        return Results.Redirect("/");
     }
 
     private static async Task<IResult> SwitchToSystemFormAsync(
@@ -399,7 +401,9 @@ public static class AuthEndpoints
         await httpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
         await SignInWithSessionAsync(httpContext, result.Value!, rememberMe: false);
 
-        return Results.Redirect(string.IsNullOrEmpty(returnUrl) ? "/" : returnUrl);
+        // v0.2.13.d — System bağlamına geçişte de dashboard'a ("/") dön (yukarıdaki
+        // SwitchTenantFormAsync ile aynı davranış). returnUrl yalnız hata fallback'i.
+        return Results.Redirect("/");
     }
 
     /// <summary>

@@ -34,5 +34,22 @@ public sealed class CreateCompanyCommandValidator : AbstractValidator<CreateComp
 
         RuleFor(x => x.Phone)
             .MaximumLength(20).WithMessage(_ => localizer["Validation.Company.Phone.MaxLength", 20].Value);
+
+        // v0.2.13.e — Zorunlu Site yöneticisi (CompanyAdmin) alanları.
+        RuleFor(x => x.AdminFirstName)
+            .NotEmpty().WithMessage(_ => localizer["Validation.Company.AdminFirstName.Required"].Value)
+            .MaximumLength(128).WithMessage(_ => localizer["Validation.Company.AdminFirstName.MaxLength", 128].Value);
+
+        RuleFor(x => x.AdminLastName)
+            .NotEmpty().WithMessage(_ => localizer["Validation.Company.AdminLastName.Required"].Value)
+            .MaximumLength(128).WithMessage(_ => localizer["Validation.Company.AdminLastName.MaxLength", 128].Value);
+
+        RuleFor(x => x.AdminEmail)
+            .NotEmpty().WithMessage(_ => localizer["Validation.Company.AdminEmail.Required"].Value)
+            .EmailAddress().WithMessage(_ => localizer["Validation.Company.AdminEmail.Invalid"].Value)
+            .MaximumLength(256);
+
+        RuleFor(x => x.AdminPhone)
+            .MaximumLength(20).WithMessage(_ => localizer["Validation.Company.Phone.MaxLength", 20].Value);
     }
 }

@@ -44,6 +44,11 @@ public static class DependencyInjection
         services.AddSingleton<Features.Main.Accruals.Distribution.IDistributionService,
             Features.Main.Accruals.Distribution.DistributionService>();
 
+        // v0.2.13.e — Scope izin çözümleyici (cascade kuralı tek yerde). Scoped:
+        // ICatalogDbContext'e bağlı.
+        services.AddScoped<Common.Authorization.IScopePermissionResolver,
+            Common.Authorization.ScopePermissionResolver>();
+
         return services;
     }
 }

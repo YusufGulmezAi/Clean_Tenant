@@ -3,27 +3,20 @@
 @inject IMainCatalogReader CompanyReader
 @inject AuthenticationStateProvider AuthProvider
 @inject PersistentComponentState PersistentState
-@inject NavigationManager Nav
-@inject IJSRuntime JS
 @inject IStringLocalizer Loc
 @implements IDisposable
-@using CleanTenant.Application.Common.Export
-@using CleanTenant.Application.Features.Main.Companies
 @using CleanTenant.Application.Features.Main.Readers
-@using CleanTenant.Domain.Tenant.Companies
 @using CleanTenant.ManagementApp.Components.Shared
-@using MediatR
-
-@inject IMediator Mediator
 
 <PageTitle>@Loc["Companies.List.PageTitle"]</PageTitle>
 
 @*
-    v0.2.4.a — DataTable<TItem> migration. Sistem operatör için tüm Site'leri
-    parent Yönetim adıyla birlikte listeler.
+    v0.2.4.a — Sistem operatör için tüm Site'leri parent Yönetim adıyla listeler.
 
-    v0.2.10.e.4 — Companies.List.* + Common.* anahtarlarıyla lokalize edildi.
-    _exportColumns OnInitialized'da Loc ile inşa edilir.
+    v0.2.13.d — Liste görünümü ortak CompaniesListView komponentine taşındı; bu
+    sayfa yalnız System scope yetkisini doğrular, tüm tenant'ların sitelerini
+    (GetAllGlobalAsync) yükler ve persistence yönetir. Tasarım Tenant sayfasıyla
+    ortaktır (bkz. CompaniesListView).
 *@
 
 @if (_unauthorized)
@@ -34,76 +27,13 @@
 }
 else
 {
-    <div class="d-flex justify-end mb-2">
-        <MudButton Href="/system/companies/new"
-                   Color="Color.Primary"
-                   Variant="Variant.Filled"
-                   StartIcon="@Icons.Material.Filled.Add">
-            @Loc["Companies.List.NewButton"]
-        </MudButton>
-    </div>
-
-    <DataTable TItem="CompanyListItem"
-               Items="@_items"
-               SearchPlaceholder="@Loc["Companies.List.Search"]"
-               SearchableFields="@(row => new[] { row.Name, row.UrlCode, row.TenantName, row.LegalName })"
-               ExportColumns="@_exportColumns"
-               ExportTitle="@Loc["Companies.SystemList.ExportTitle"].Value">
-        <ToolbarRight>
-            <MudMenu Dense="true"
-                     AnchorOrigin="Origin.BottomRight"
-                     TransformOrigin="Origin.TopRight">
-                <ActivatorContent>
-                    <MudIconButton Icon="@Icons.Material.Filled.ViewColumn"
-                                   Size="Size.Small"
-                                   Color="Color.Default"
-                                   title="@Loc["DataTable.ColumnChooser"]" />
-                </ActivatorContent>
-                <ChildContent>
-                    <div class="pa-3" style="min-width: 180px;">
-                        <MudText Typo="Typo.caption" Class="mb-2 d-block">@Loc["DataTable.ColumnChooser"]</MudText>
-                        <div><MudCheckBox @bind-Value="_colUrlCode" Dense="true" Label="@Loc["Companies.List.Col.UrlCode"].Value" /></div>
-                        <div><MudCheckBox @bind-Value="_colTenantName" Dense="true" Label="@Loc["Companies.List.Col.Tenant"].Value" /></div>
-                        <div><MudCheckBox @bind-Value="_colLegalName" Dense="true" Label="@Loc["Companies.List.Col.LegalName"].Value" /></div>
-                        <div><MudCheckBox @bind-Value="_colStatus" Dense="true" Label="@Loc["Companies.List.Col.Status"].Value" /></div>
-                    </div>
-                </ChildContent>
-            </MudMenu>
-        </ToolbarRight>
-        <Columns>
-            <PropertyColumn T="CompanyListItem" TProperty="string" Property="@(c => c.Name)" Title="@Loc["Companies.List.Col.Name"].Value" />
-            <PropertyColumn T="CompanyListItem" TProperty="string" Property="@(c => c.UrlCode)" Title="@Loc["Companies.List.Col.UrlCode"].Value" Hidden="@(!_colUrlCode)" />
-            <PropertyColumn T="CompanyListItem" TProperty="string" Property="@(c => c.TenantName)" Title="@Loc["Companies.List.Col.Tenant"].Value" Hidden="@(!_colTenantName)" />
-            <PropertyColumn T="CompanyListItem" TProperty="string" Property="@(c => c.LegalName)" Title="@Loc["Companies.List.Col.LegalName"].Value" Hidden="@(!_colLegalName)" />
-            <PropertyColumn T="CompanyListItem" TProperty="CompanyStatus" Property="@(c => c.Status)" Title="@Loc["Companies.List.Col.Status"].Value" Hidden="@(!_colStatus)">
-                <CellTemplate>
-                    <MudChip T="string" Size="Size.Small"
-                             Color="@(context.Item.Status == CompanyStatus.Active ? Color.Success : Color.Default)">
-                        @context.Item.Status
-                    </MudChip>
-                </CellTemplate>
-            </PropertyColumn>
-            <TemplateColumn T="CompanyListItem" CellClass="d-flex justify-end gap-1" Filterable="false" Sortable="false">
-                <CellTemplate>
-                    <MudIconButton Icon="@Icons.Material.Filled.Edit"
-                                   Size="Size.Small"
-                                   Color="Color.Info"
-                                   Title="@Loc["Common.Edit"]"
-                                   Href="@($"/system/companies/{context.Item.UrlCode}/edit")" />
-                    <MudIconButton Icon="@Icons.Material.Filled.Login"
-                                   Size="Size.Small"
-                                   Color="Color.Primary"
-                                   Title="@Loc["Companies.List.Action.Switch"]"
-                                   OnClick="@(() => SwitchAsync(context.Item.TenantId, context.Item.Id))" />
-                    <MudIconButton Icon="@Icons.Material.Filled.Delete"
-                                   Size="Size.Small"
-                                   Color="Color.Error"
-                                   Title="@Loc["Common.Delete"]"
-                                   OnClick="@(() => DeleteAsync(context.Item.Id))" />
-                </CellTemplate>
-            </TemplateColumn>
-        </Columns>
-    </DataTable>
+    <CompaniesListView Items="@_items"
+                       EditRoutePrefix="/system/companies"
+                       ShowTenantColumn="true"
+                       ShowBuildingSchemaAction="false"
+                       SearchPlaceholder="@Loc["Companies.List.Search"]"
+                       ExportTitle="@Loc["Companies.SystemList.ExportTitle"].Value"
+                       OnDeleted="ReloadAsync" />
 }
 
 @code {
@@ -112,25 +42,8 @@ else
     private IReadOnlyList<CompanyListItem>? _items;
     private PersistingComponentStateSubscription _persistSubscription;
 
-    private IReadOnlyList<ExportColumn<CompanyListItem>> _exportColumns = [];
-
-    private bool _colUrlCode = true;
-    private bool _colTenantName = true;
-    private bool _colLegalName = true;
-    private bool _colStatus = true;
-
     protected override async Task OnInitializedAsync()
     {
-        _exportColumns =
-        [
-            new() { Header = Loc["Companies.List.Col.Name"].Value, Selector = r => r.Name },
-            new() { Header = Loc["Companies.List.Col.UrlCode"].Value, Selector = r => r.UrlCode },
-            new() { Header = Loc["Companies.List.Col.Tenant"].Value, Selector = r => r.TenantName },
-            new() { Header = Loc["Companies.List.Col.LegalName"].Value, Selector = r => r.LegalName },
-            new() { Header = Loc["CompanyForm.Vkn"].Value, Selector = r => r.Vkn },
-            new() { Header = Loc["Companies.List.Col.Status"].Value, Selector = r => r.Status.ToString() },
-        ];
-
         var authState = await AuthProvider.GetAuthenticationStateAsync();
         var user = authState.User;
         if (user?.Identity?.IsAuthenticated != true
@@ -143,10 +56,11 @@ else
         if (PersistentState.TryTakeFromJson<List<CompanyListItem>>(PersistKey, out var cached) && cached is not null)
         {
             _items = cached;
-            return;
         }
-
-        _items = await CompanyReader.GetAllGlobalAsync();
+        else
+        {
+            _items = await CompanyReader.GetAllGlobalAsync();
+        }
 
         _persistSubscription = PersistentState.RegisterOnPersisting(() =>
         {
@@ -155,30 +69,8 @@ else
         });
     }
 
-    private async Task SwitchAsync(Guid tenantId, Guid companyId)
-    {
-        var returnUrl = "/" + Nav.ToBaseRelativePath(Nav.Uri);
-        await JS.InvokeVoidAsync(
-            "cleantenant.submitTenantSwitch",
-            tenantId.ToString(),
-            returnUrl,
-            companyId.ToString());
-    }
-
-    private async Task DeleteAsync(Guid companyId)
-    {
-        var confirmed = await JS.InvokeAsync<bool>("confirm", Loc["Companies.List.Delete.Confirm"].Value);
-        if (!confirmed) return;
-
-        var command = new DeleteCompanyCommand(companyId);
-        var result = await Mediator.Send(command);
-
-        if (result.IsSuccess)
-        {
-            // Refresh list
-            _items = await CompanyReader.GetAllGlobalAsync();
-        }
-    }
+    private async Task ReloadAsync()
+        => _items = await CompanyReader.GetAllGlobalAsync();
 
     public void Dispose() => _persistSubscription.Dispose();
 }

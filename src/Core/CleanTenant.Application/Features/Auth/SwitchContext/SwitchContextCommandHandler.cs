@@ -1,4 +1,5 @@
 using CleanTenant.Application.Common.Auth;
+using CleanTenant.Application.Common.Authorization;
 using CleanTenant.Application.Common.Persistence;
 using CleanTenant.SharedKernel.Common.Errors;
 using CleanTenant.SharedKernel.Common.Results;
@@ -28,6 +29,7 @@ namespace CleanTenant.Application.Features.Auth.SwitchContext;
 public sealed class SwitchContextCommandHandler : IRequestHandler<SwitchContextCommand, Result<TokenPair>>
 {
     private readonly ICatalogDbContext _db;
+    private readonly IScopePermissionResolver _resolver;
     private readonly IJwtTokenService _jwtTokenService;
     private readonly IRefreshTokenService _refreshTokenService;
     private readonly IAuthSessionStore _sessionStore;
@@ -39,6 +41,7 @@ public sealed class SwitchContextCommandHandler : IRequestHandler<SwitchContextC
     /// <summary>DI bağımlılıklarını alır.</summary>
     public SwitchContextCommandHandler(
         ICatalogDbContext db,
+        IScopePermissionResolver resolver,
         IJwtTokenService jwtTokenService,
         IRefreshTokenService refreshTokenService,
         IAuthSessionStore sessionStore,
@@ -48,6 +51,7 @@ public sealed class SwitchContextCommandHandler : IRequestHandler<SwitchContextC
         IOptions<SessionSettings> sessionOptions)
     {
         _db = db;
+        _resolver = resolver;
         _jwtTokenService = jwtTokenService;
         _refreshTokenService = refreshTokenService;
         _sessionStore = sessionStore;
@@ -77,15 +81,24 @@ public sealed class SwitchContextCommandHandler : IRequestHandler<SwitchContextC
                     $"Persona '{current.PersonaSide}' bu scope seviyesine ({command.TargetLevel}) geçemez."));
         }
 
-        // Hedef scope kullanıcının atamasında var mı?
+        // Hedef scope kullanıcının atamasında var mı? Cascade (v0.2.13.e): Company
+        // hedefinde, parent tenant'ta Tenant-scope ataması olan kullanıcı (TenantAdmin)
+        // da kabul edilir — aksi halde resolver hiç çalışmadan AUTH-011'de takılırdı.
         var hasAssignment = await _db.UserRoleAssignments
             .AsNoTracking()
             .AnyAsync(a => a.UserId == current.UserId
                         && a.IsActive
-                        && a.ScopeLevel == command.TargetLevel
-                        && a.TenantId == command.TargetTenantId
-                        && a.CompanyId == command.TargetCompanyId
-                        && a.UnitId == command.TargetUnitId,
+                        && (
+                               (a.ScopeLevel == command.TargetLevel
+                                && a.TenantId == command.TargetTenantId
+                                && a.CompanyId == command.TargetCompanyId
+                                && a.UnitId == command.TargetUnitId)
+                               || (command.TargetLevel == ScopeLevel.Company
+                                   && a.ScopeLevel == ScopeLevel.Tenant
+                                   && a.TenantId == command.TargetTenantId
+                                   && a.CompanyId == null
+                                   && a.UnitId == null)
+                           ),
                 cancellationToken);
         if (!hasAssignment)
         {
@@ -93,30 +106,15 @@ public sealed class SwitchContextCommandHandler : IRequestHandler<SwitchContextC
                 Error.Forbidden("AUTH-011", "Hedef scope için aktif atama yok."));
         }
 
-        // Yeni scope'taki roller + permission'lar
-        var roles = await _db.UserRoleAssignments
-            .AsNoTracking()
-            .Where(a => a.UserId == current.UserId
-                     && a.IsActive
-                     && a.ScopeLevel == command.TargetLevel
-                     && a.TenantId == command.TargetTenantId
-                     && a.CompanyId == command.TargetCompanyId
-                     && a.UnitId == command.TargetUnitId)
-            .Join(_db.Roles, a => a.RoleId, r => r.Id, (a, r) => r.Name!)
-            .ToListAsync(cancellationToken);
-
-        var permissions = await _db.UserRoleAssignments
-            .AsNoTracking()
-            .Where(a => a.UserId == current.UserId
-                     && a.IsActive
-                     && a.ScopeLevel == command.TargetLevel
-                     && a.TenantId == command.TargetTenantId
-                     && a.CompanyId == command.TargetCompanyId
-                     && a.UnitId == command.TargetUnitId)
-            .Join(_db.RolePermissions, a => a.RoleId, rp => rp.RoleId, (a, rp) => rp.PermissionId)
-            .Join(_db.Permissions, pid => pid, p => p.Id, (pid, p) => p.Code)
-            .Distinct()
-            .ToListAsync(cancellationToken);
+        // Yeni scope'taki roller + permission'lar — cascade kuralını içeren ortak
+        // resolver üzerinden çözülür.
+        var (roles, permissions) = await _resolver.ResolveAsync(
+            current.UserId,
+            command.TargetLevel,
+            command.TargetTenantId,
+            command.TargetCompanyId,
+            command.TargetUnitId,
+            cancellationToken);
 
         var now = _clock.UtcNow;
         var newSessionId = Guid.CreateVersion7(now);

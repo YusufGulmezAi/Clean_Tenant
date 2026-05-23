@@ -85,7 +85,11 @@ else
                 LegalName: _model.LegalName,
                 Vkn: _model.Vkn,
                 Email: _model.Email,
-                Phone: _model.Phone);
+                Phone: _model.Phone,
+                AdminFirstName: _model.AdminFirstName,
+                AdminLastName: _model.AdminLastName,
+                AdminEmail: _model.AdminEmail,
+                AdminPhone: _model.AdminPhone);
 
             var result = await Mediator.Send(command);
 

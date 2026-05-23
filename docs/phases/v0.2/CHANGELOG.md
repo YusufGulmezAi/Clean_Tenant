@@ -7,6 +7,37 @@ Bu dosya, Faz 1 (UI başlangıç + ManagementApp) kapsamında yapılan tüm alt-
 
 ---
 
+## v0.2.13.e — 2026-05-23 — Süper Yetkili Roller & Erişim
+
+**Mimari harita**: [v0.2.13.e-FINAL-ARCHITECTURE-MAP.md](v0.2.13.e-FINAL-ARCHITECTURE-MAP.md)
+
+### Kapsam
+Süper yetkili `TenantAdmin`/`CompanyAdmin` rolleri (izin seed), her yeni Site'a zorunlu CompanyAdmin provisioning, Tenant→Site izin cascade'i, kullanıcı bazlı kalıcı tema (v0.2.13.d), Siteler liste tasarımının bağlamlar arası birleştirilmesi, Context Switcher geçiş deneyimi.
+
+### Alt-faz Değişiklik Özeti
+
+| Alt-faz | Özet |
+|---|---|
+| **d** | Avatar menü sadeleştirme (2FA/Ayarlar kaldır) + tema profil > Tema sekmesi + `UserThemeService` (DB kalıcı tema) + `AddUserThemePreferences` migration + Siteler `CompaniesListView` birleştirme + Context Switcher overlay & dashboard yönlenmesi |
+| **e** | `TenantAdmin`/`CompanyAdmin` izin seed + `CreateCompany` CompanyAdmin provisioning + `IScopePermissionResolver` cascade + `SwitchContext` guard genişletme + 21 faz kapanış testi |
+
+### Mimari Kararlar
+- **Built-in rolleri doldur, yeni rol türetme**: TenantAdmin = Tenant+Company (78 izin), CompanyAdmin = Company (33 izin). System/Unit hariç (privilege ceiling).
+- **Cascade aşağı yönlü** (Tenant → tüm siteler); yukarı sızma yok. Ortak `IScopePermissionResolver` ile tek yerde.
+- **Support Mode v2 korundu** — System operatör geçişi (SupportSession + `AllowSystemWriteAccess`) değiştirilmedi.
+- **Tema DB'de tek kaynak** — cihazlar arası taşınır, her login'de uygulanır, default "Kurumsal Mavi".
+- **Şema değişikliği minimum** — Company admin `UserRoleAssignment` ile izlenir (migration gerektirmez; yalnız tema kolonları).
+
+### Doğrulama
+- ✓ `dotnet build CleanTenant.slnx` — 0 hata / 0 uyarı
+- ✓ 21 yeni test yeşil (11 Application unit + 5 ManagementApp bUnit + 5 Infrastructure integration)
+- ✓ Seeding canlı doğrulandı (TenantAdmin/CompanyAdmin izin atamaları + listening)
+
+### Not
+v0.2.13 umbrella fazının diğer parçaları (Muhasebe / Bütçe / Tahakkuk / Yapı Şeması ve v0.2.12) bu CHANGELOG'a işlenmemiştir; bu giriş yalnız bu oturumun kapsamını belgeler.
+
+---
+
 ## v0.2.11 — 2026-05-20 — UX & Form İyileştirmeleri
 
 **Tag**: `v0.2.11` · **Mimari harita**: [v0.2.11-FINAL-ARCHITECTURE-MAP.md](v0.2.11-FINAL-ARCHITECTURE-MAP.md)

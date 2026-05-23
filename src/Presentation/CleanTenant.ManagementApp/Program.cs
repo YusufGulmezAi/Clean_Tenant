@@ -6,6 +6,7 @@ using CleanTenant.Infrastructure.Identity;
 using CleanTenant.Infrastructure.Identity.Middleware;
 using CleanTenant.Infrastructure.Logging;
 using CleanTenant.Infrastructure.Persistence;
+using CleanTenant.Infrastructure.Storage;
 using CleanTenant.ManagementApp.Auth;
 using CleanTenant.ManagementApp.Components;
 using CleanTenant.ManagementApp.Services;
@@ -45,6 +46,8 @@ builder.Services.AddCatalogPersistence(catalogConnection, auditConnection);
 builder.Services.AddRedisCache(redisConnection);
 builder.Services.AddIdentityServices(builder.Configuration);
 builder.Services.AddCleanTenantNotifications(builder.Configuration, builder.Environment);
+// v0.2.13 — Object storage (MinIO): profil fotoğrafı saklama + görsel işleme.
+builder.Services.AddObjectStorage(builder.Configuration, builder.Environment);
 if (!string.IsNullOrWhiteSpace(auditConnection))
 {
     builder.Services.AddAuditPersistence(auditConnection);
@@ -73,7 +76,11 @@ builder.Services.AddMudServices();
 // v0.2.4.a — Excel (ClosedXML) + PDF (QuestPDF Community) export servisleri.
 builder.Services.AddCleanTenantExport();
 builder.Services.AddBlazoredLocalStorage();
-builder.Services.AddScoped<IThemeService, LocalStorageThemeService>();
+// v0.2.13.d — Tema tercihi artık DB'de (User) saklanır; cihazlar arası taşınır ve
+// her login'de uygulanır. Önceki LocalStorageThemeService'in yerini alır.
+builder.Services.AddScoped<IThemeService, UserThemeService>();
+// v0.2.13 — Profil avatar'ı circuit boyunca paylaşılır (AppBar anında güncellenir).
+builder.Services.AddScoped<ProfileAvatarState>();
 builder.Services.AddLocalization(opts => opts.ResourcesPath = "Localization/Resources");
 
 // v0.2.4.b.4 — Desteklenen diller; kültür cookie'si (.AspNetCore.Culture) üzerinden seçilir.

@@ -61,6 +61,15 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.LastLoginIp).HasMaxLength(45); // IPv6 max
         builder.Property(u => u.LastLoginAt);
 
+        // v0.2.13 — Profil fotoğrafı object storage anahtarı (görselin kendisi DB'de değil).
+        builder.Property(u => u.ProfilePhotoKey).HasMaxLength(256);
+        builder.Property(u => u.ProfilePhotoUpdatedAt);
+
+        // v0.2.13.d — Tema tercihi (renk preset adı + gece modu). null preset →
+        // varsayılan "Kurumsal Mavi". Cihazlar arası taşınır, her login'de uygulanır.
+        builder.Property(u => u.PreferredThemePreset).HasMaxLength(32);
+        builder.Property(u => u.PreferredDarkMode).IsRequired().HasDefaultValue(false);
+
         // xmin
         builder.UseXminAsConcurrencyToken();
 

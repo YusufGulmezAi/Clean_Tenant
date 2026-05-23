@@ -21,6 +21,8 @@
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
     <PackageReference Include="ClosedXML" />
     <PackageReference Include="QuestPDF" />
+    <!-- v0.2.13 — SkiaImageProcessor testinde test görseli üretmek için. -->
+    <PackageReference Include="SkiaSharp" />
   </ItemGroup>
 
   <ItemGroup>
@@ -30,12 +32,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\Core\CleanTenant.Application\CleanTenant.Application.csproj" />
     <ProjectReference Include="..\..\src\Infrastructure\CleanTenant.Infrastructure.Persistence\CleanTenant.Infrastructure.Persistence.csproj" />
     <ProjectReference Include="..\..\src\Infrastructure\CleanTenant.Infrastructure.Identity\CleanTenant.Infrastructure.Identity.csproj" />
     <ProjectReference Include="..\..\src\Infrastructure\CleanTenant.Infrastructure.Logging\CleanTenant.Infrastructure.Logging.csproj" />
     <ProjectReference Include="..\..\src\Infrastructure\CleanTenant.Infrastructure.Caching\CleanTenant.Infrastructure.Caching.csproj" />
     <ProjectReference Include="..\..\src\Infrastructure\CleanTenant.Infrastructure.Export\CleanTenant.Infrastructure.Export.csproj" />
     <ProjectReference Include="..\..\src\Infrastructure\CleanTenant.Infrastructure.BackgroundJobs\CleanTenant.Infrastructure.BackgroundJobs.csproj" />
+    <ProjectReference Include="..\..\src\Infrastructure\CleanTenant.Infrastructure.Storage\CleanTenant.Infrastructure.Storage.csproj" />
   </ItemGroup>
 
 </Project>

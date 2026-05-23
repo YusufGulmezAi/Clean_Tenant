@@ -17,6 +17,7 @@
     <ProjectReference Include="..\..\Infrastructure\CleanTenant.Infrastructure.Logging\CleanTenant.Infrastructure.Logging.csproj" />
     <ProjectReference Include="..\..\Infrastructure\CleanTenant.Infrastructure.Caching\CleanTenant.Infrastructure.Caching.csproj" />
     <ProjectReference Include="..\..\Infrastructure\CleanTenant.Infrastructure.BackgroundJobs\CleanTenant.Infrastructure.BackgroundJobs.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\CleanTenant.Infrastructure.Storage\CleanTenant.Infrastructure.Storage.csproj" />
   </ItemGroup>
 
 </Project>

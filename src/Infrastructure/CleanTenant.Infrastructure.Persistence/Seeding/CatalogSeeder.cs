@@ -4,6 +4,7 @@ using CleanTenant.Domain.LookUp;
 using CleanTenant.Domain.Tenant.Accounting.Enums;
 using CleanTenant.Domain.Tenant.Budgeting.Enums;
 using CleanTenant.Infrastructure.Persistence.Catalog;
+using CleanTenant.SharedKernel.Context;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -49,6 +50,8 @@ public sealed class CatalogSeeder
         await SeedBuiltInRolesAsync(cancellationToken);
         await SeedDeveloperPermissionsAsync(cancellationToken);
         await SeedSystemAdminPermissionsAsync(cancellationToken);
+        await SeedTenantAdminPermissionsAsync(cancellationToken);
+        await SeedCompanyAdminPermissionsAsync(cancellationToken);
         await SeedInflationIndexesAsync(cancellationToken);
         await SeedChartOfAccountsTemplatesAsync(cancellationToken);
         await SeedBudgetTypeMetadataAsync(cancellationToken);
@@ -274,6 +277,112 @@ public sealed class CatalogSeeder
         else
         {
             _logger.LogInformation("SystemAdmin baseline permission seed: değişiklik yok.");
+        }
+    }
+
+    /// <summary>
+    /// <para>
+    /// TenantAdmin built-in rolüne TÜM Tenant- ve Company-scope izinlerini idempotent
+    /// atar — "süper tenant kullanıcısı" (v0.2.13.e). System ve Unit izinleri kasıtlı
+    /// olarak DIŞARIDA bırakılır (privilege ceiling): <c>Tenant.Create</c>,
+    /// <c>Support.*</c> gibi System-only izinler operatöre özeldir; Unit izinleri ise
+    /// portal sakin rolleridir.
+    /// </para>
+    /// <para>
+    /// Company izinlerini de içermesi cascade içindir: <c>SwitchTenantCommandHandler</c>
+    /// bir siteye geçişte en geniş atamayı (Tenant) baz aldığından, TenantAdmin tenant'ın
+    /// tüm sitelerinde tam yetkili olur.
+    /// </para>
+    /// </summary>
+    private async Task SeedTenantAdminPermissionsAsync(CancellationToken cancellationToken)
+    {
+        var role = await _db.Roles
+            .AsNoTracking()
+            .FirstOrDefaultAsync(r => r.NormalizedName == "TENANTADMIN" && r.Scope == ScopeLevel.Tenant, cancellationToken);
+
+        if (role is null)
+        {
+            _logger.LogWarning("TenantAdmin rolü bulunamadı; permission seed atlandı.");
+            return;
+        }
+
+        var targetPermissionIds = await _db.Permissions
+            .AsNoTracking()
+            .Where(p => p.MinimumRoleScope == ScopeLevel.Tenant || p.MinimumRoleScope == ScopeLevel.Company)
+            .Select(p => p.Id)
+            .ToListAsync(cancellationToken);
+
+        await GrantPermissionsToRoleAsync(role.Id, targetPermissionIds, "TenantAdmin", cancellationToken);
+    }
+
+    /// <summary>
+    /// CompanyAdmin built-in rolüne TÜM Company-scope izinlerini idempotent atar —
+    /// "süper company kullanıcısı" (v0.2.13.e). Yalnız <see cref="ScopeLevel.Company"/>
+    /// izinleri; Tenant/System/Unit hariç.
+    /// </summary>
+    private async Task SeedCompanyAdminPermissionsAsync(CancellationToken cancellationToken)
+    {
+        var role = await _db.Roles
+            .AsNoTracking()
+            .FirstOrDefaultAsync(r => r.NormalizedName == "COMPANYADMIN" && r.Scope == ScopeLevel.Company, cancellationToken);
+
+        if (role is null)
+        {
+            _logger.LogWarning("CompanyAdmin rolü bulunamadı; permission seed atlandı.");
+            return;
+        }
+
+        var targetPermissionIds = await _db.Permissions
+            .AsNoTracking()
+            .Where(p => p.MinimumRoleScope == ScopeLevel.Company)
+            .Select(p => p.Id)
+            .ToListAsync(cancellationToken);
+
+        await GrantPermissionsToRoleAsync(role.Id, targetPermissionIds, "CompanyAdmin", cancellationToken);
+    }
+
+    /// <summary>
+    /// Verilen permission Id setini bir role idempotent atar (mevcut atamalar korunur,
+    /// yalnız eksikler eklenir). <see cref="SeedDeveloperPermissionsAsync"/> ile aynı desen.
+    /// </summary>
+    private async Task GrantPermissionsToRoleAsync(
+        Guid roleId,
+        IReadOnlyList<Guid> permissionIds,
+        string roleLabel,
+        CancellationToken cancellationToken)
+    {
+        var existing = await _db.RolePermissions
+            .AsNoTracking()
+            .Where(rp => rp.RoleId == roleId)
+            .Select(rp => rp.PermissionId)
+            .ToHashSetAsync(cancellationToken);
+
+        var added = 0;
+        foreach (var permissionId in permissionIds)
+        {
+            if (existing.Contains(permissionId))
+            {
+                continue;
+            }
+
+            _db.RolePermissions.Add(new RolePermission
+            {
+                RoleId = roleId,
+                PermissionId = permissionId,
+                GrantedAt = DateTimeOffset.UtcNow,
+                GrantedBy = null,
+            });
+            added++;
+        }
+
+        if (added > 0)
+        {
+            await _db.SaveChangesAsync(cancellationToken);
+            _logger.LogInformation("{Role} permission seed: {Added} yeni atama yapıldı.", roleLabel, added);
+        }
+        else
+        {
+            _logger.LogInformation("{Role} permission seed: değişiklik yok.", roleLabel);
         }
     }
 

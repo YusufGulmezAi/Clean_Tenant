@@ -73,7 +73,9 @@ public static class CompanyEndpoints
         [FromServices] IMediator mediator,
         CancellationToken cancellationToken)
     {
-        var command = new CreateCompanyCommand(tenantId, request.Name, request.LegalName, request.Vkn, request.Email, request.Phone);
+        var command = new CreateCompanyCommand(
+            tenantId, request.Name, request.LegalName, request.Vkn, request.Email, request.Phone,
+            request.AdminFirstName, request.AdminLastName, request.AdminEmail, request.AdminPhone);
         var result = await mediator.Send(command, cancellationToken);
         return result.IsSuccess
             ? Results.CreatedAtRoute("GetCompanyDetail", new { companyId = result.Value!.Id }, result.Value!)
@@ -129,13 +131,17 @@ public static class CompanyEndpoints
     };
 }
 
-/// <summary>Company oluşturma isteği.</summary>
+/// <summary>Company oluşturma isteği. v0.2.13.e — zorunlu CompanyAdmin alanları.</summary>
 public record CreateCompanyRequest(
     string Name,
     string? LegalName,
     string? Vkn,
     string? Email,
-    string? Phone);
+    string? Phone,
+    string AdminFirstName,
+    string AdminLastName,
+    string AdminEmail,
+    string? AdminPhone);
 
 /// <summary>Company güncelleme isteği.</summary>
 public record UpdateCompanyRequest(

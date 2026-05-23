@@ -3,6 +3,7 @@ using CleanTenant.Application;
 using CleanTenant.Infrastructure.Caching;
 using CleanTenant.Infrastructure.Identity;
 using CleanTenant.Infrastructure.Persistence;
+using CleanTenant.Infrastructure.Storage;
 using Microsoft.AspNetCore.Http.Json;
 
 namespace CleanTenant.WebApi.Configuration;
@@ -40,6 +41,8 @@ public static class ServiceCollectionExtensions
         services.AddRedisCache(redisConnection);
         services.AddIdentityServices(configuration);
         services.AddCleanTenantNotifications(configuration, environment);
+        // v0.2.13 — Object storage (MinIO): profil fotoğrafı + ileride dosya ekleri.
+        services.AddObjectStorage(configuration, environment);
 
         if (!string.IsNullOrWhiteSpace(auditConnection))
         {

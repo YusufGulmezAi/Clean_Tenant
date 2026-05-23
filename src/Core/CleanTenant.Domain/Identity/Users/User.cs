@@ -87,6 +87,45 @@ public sealed class User : IdentityUser<Guid>, IAuditable, ISoftDeletable, IHasU
     /// </summary>
     public string? PreferredCulture { get; set; }
 
+    /// <summary>
+    /// <para>
+    /// Kullanıcının tercih ettiği renk teması preset'inin adı (örn.
+    /// <c>"KurumsalMavi"</c>). Login sonrası tema bu değere göre uygulanır; her
+    /// oturumda kullanıcının teması otomatik gelir (cihazlar arası taşınır, v0.2.13.d).
+    /// </para>
+    /// <para>
+    /// <c>null</c> → sistem varsayılanı (<c>"Kurumsal Mavi"</c>). Kullanıcı profil
+    /// &gt; Tema sekmesinden değiştirdiğinde burası güncellenir.
+    /// </para>
+    /// </summary>
+    public string? PreferredThemePreset { get; set; }
+
+    /// <summary>
+    /// Kullanıcının gece modu (dark) tercihi. <c>false</c> → açık mod (varsayılan).
+    /// Üst bardaki gece modu düğmesi veya profil &gt; Tema sekmesi günceller; renk
+    /// teması ile birlikte her login'de uygulanır (v0.2.13.d).
+    /// </summary>
+    public bool PreferredDarkMode { get; set; }
+
+    /// <summary>
+    /// <para>
+    /// Profil fotoğrafının object storage (MinIO) içindeki nesne anahtarı
+    /// (örn. <c>avatars/3f1c....png</c>). <c>null</c> → fotoğraf yok, baş harf
+    /// avatar'ı gösterilir.
+    /// </para>
+    /// <para>
+    /// Fotoğrafın kendisi DB'de saklanmaz; yalnız anahtar tutulur. Kullanıcı
+    /// başına tek anahtar; yeni yükleme öncekini üzerine yazar (v0.2.13).
+    /// </para>
+    /// </summary>
+    public string? ProfilePhotoKey { get; set; }
+
+    /// <summary>
+    /// Profil fotoğrafının son güncellenme zamanı (UTC). Önbellek kırma (cache
+    /// busting) ve "en son ne zaman değişti" gösterimi için. Fotoğraf yoksa null.
+    /// </summary>
+    public DateTimeOffset? ProfilePhotoUpdatedAt { get; set; }
+
     /// <inheritdoc />
     public DateTimeOffset CreatedAt { get; set; }
 

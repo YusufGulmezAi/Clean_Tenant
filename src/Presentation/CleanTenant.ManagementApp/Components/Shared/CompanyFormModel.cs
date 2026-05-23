@@ -28,6 +28,20 @@ public sealed class CompanyFormModel
 
     /// <summary>Site durumu. Yeni kayıtta varsayılan Active; düzenleme modunda mevcut değer yüklenir.</summary>
     public CompanyStatus Status { get; set; } = CompanyStatus.Active;
+
+    // ── Site Yöneticisi (CompanyAdmin) — yalnız Create modunda kullanılır (v0.2.13.e) ──
+
+    /// <summary>Site yöneticisi adı (Create modunda zorunlu).</summary>
+    public string AdminFirstName { get; set; } = string.Empty;
+
+    /// <summary>Site yöneticisi soyadı (Create modunda zorunlu).</summary>
+    public string AdminLastName { get; set; } = string.Empty;
+
+    /// <summary>Site yöneticisi e-postası — CompanyAdmin olarak atanır (Create modunda zorunlu).</summary>
+    public string AdminEmail { get; set; } = string.Empty;
+
+    /// <summary>Site yöneticisi telefonu (opsiyonel).</summary>
+    public string? AdminPhone { get; set; }
 }
 
 /// <summary>

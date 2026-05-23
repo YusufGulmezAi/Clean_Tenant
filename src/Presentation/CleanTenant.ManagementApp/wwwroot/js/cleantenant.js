@@ -195,11 +195,41 @@ window.cleantenant.downloadBlobBase64 = function (filename, base64Content, mimeT
 };
 
 // ---------------------------------------------------------------------------
+// v0.2.13.d — Bağlam değiştirme overlay'i. Context Switcher tenant/company/
+// System değişiminde tam-sayfa form POST'tan hemen önce çağrılır: eski bağlamın
+// içeriği tam-ekran opak bir katmanla örtülür (body görsel olarak boşaltılır) ve
+// yükleme spinner'ı gösterilir. Geçiş tamamlanınca server kullanıcıyı yeni
+// bağlamın dashboard'ına ("/") yönlendirir; tam reload ile overlay yeni sayfada
+// doğal olarak kaybolur. Idempotent — zaten varsa tekrar eklemez.
+// ---------------------------------------------------------------------------
+window.cleantenant.showSwitchOverlay = function (message) {
+    if (document.getElementById('ct-switch-overlay')) return;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'ct-switch-overlay';
+    overlay.className = 'ct-switch-overlay';
+
+    const spinner = document.createElement('div');
+    spinner.className = 'ct-switch-overlay__spinner';
+    overlay.appendChild(spinner);
+
+    if (message) {
+        const text = document.createElement('div');
+        text.className = 'ct-switch-overlay__text';
+        text.textContent = message;
+        overlay.appendChild(text);
+    }
+
+    document.body.appendChild(overlay);
+};
+
+// ---------------------------------------------------------------------------
 // Tenant switch: dinamik form üret + post /auth/switch-tenant (cookie yenile).
 // Blazor circuit içinden cookie set'lemek mümkün değil; form post HttpContext
 // yolunu kullanır. Component MudMenuItem OnClick'inde bunu çağırır.
 // ---------------------------------------------------------------------------
 window.cleantenant.submitTenantSwitch = function (tenantId, returnUrl, companyId) {
+    window.cleantenant.showSwitchOverlay('Bağlam değiştiriliyor…');
     const fields = { tenantId: tenantId };
     if (companyId) {
         fields.companyId = companyId;
@@ -218,6 +248,7 @@ window.cleantenant.clickElement = function (id) {
 
 // System scope'a geri dönüş (TenantSwitcher dropdown'undaki "System Scope" seçeneği)
 window.cleantenant.submitSwitchToSystem = function (returnUrl) {
+    window.cleantenant.showSwitchOverlay('Bağlam değiştiriliyor…');
     submitFormWithReturn('/auth/switch-to-system', returnUrl, {});
 };
 
