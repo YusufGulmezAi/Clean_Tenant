@@ -44,6 +44,10 @@ public static class DependencyInjection
         services.AddSingleton<Features.Main.Accruals.Distribution.IDistributionService,
             Features.Main.Accruals.Distribution.DistributionService>();
 
+        // Tahakkuk → yevmiye fişi postlayıcı (IMainDbContext kullanır → scoped)
+        services.AddScoped<Features.Main.Accruals.Posting.IAccrualJournalPoster,
+            Features.Main.Accruals.Posting.AccrualJournalPoster>();
+
         // v0.2.13.e — Scope izin çözümleyici (cascade kuralı tek yerde). Scoped:
         // ICatalogDbContext'e bağlı.
         services.AddScoped<Common.Authorization.IScopePermissionResolver,

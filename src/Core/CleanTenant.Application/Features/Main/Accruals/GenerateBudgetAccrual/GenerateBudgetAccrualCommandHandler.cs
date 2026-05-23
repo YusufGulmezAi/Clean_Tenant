@@ -2,6 +2,7 @@ using System.Text.Json;
 using CleanTenant.Application.Common.Auth;
 using CleanTenant.Application.Common.Persistence;
 using CleanTenant.Application.Features.Main.Accruals.Distribution;
+using CleanTenant.Application.Features.Main.Accruals.Posting;
 using CleanTenant.Domain.Tenant.Accruals;
 using CleanTenant.Domain.Tenant.Accruals.Enums;
 using CleanTenant.Domain.Tenant.Budgeting;
@@ -21,6 +22,7 @@ public sealed class GenerateBudgetAccrualCommandHandler
     private readonly IMainDbContext _db;
     private readonly IDistributionService _distribution;
     private readonly IAccountCodeAllocator _allocator;
+    private readonly IAccrualJournalPoster _journalPoster;
     private readonly IClock _clock;
     private readonly ICurrentSessionAccessor _session;
 
@@ -29,12 +31,14 @@ public sealed class GenerateBudgetAccrualCommandHandler
         IMainDbContext db,
         IDistributionService distribution,
         IAccountCodeAllocator allocator,
+        IAccrualJournalPoster journalPoster,
         IClock clock,
         ICurrentSessionAccessor session)
     {
         _db = db;
         _distribution = distribution;
         _allocator = allocator;
+        _journalPoster = journalPoster;
         _clock = clock;
         _session = session;
     }
@@ -247,7 +251,6 @@ public sealed class GenerateBudgetAccrualCommandHandler
             TotalAmount = total,
             ReceivableAccountCodeId = budget.ReceivableAccountCodeId,
             IncomeAccountCodeId = budget.IncomeAccountCodeId,
-            JournalEntryId = null, // Slice 6.5b'de yevmiye fişi postingi
             Description = $"{budget.Title} — {request.Month:00}/{request.Year} Tahakkuk",
             GeneratedAt = _clock.UtcNow,
             GeneratedBy = _session.Current?.UserId,
@@ -270,6 +273,12 @@ public sealed class GenerateBudgetAccrualCommandHandler
         }
 
         _db.Accruals.Add(accrual);
+
+        // ── 13. Otomatik yevmiye fişi (Karar B) ──────────────────────────────────
+        var postResult = await _journalPoster.PostAsync(accrual, cancellationToken);
+        if (postResult.IsFailure)
+            return Result<AccrualResult>.Failure(postResult.FirstError);
+
         await _db.SaveChangesAsync(cancellationToken);
 
         return Result<AccrualResult>.Success(
