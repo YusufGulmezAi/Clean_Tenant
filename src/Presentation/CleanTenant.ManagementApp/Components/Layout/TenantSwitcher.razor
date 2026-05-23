@@ -61,6 +61,10 @@
 
             @if (_view?.HasSystemAssignment == true && SystemMatchesFilter())
             {
+                <div class="px-4 pt-2 pb-1">
+                    <MudText Typo="Typo.caption" Color="Color.Default"
+                             Style="font-weight:600; letter-spacing:.5px;">SİSTEM</MudText>
+                </div>
                 var systemActive = ActiveTenantId is null;
                 <MudMenuItem Icon="@Icons.Material.Filled.AdminPanelSettings"
                              IconColor="@(systemActive ? Color.Success : Color.Warning)"
@@ -82,8 +86,12 @@
                     <MudText Typo="Typo.body2" Color="Color.Default">Atanmış bağlam yok</MudText>
                 </div>
             }
-            else if (_view is not null)
+            else if (_view is not null && VisibleTenantCount > 0)
             {
+                <div class="px-4 pt-2 pb-1">
+                    <MudText Typo="Typo.caption" Color="Color.Default"
+                             Style="font-weight:600; letter-spacing:.5px;">YÖNETİMLER (@VisibleTenantCount)</MudText>
+                </div>
                 @foreach (var ctx in _view.Contexts)
                 {
                     var tenantNameMatches = TenantMatchesFilter(ctx);
@@ -234,6 +242,38 @@
 
         var hasSystem = assignments.Any(a => a.ScopeLevel == ScopeLevel.System);
 
+        // Reader'lar — cache hit'lerden faydalan (tüm aktif Yönetim + tüm Site).
+        var allTenants = await TenantReader.GetAllActiveAsync(ct);
+        var allCompanies = await CompanyReader.GetAllGlobalAsync(ct);
+
+        // ── System operatörü: tüm aktif Yönetim + tüm Site'lere erişir ─────────
+        // Gerçek rol ataması gerekmez; SwitchTenantCommandHandler System scope'u
+        // korur ve geçişte (KVKK/audit için) otomatik SupportSession açar
+        // (yazma yetkisi tenant.AllowSystemWriteAccess'e göre WriteEnabled/ReadOnly).
+        // Dropdown bu yüzden System kullanıcıya tam katalogu gösterir.
+        if (hasSystem)
+        {
+            var activeTenantIds = allTenants.Select(t => t.Id).ToHashSet();
+            var companiesByTenant = allCompanies
+                .Where(c => activeTenantIds.Contains(c.TenantId))
+                .GroupBy(c => c.TenantId)
+                .ToDictionary(
+                    g => g.Key,
+                    g => (IReadOnlyList<CompanyRow>)g
+                        .OrderBy(c => c.Name)
+                        .Select(c => new CompanyRow(c.Id, c.UrlCode, c.Name)).ToList());
+
+            var allContexts = allTenants
+                .OrderBy(t => t.Name)
+                .Select(t => new TenantContextRow(
+                    t.Id, t.UrlCode, t.Name,
+                    companiesByTenant.TryGetValue(t.Id, out var sysCs) ? sysCs : []))
+                .ToList();
+
+            return new UserContextView(true, allContexts);
+        }
+
+        // ── Alt scope kullanıcı: yalnız gerçek rol atamaları ───────────────────
         var assignedTenantIds = assignments
             .Where(a => a.TenantId.HasValue)
             .Select(a => a.TenantId!.Value)
@@ -242,11 +282,9 @@
 
         if (assignedTenantIds.Count == 0)
         {
-            return new UserContextView(hasSystem, []);
+            return new UserContextView(false, []);
         }
 
-        // Reader'lar — cache hit'lerden faydalan
-        var allTenants = await TenantReader.GetAllActiveAsync(ct);
         var assignedTenants = allTenants
             .Where(t => assignedTenantIds.Contains(t.Id))
             .ToList();
@@ -266,7 +304,6 @@
         // Company listesi: tenant-level ataması olan Yönetim'lerin tüm site'leri +
         // company-level ataması olan tek site'ler. Reader cache'ten global hit
         // çekilir, local filter.
-        var allCompanies = await CompanyReader.GetAllGlobalAsync(ct);
         var visibleCompanies = allCompanies
             .Where(c => assignedTenantIds.Contains(c.TenantId)
                      && (tenantLevelTenantIds.Contains(c.TenantId) || assignedCompanyIds.Contains(c.Id)))
@@ -284,8 +321,13 @@
                 byTenant.TryGetValue(t.Id, out var cs) ? cs : []))
             .ToList();
 
-        return new UserContextView(hasSystem, contexts);
+        return new UserContextView(false, contexts);
     }
+
+    /// <summary>Aktif arama filtresine göre görünen Yönetim sayısı — başlık rozeti
+    /// (YÖNETİMLER (N)) ve grup görünürlüğü bunu kullanır.</summary>
+    private int VisibleTenantCount =>
+        _view?.Contexts.Count(ctx => TenantMatchesFilter(ctx) || ctx.Companies.Any(CompanyMatchesFilter)) ?? 0;
 
     private bool SystemMatchesFilter() =>
         string.IsNullOrWhiteSpace(_searchText)

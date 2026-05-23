@@ -48,23 +48,27 @@ public sealed class GetAccessibleContextsQueryHandler
                 Error.Unauthorized("AUTH-005", "Kimlik bilgisi gerekli."));
         }
 
-        // v0.2.3.c — Support Mode v2 revizyonu:
-        // Context Switcher dropdown'u **yalnız kullanıcının gerçek rol atamalarını**
-        // gösterir (System için bile). Sistem operatörü "tüm Yönetim/Site listesi"ne
-        // sol menü ("Yönetimler" / "Siteler" NavGroup'ları) üzerinden erişir —
-        // burada gösterilenler değil. Bu ayrım: gerçek atama = tam yetki vs. support
-        // erişimi = ReadOnly/WriteEnabled (mail link onayına bağlı).
-        //
-        // Yani: System scope da olsa, dropdown listesi her zaman UserRoleAssignments
-        // tablosundan filtrelenir. "Sistem" item'ı NavMenu'de + dropdown'da ayrıca
-        // gösterilir (kullanıcının System scope rol ataması varsa).
-        var assignedTenantIds = _catalog.UserRoleAssignments.AsNoTracking()
-            .Where(a => a.UserId == session.UserId && a.IsActive && a.TenantId != null)
-            .Select(a => a.TenantId!.Value)
-            .Distinct();
+        // System operatörü tüm aktif Yönetim'lere (ve altındaki tüm Site'lere)
+        // erişebilir: SwitchTenantCommandHandler geçişte scope'u System tutar ve
+        // KVKK/audit için otomatik SupportSession açar (yazma yetkisi
+        // tenant.AllowSystemWriteAccess'e göre WriteEnabled/ReadOnly). Bu yüzden
+        // Context Switcher System kullanıcıya tam katalogu listeler. Alt scope
+        // kullanıcı yalnız kendi UserRoleAssignments kayıtlarındaki Yönetim'leri görür.
+        var isSystem = session.ScopeLevel == ScopeLevel.System;
 
-        var tenants = await _catalog.Tenants.AsNoTracking()
-            .Where(t => t.Status == TenantStatus.Active && assignedTenantIds.Contains(t.Id))
+        var tenantsQuery = _catalog.Tenants.AsNoTracking()
+            .Where(t => t.Status == TenantStatus.Active);
+
+        if (!isSystem)
+        {
+            var assignedTenantIds = _catalog.UserRoleAssignments.AsNoTracking()
+                .Where(a => a.UserId == session.UserId && a.IsActive && a.TenantId != null)
+                .Select(a => a.TenantId!.Value)
+                .Distinct();
+            tenantsQuery = tenantsQuery.Where(t => assignedTenantIds.Contains(t.Id));
+        }
+
+        var tenants = await tenantsQuery
             .OrderBy(t => t.Name)
             .Select(t => new { t.Id, t.UrlCode, t.Name })
             .ToListAsync(cancellationToken);
