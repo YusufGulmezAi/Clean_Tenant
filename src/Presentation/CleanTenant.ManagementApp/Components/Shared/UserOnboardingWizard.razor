@@ -95,6 +95,7 @@ else if (_state == WizardState.UserFound)
                MultiSelection="true"
                SelectedValues="@_selectedRoleIds"
                SelectedValuesChanged="@(v => _selectedRoleIds = v)"
+               ToStringFunc="@RoleIdToName"
                Label="@Loc["UserForm.Roles"]"
                Variant="Variant.Outlined"
                Margin="Margin.Dense"
@@ -164,6 +165,7 @@ else if (_state == WizardState.NewUser)
                MultiSelection="true"
                SelectedValues="@_selectedRoleIds"
                SelectedValuesChanged="@(v => _selectedRoleIds = v)"
+               ToStringFunc="@RoleIdToName"
                Label="@Loc["UserForm.Roles"]"
                Variant="Variant.Outlined"
                Margin="Margin.Dense"
@@ -235,6 +237,11 @@ else if (_state == WizardState.NewUser)
 
     // Rol seçimi
     private IEnumerable<Guid> _selectedRoleIds = [];
+
+    /// <summary>MudSelect kapalı görünümünde seçili rol Id'sini okunur ada çevirir
+    /// (aksi halde Guid.ToString() görünür).</summary>
+    private string RoleIdToName(Guid id) =>
+        AvailableRoles.FirstOrDefault(r => r.Id == id)?.Name ?? string.Empty;
 
     private bool _isSubmitting;
     private string _errorMessage = string.Empty;
