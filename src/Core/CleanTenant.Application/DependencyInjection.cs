@@ -48,6 +48,12 @@ public static class DependencyInjection
         services.AddScoped<Features.Main.Accruals.Posting.IAccrualJournalPoster,
             Features.Main.Accruals.Posting.AccrualJournalPoster>();
 
+        // Gecikme faizi: saf hesaplama + politika çözümleyici (stateless → singleton)
+        services.AddSingleton<Features.Main.LateFees.Calculation.ILateFeeCalculator,
+            Features.Main.LateFees.Calculation.LateFeeCalculator>();
+        services.AddSingleton<Features.Main.LateFees.Calculation.ILateFeePolicyResolver,
+            Features.Main.LateFees.Calculation.LateFeePolicyResolver>();
+
         // v0.2.13.e — Scope izin çözümleyici (cascade kuralı tek yerde). Scoped:
         // ICatalogDbContext'e bağlı.
         services.AddScoped<Common.Authorization.IScopePermissionResolver,
