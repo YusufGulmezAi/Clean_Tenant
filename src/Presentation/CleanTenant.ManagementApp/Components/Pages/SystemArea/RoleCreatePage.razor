@@ -1,68 +1,16 @@
 @page "/system/roles/new"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
-@inject MediatR.IMediator Mediator
-@inject AuthenticationStateProvider AuthProvider
 @inject NavigationManager Nav
-@inject ISnackbar Snackbar
-@inject IStringLocalizer Loc
-@using CleanTenant.Application.Features.Catalog.Roles
-@using CleanTenant.ManagementApp.Components.Shared
-
-<PageTitle>@Loc["Roles.New.PageTitle"]</PageTitle>
 
 @*
-    v0.2.10.e.4 — Roles.New.* anahtarlarıyla lokalize edildi.
+    v0.2.13.b — Rol oluşturma artık /access > "Roller & İzinler" sekmesindeki
+    RoleDialog modalı ile yapılır. Bu eski route (/system/roles/new) /access'e
+    yönlendirir.
 *@
 
-@if (_unauthorized)
-{
-    <MudAlert Severity="Severity.Warning">
-        @Loc["Roles.List.UnauthorizedSystem"]
-    </MudAlert>
-}
-else
-{
-    <MudText Typo="Typo.h5" Class="mb-4">@Loc["Roles.New.Title"]</MudText>
-
-    <RoleForm Model="_model"
-              OnSubmit="@SubmitAsync"
-              IsSubmitting="@_busy"
-              SubmitButtonText="@Loc["Roles.New.SubmitButton"]"
-              CancelHref="/system/roles" />
-}
-
 @code {
-    private readonly RoleFormModel _model = new();
-    private bool _busy;
-    private bool _unauthorized;
-
-    protected override async Task OnInitializedAsync()
+    protected override void OnInitialized()
     {
-        var authState = await AuthProvider.GetAuthenticationStateAsync();
-        var user = authState.User;
-        _unauthorized = user?.Identity?.IsAuthenticated != true
-            || !string.Equals(user.FindFirst("scope")?.Value, "System", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private async Task SubmitAsync(RoleFormModel model)
-    {
-        _busy = true;
-
-        try
-        {
-            var command = new CreateRoleCommand(model.Name, model.Scope, model.Description);
-            var roleId = await Mediator.Send(command);
-
-            Snackbar.Add(Loc["Roles.New.Success"].Value, Severity.Success);
-            Nav.NavigateTo("/system/roles");
-        }
-        catch (Exception ex)
-        {
-            Snackbar.Add(Loc["Lookup.ErrorPrefix", ex.Message].Value, Severity.Error);
-        }
-        finally
-        {
-            _busy = false;
-        }
+        Nav.NavigateTo("/access", forceLoad: false, replace: true);
     }
 }

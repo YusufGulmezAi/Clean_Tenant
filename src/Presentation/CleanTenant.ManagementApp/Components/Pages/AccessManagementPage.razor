@@ -1,0 +1,88 @@
+@page "/access"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject AuthenticationStateProvider AuthProvider
+@inject IStringLocalizer Loc
+@using CleanTenant.ManagementApp.Components.Shared
+@using CleanTenant.SharedKernel.Context
+
+@*
+    Erişim Yönetimi — kullanıcı yönetimi ile rol/izin yönetimini tek sekmeli
+    sayfada birleştirir (v0.2.13.b).
+
+    Üst MudTabs:
+      - "Kullanıcılar"      → UserListPanel (scope-aware, her bağlamda görünür)
+      - "Roller & İzinler"  → RolesPanel (yalnız System / Tenant scope'ta görünür;
+                              Company scope'ta rol tanımlama yoktur — güvenlik kuralı)
+
+    Etkin bağlam claim'lerden okunur (company_id > tenant_id > System önceliği),
+    SystemUsersPage / NavMenu ile aynı mantık. Eski /users ve /system|tenant/roles
+    sayfaları bu sayfaya yönlendirilir.
+*@
+
+<PageTitle>@Loc["NavMenu.RolesAndUsers"]</PageTitle>
+
+@if (_unauthorized)
+{
+    <MudAlert Severity="Severity.Warning" Class="my-3">
+        @Loc["SystemUsers.Unauthorized"]
+    </MudAlert>
+}
+else if (_effectiveScope is null)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else
+{
+    <MudText Typo="Typo.h5" Class="mb-4">@Loc["NavMenu.RolesAndUsers"]</MudText>
+
+    <MudTabs Elevation="1" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-4">
+        <MudTabPanel Text="@Loc["NavMenu.Users"].Value" Icon="@Icons.Material.Filled.People">
+            <UserListPanel Scope="_effectiveScope.Value" TenantId="_tenantId" CompanyId="_companyId" />
+        </MudTabPanel>
+
+        @* Rol tanımlama yalnız System ve Tenant seviyesinde — Company'de sekme gizli. *@
+        @if (_effectiveScope != ScopeLevel.Company)
+        {
+            <MudTabPanel Text="@Loc["NavMenu.RolesAndPermissions"].Value" Icon="@Icons.Material.Filled.Security">
+                <RolesPanel EffectiveScope="_effectiveScope.Value" TenantId="_tenantId" CompanyId="_companyId" />
+            </MudTabPanel>
+        }
+    </MudTabs>
+}
+
+@code {
+    private ScopeLevel? _effectiveScope;
+    private Guid? _tenantId;
+    private Guid? _companyId;
+    private bool _unauthorized;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user?.Identity?.IsAuthenticated != true || user.FindFirst("scope")?.Value is null)
+        {
+            _unauthorized = true;
+            return;
+        }
+
+        // tenant_id / company_id her zaman okunur — System operatörü bir tenant/company
+        // bağlamına geçtiğinde scope "System" kalsa da bu claim'ler dolu olur.
+        if (user.FindFirst("tenant_id") is { Value: var tid }
+            && Guid.TryParseExact(tid, "N", out var tenantGuid))
+        {
+            _tenantId = tenantGuid;
+        }
+        if (user.FindFirst("company_id") is { Value: var cid }
+            && Guid.TryParseExact(cid, "N", out var companyGuid))
+        {
+            _companyId = companyGuid;
+        }
+
+        // Etkin bağlam: company_id > tenant_id > System önceliğiyle belirlenir.
+        _effectiveScope = _companyId.HasValue ? ScopeLevel.Company
+                        : _tenantId.HasValue ? ScopeLevel.Tenant
+                        : ScopeLevel.System;
+    }
+}

@@ -68,13 +68,13 @@
 
         var systemAdminChildren = new[]
         {
-            (Loc["NavMenu.SystemUsers"].Value, "/users", Icons.Material.Filled.ManageAccounts, "", false),
+            // v0.2.13.b — SystemUsers (/users) + Roller (/system/roles) tek "Erişim Yönetimi" (/access) altında birleşti.
+            (Loc["NavMenu.RolesAndUsers"].Value, "/access", Icons.Material.Filled.ManageAccounts, "", false),
             (Loc["NavMenu.LookUpTables"].Value, "/system/lookup-tables", Icons.Material.Filled.DataObject, "", false),
             (Loc["NavMenu.Banks"].Value, "/system/banks", Icons.Material.Filled.AccountBalance, "", false),
             (Loc["NavMenu.AuditExplorer"].Value, "/system/audit", Icons.Material.Filled.History, "", false),
             (Loc["NavMenu.Localization"].Value, "/system/localization", Icons.Material.Filled.Translate, "", false),
             (Loc["NavMenu.LogViewer"].Value, "/logs", Icons.Material.Filled.Article, "Faz 1.6", true),
-            (Loc["NavMenu.Roles"].Value, "/system/roles", Icons.Material.Filled.Shield, "", false),
             (Loc["NavMenu.PermissionCatalog"].Value, "/permissions", Icons.Material.Filled.Security, "Faz 1.5", true),
             (Loc["NavMenu.SystemSettings"].Value, "/system/settings", Icons.Material.Filled.Tune, "Faz 1.4", true),
         };
@@ -104,9 +104,7 @@
     {
         var tenantCompaniesLabel = Loc["NavMenu.Companies"].Value;
         var tenantBudgetLabel = Loc["NavMenu.Budget"].Value;
-        var tenantUsersLabel = Loc["NavMenu.Users"].Value;
-        var tenantRolesLabel = Loc["NavMenu.RolesAndPermissions"].Value;
-        var tenantRolesUsersLabel = Loc["NavMenu.RolesAndUsers"].Value;
+        var tenantAccessLabel = Loc["NavMenu.RolesAndUsers"].Value;
 
         @if (Matches(tenantCompaniesLabel))
         {
@@ -123,22 +121,14 @@
             </MudNavLink>
         }
 
-        @if (AnyMatch(_canManageUsers ? new[] { tenantUsersLabel, tenantRolesLabel } : new[] { tenantRolesLabel }))
+        @* v0.2.13.b — Kullanıcılar + Roller tek "Erişim Yönetimi" (/access) linkinde birleşti.
+           _canManageUsers gating'i korunur; izinli kullanıcı /access üzerinden hem kullanıcı
+           hem rol sekmelerine erişir. *@
+        @if (_canManageUsers && Matches(tenantAccessLabel))
         {
-            <MudNavGroup Title="@tenantRolesUsersLabel" Icon="@Icons.Material.Filled.ManageAccounts" Expanded="@IsSearching">
-                @if (_canManageUsers && Matches(tenantUsersLabel))
-                {
-                    <MudNavLink Href="/users" Icon="@Icons.Material.Filled.People">
-                        @tenantUsersLabel
-                    </MudNavLink>
-                }
-                @if (Matches(tenantRolesLabel))
-                {
-                    <MudNavLink Href="/tenant/roles" Icon="@Icons.Material.Filled.Security">
-                        @tenantRolesLabel
-                    </MudNavLink>
-                }
-            </MudNavGroup>
+            <MudNavLink Href="/access" Icon="@Icons.Material.Filled.ManageAccounts">
+                @tenantAccessLabel
+            </MudNavLink>
         }
 
         var tenantAdminChildren = new[]
@@ -172,11 +162,13 @@
     @if (_effectiveScope == "Company")
     {
         @* Kullanıcılar — Company scope kullanıcı yönetimi (permission-gated). Rol/izin
-           tanımlama Site seviyesinde YOK; yalnız Sistem ve Yönetim seviyesinde yapılır. *@
+           tanımlama Site seviyesinde YOK; yalnız Sistem ve Yönetim seviyesinde yapılır.
+           v0.2.13.b — /access'e taşındı; Company scope'ta /access yalnız "Kullanıcılar"
+           sekmesini gösterir (Roller sekmesi gizli). *@
         var companyUsersLabel = Loc["NavMenu.Users"].Value;
         @if (_canManageCompanyUsers && Matches(companyUsersLabel))
         {
-            <MudNavLink Href="/users" Icon="@Icons.Material.Filled.People">
+            <MudNavLink Href="/access" Icon="@Icons.Material.Filled.People">
                 @companyUsersLabel
             </MudNavLink>
         }

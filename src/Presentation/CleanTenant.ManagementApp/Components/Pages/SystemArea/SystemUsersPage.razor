@@ -2,85 +2,17 @@
 @page "/system/users"
 @page "/tenant/users"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
-@inject AuthenticationStateProvider AuthProvider
-@inject IStringLocalizer Loc
-@using CleanTenant.ManagementApp.Components.Shared
-@using CleanTenant.SharedKernel.Context
+@inject NavigationManager Nav
 
 @*
-    Kullanıcı yönetim sayfası — System, Tenant ve Company scope için ortak.
-    Oturum claim'lerinden scope + tenantId + companyId okunur; UserListPanel
-    doğru parametrelerle çağrılır.
-
-    v0.2.12 — System + Tenant scope.
-    v0.2.13 — /users birleşik route + Company scope desteği.
+    v0.2.13.b — Kullanıcı yönetimi birleşik "Erişim Yönetimi" (/access) sayfasına
+    taşındı. Bu eski route'lar (/users, /system/users, /tenant/users) artık /access'e
+    yönlendirir. /access ayrı bir sayfadır; sonsuz döngü oluşmaz.
 *@
 
-<PageTitle>@Loc["SystemUsers.PageTitle"]</PageTitle>
-
-@if (_unauthorized)
-{
-    <MudAlert Severity="Severity.Warning" Class="my-3">
-        @Loc["SystemUsers.Unauthorized"]
-    </MudAlert>
-}
-else if (_effectiveScope == ScopeLevel.Company && _tenantId.HasValue && _companyId.HasValue)
-{
-    <MudText Typo="Typo.h5" Class="mb-4">@Loc["CompanyUsers.PageTitle"]</MudText>
-    <UserListPanel Scope="ScopeLevel.Company" TenantId="@_tenantId" CompanyId="@_companyId" />
-}
-else if (_effectiveScope == ScopeLevel.Tenant && _tenantId.HasValue)
-{
-    <MudText Typo="Typo.h5" Class="mb-4">@Loc["TenantUsers.PageTitle"]</MudText>
-    <UserListPanel Scope="ScopeLevel.Tenant" TenantId="@_tenantId" />
-}
-else if (_effectiveScope == ScopeLevel.System)
-{
-    <MudText Typo="Typo.h5" Class="mb-4">@Loc["SystemUsers.PageTitle"]</MudText>
-    <UserListPanel Scope="ScopeLevel.System" />
-}
-
 @code {
-    // Etkin bağlam: System operatörü bir tenant/company'ye geçince scope "System"
-    // kalsa da tenant_id/company_id doluysa o alt bağlamın kullanıcı paneli açılır.
-    private ScopeLevel? _effectiveScope;
-    private Guid? _tenantId;
-    private Guid? _companyId;
-    private bool _unauthorized;
-
-    protected override async Task OnInitializedAsync()
+    protected override void OnInitialized()
     {
-        var authState = await AuthProvider.GetAuthenticationStateAsync();
-        var user = authState.User;
-
-        if (user?.Identity?.IsAuthenticated != true)
-        {
-            _unauthorized = true;
-            return;
-        }
-
-        if (user.FindFirst("scope")?.Value is null)
-        {
-            _unauthorized = true;
-            return;
-        }
-
-        // tenant_id / company_id her zaman okunur — System operatörü bir tenant/company
-        // bağlamına geçtiğinde scope "System" kalsa da bu claim'ler dolu olur.
-        if (user.FindFirst("tenant_id") is { Value: var tid }
-            && Guid.TryParseExact(tid, "N", out var tenantGuid))
-        {
-            _tenantId = tenantGuid;
-        }
-        if (user.FindFirst("company_id") is { Value: var cid }
-            && Guid.TryParseExact(cid, "N", out var companyGuid))
-        {
-            _companyId = companyGuid;
-        }
-
-        // Etkin bağlam: company_id > tenant_id > System önceliğiyle belirlenir.
-        _effectiveScope = _companyId.HasValue ? ScopeLevel.Company
-                        : _tenantId.HasValue ? ScopeLevel.Tenant
-                        : ScopeLevel.System;
+        Nav.NavigateTo("/access", forceLoad: false, replace: true);
     }
 }

@@ -1,0 +1,299 @@
+@inject IMediator Mediator
+@inject IAuthorizationCatalogReader RoleReader
+@inject ISnackbar Snackbar
+@inject IStringLocalizer Loc
+@using CleanTenant.Application.Features.Catalog.Permissions
+@using CleanTenant.Application.Features.Catalog.Readers
+@using CleanTenant.Application.Features.Catalog.Roles
+@using CleanTenant.SharedKernel.Context
+
+@*
+    Rol oluşturma / düzenleme modalı — geniş diyalog.
+
+    Tek modalda hem rol bilgileri (ad / scope / açıklama) hem de izin seçici
+    (PermissionPicker) gösterilir. Kaydet tek seferde rolü ve izinlerini yazar.
+
+    - RoleUrlCode null  → Create modu (scope seçilebilir)
+    - RoleUrlCode dolu  → Edit modu (scope salt-okunur; built-in / global /
+      başka tenant rolleri için tüm form salt-görüntüleme)
+
+    AccessManagementPage > RolesPanel tarafından açılır (v0.2.13.b — birleşik
+    Erişim Yönetimi sayfası). Eski /system/roles/new ve /tenant/roles/{code}/edit
+    sayfalarının yerini alır.
+*@
+
+<MudDialog>
+    <TitleContent>
+        <div class="d-flex align-center gap-2">
+            <MudIcon Icon="@Icons.Material.Filled.Shield" Color="Color.Primary" Size="Size.Medium" />
+            <MudText Typo="Typo.h6">
+                @(_isCreate ? Loc["Roles.New.Title"].Value
+                            : (_readOnly ? Loc["Roles.Edit.TitleReadOnly"].Value : Loc["Roles.Edit.Title"].Value))
+            </MudText>
+            @if (_isBuiltIn)
+            {
+                <MudChip T="string" Color="Color.Info" Variant="Variant.Outlined" Size="Size.Small">
+                    <MudIcon Icon="@Icons.Material.Filled.Lock" Size="Size.Small" Class="mr-1" /> @Loc["Roles.List.Col.BuiltIn"]
+                </MudChip>
+            }
+            else if (!_isCreate && _isGlobal)
+            {
+                <MudChip T="string" Color="Color.Secondary" Variant="Variant.Outlined" Size="Size.Small">@Loc["Roles.List.Tag.Global"]</MudChip>
+            }
+        </div>
+    </TitleContent>
+
+    <DialogContent>
+        <div style="min-width: 640px;">
+            @if (_loading)
+            {
+                <MudProgressLinear Indeterminate="true" />
+            }
+            else if (_notFound)
+            {
+                <MudAlert Severity="Severity.Error">@Loc["Roles.Edit.NotFound"]</MudAlert>
+            }
+            else
+            {
+                @if (_isBuiltIn)
+                {
+                    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-3">
+                        @Loc["Roles.Edit.BuiltInBanner"]
+                    </MudAlert>
+                }
+                else if (_readOnly)
+                {
+                    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-3">
+                        @Loc["Roles.Edit.ReadOnlyBanner"]
+                    </MudAlert>
+                }
+
+                @* ── Rol bilgileri ────────────────────────────────────────── *@
+                <MudGrid Spacing="2" Class="mb-2">
+                    <MudItem xs="12" sm="6">
+                        <MudTextField @bind-Value="_name"
+                                      Label="@Loc["Roles.Form.Name"]"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      MaxLength="256"
+                                      ReadOnly="@_readOnly"
+                                      Immediate="true" />
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudSelect T="int"
+                                   @bind-Value="_scope"
+                                   @bind-Value:after="OnScopeChanged"
+                                   Label="@Loc["Roles.Form.Scope"]"
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense"
+                                   ReadOnly="@(!_isCreate || _readOnly)">
+                            @* System assigner tüm scope'ları seçebilir; Tenant assigner
+                               System scope'u (1) seçemez. *@
+                            @if (EffectiveScope == ScopeLevel.System)
+                            {
+                                <MudSelectItem Value="1">@Loc["Scope.System"]</MudSelectItem>
+                            }
+                            <MudSelectItem Value="2">@Loc["Scope.Tenant"]</MudSelectItem>
+                            <MudSelectItem Value="3">@Loc["Scope.Company"]</MudSelectItem>
+                            <MudSelectItem Value="4">@Loc["Scope.Unit"]</MudSelectItem>
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="_description"
+                                      Label="@Loc["Roles.Form.Description"]"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Lines="2"
+                                      MaxLength="1024"
+                                      ReadOnly="@_readOnly"
+                                      Immediate="true" />
+                    </MudItem>
+                </MudGrid>
+
+                <MudText Typo="Typo.subtitle1" Class="mt-2 mb-1">@Loc["Roles.Edit.PermissionsTitle"]</MudText>
+                @if (_permissions is null)
+                {
+                    <MudProgressLinear Indeterminate="true" />
+                }
+                else
+                {
+                    <PermissionPicker Permissions="@_permissions"
+                                      Selection="@_selection"
+                                      RoleScope="@_roleScope"
+                                      ReadOnly="@_readOnly" />
+                }
+            }
+        </div>
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="Cancel" Disabled="@_busy">
+            @Loc["Common.Cancel"]
+        </MudButton>
+        <MudButton Color="Color.Primary"
+                   Variant="Variant.Filled"
+                   StartIcon="@(_busy ? null : Icons.Material.Filled.Save)"
+                   OnClick="SaveAsync"
+                   Disabled="@(_busy || _readOnly || _loading || _notFound)">
+            @if (_busy)
+            {
+                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                <MudText Class="ms-2">@Loc["Common.Saving"]</MudText>
+            }
+            else
+            {
+                @Loc["Common.Save"]
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    /// <summary>Düzenlenecek rolün UrlCode'u. Null ise yeni rol oluşturulur.</summary>
+    [Parameter] public string? RoleUrlCode { get; set; }
+
+    /// <summary>Açan kullanıcının etkin scope'u (System / Tenant).</summary>
+    [Parameter] public ScopeLevel EffectiveScope { get; set; }
+
+    [Parameter] public Guid? TenantId { get; set; }
+    [Parameter] public Guid? CompanyId { get; set; }
+
+    private bool _isCreate;
+    private bool _loading = true;
+    private bool _notFound;
+    private bool _busy;
+    private bool _readOnly;
+    private bool _isBuiltIn;
+    private bool _isGlobal;
+
+    private Guid _roleId;
+    private string _name = string.Empty;
+    private string? _description;
+    private int _scope = 2;             // Create varsayılanı: Yönetim (Tenant)
+    private ScopeLevel _roleScope = ScopeLevel.Tenant;
+
+    private IReadOnlyList<PermissionDto>? _permissions;
+    private HashSet<Guid> _selection = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _isCreate = string.IsNullOrEmpty(RoleUrlCode);
+
+        // Create varsayılan scope: System assigner için System (1), aksi halde Tenant (2).
+        if (_isCreate)
+        {
+            _scope = EffectiveScope == ScopeLevel.System ? 1 : 2;
+            _roleScope = (ScopeLevel)_scope;
+        }
+
+        if (!_isCreate)
+        {
+            await LoadRoleAsync();
+        }
+
+        await LoadPermissionsAsync();
+        _loading = false;
+    }
+
+    private async Task LoadRoleAsync()
+    {
+        try
+        {
+            var role = await RoleReader.GetRoleByUrlCodeAsync(RoleUrlCode!);
+            if (role is null)
+            {
+                _notFound = true;
+                return;
+            }
+
+            _roleId = role.Id;
+            _name = role.Name;
+            _description = role.Description;
+            _scope = (int)role.Scope;
+            _roleScope = role.Scope;
+            _isBuiltIn = role.IsBuiltIn;
+            _isGlobal = role.TenantId is null;
+            _selection = new HashSet<Guid>(role.PermissionIds);
+
+            // Salt-görüntüleme kuralı: System assigner her rolü düzenler. Tenant assigner
+            // yalnız kendi tenant'ının (built-in olmayan, global olmayan) rolünü düzenler.
+            _readOnly = EffectiveScope != ScopeLevel.System
+                        && (role.IsBuiltIn || role.TenantId is null || role.TenantId != TenantId);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(Loc["Roles.Edit.LoadError", ex.Message].Value, Severity.Error);
+            _notFound = true;
+        }
+    }
+
+    private async Task LoadPermissionsAsync()
+    {
+        try
+        {
+            _permissions = await Mediator.Send(new GetPermissionsQuery());
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(Loc["Roles.Edit.PermsLoadError", ex.Message].Value, Severity.Error);
+        }
+    }
+
+    // Create modunda scope değişince PermissionPicker'ın filtre scope'u güncellenir.
+    private void OnScopeChanged()
+    {
+        _roleScope = (ScopeLevel)_scope;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_readOnly) return;
+
+        if (string.IsNullOrWhiteSpace(_name))
+        {
+            Snackbar.Add(Loc["Roles.Form.Name"].Value, Severity.Warning);
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            if (_isCreate)
+            {
+                // TenantId/CompanyId her zaman geçilir; CreateRoleCommandHandler bunları
+                // yalnız System scope assigner için kullanır (System operatör bir bağlama
+                // geçmişse o tenant/site'ye bağlanır), Tenant assigner'da session'dan doldurur.
+                var newRoleId = await Mediator.Send(
+                    new CreateRoleCommand(_name.Trim(), _scope, _description, TenantId, CompanyId));
+
+                if (_selection.Count > 0)
+                {
+                    await Mediator.Send(new AssignPermissionsToRoleCommand(newRoleId, _selection.ToList()));
+                }
+
+                Snackbar.Add(Loc["Roles.New.Success"].Value, Severity.Success);
+            }
+            else
+            {
+                await Mediator.Send(new UpdateRoleCommand(_roleId, _name.Trim(), _description));
+                await Mediator.Send(new AssignPermissionsToRoleCommand(_roleId, _selection.ToList()));
+
+                Snackbar.Add(Loc["Roles.Edit.UpdateSuccess"].Value, Severity.Success);
+            }
+
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(Loc["Lookup.ErrorPrefix", ex.Message].Value, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}
