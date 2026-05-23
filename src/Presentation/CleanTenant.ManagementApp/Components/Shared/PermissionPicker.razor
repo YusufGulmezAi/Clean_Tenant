@@ -57,7 +57,7 @@ else if (_initialized)
         <div class="mb-4">
             <div class="d-flex justify-space-between align-center mb-1">
                 <MudText Typo="Typo.subtitle2" Style="font-weight:700;">
-                    @module.Key
+                    @ModuleLabel(module.Key)
                     <MudText Typo="Typo.caption" Color="Color.Default" Class="ml-1" Inline="true">(@modulePerms.Count)</MudText>
                 </MudText>
                 <MudButton Variant="Variant.Text"
@@ -94,7 +94,7 @@ else if (_initialized)
                             .ToList();
 
                         <tr>
-                            <td style="font-weight:500">@entity.Key</td>
+                            <td style="font-weight:500">@EntityLabel(entity.Key)</td>
                             @foreach (var (action, _) in CrudColumns)
                             {
                                 <td style="text-align:center">
@@ -230,6 +230,22 @@ else if (_initialized)
 
     private static string Capitalize(string s) =>
         string.IsNullOrEmpty(s) ? s : char.ToUpperInvariant(s[0]) + s[1..];
+
+    // Modül adını lokalize et; çeviri yoksa teknik isme düş.
+    private string ModuleLabel(string module)
+    {
+        var key = $"Permissions.Module.{module}";
+        var val = Loc[key].Value;
+        return string.Equals(val, key, StringComparison.Ordinal) ? module : val;
+    }
+
+    // Kaynak (entity) adını lokalize et; çeviri yoksa teknik isme düş.
+    private string EntityLabel(string entity)
+    {
+        var key = $"Permissions.Entity.{entity}";
+        var val = Loc[key].Value;
+        return string.Equals(val, key, StringComparison.Ordinal) ? entity : val;
+    }
 
     private static bool IsCrudAction(string action) =>
         action is "create" or "read" or "write" or "update" or "delete" or "manage";

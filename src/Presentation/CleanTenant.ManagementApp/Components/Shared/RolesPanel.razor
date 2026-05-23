@@ -56,7 +56,7 @@ else
                SearchPlaceholder="@Loc["Roles.List.Search"]"
                SearchableFields="@(row => new[] { row.Name, row.Description ?? "" })"
                ExportTitle="@Loc["NavMenu.RolesAndPermissions"].Value"
-               Filterable="true">
+               Filterable="false">
         <Columns>
             <PropertyColumn T="RoleListItem" TProperty="string" Property="@(r => r.Name)" Title="@Loc["Roles.List.Col.Name"].Value" />
             <PropertyColumn T="RoleListItem" TProperty="string" Property="@(r => r.Description)" Title="@Loc["Roles.List.Col.Description"].Value" />
@@ -188,8 +188,20 @@ else
 
     private async Task DeleteAsync(RoleListItem role)
     {
-        var confirmed = await JS.InvokeAsync<bool>("confirm", Loc["Roles.List.DeleteConfirm", role.Name].Value);
-        if (!confirmed) return;
+        var parameters = new DialogParameters<ConfirmDialog>
+        {
+            { x => x.Message, Loc["Roles.List.DeleteConfirm", role.Name].Value },
+            { x => x.ConfirmText, Loc["Common.Delete"].Value },
+            { x => x.ConfirmColor, Color.Error },
+            { x => x.ConfirmIcon, Icons.Material.Filled.Delete },
+            { x => x.TitleIcon, Icons.Material.Filled.Delete },
+        };
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>(
+            Loc["Common.Delete"].Value, parameters,
+            new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true });
+
+        var result = await dialog.Result;
+        if (result?.Canceled == true) return;
 
         try
         {
