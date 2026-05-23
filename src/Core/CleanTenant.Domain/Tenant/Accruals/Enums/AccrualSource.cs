@@ -25,5 +25,13 @@ public enum AccrualSource
     /// Doğrudan BB borçlandırma (CreateDirectUnitChargeCommand). Tek bir BB'ye
     /// dağıtımsız borç (örn. depo kira, site yönetiminden ürün satışı).
     /// </summary>
-    DirectCharge = 2
+    DirectCharge = 2,
+
+    /// <summary>
+    /// Gecikme faizi tahakkuğu (GenerateLateFeeChargesCommand). Vadesi geçmiş açık
+    /// anapara detayları üzerinden KMK m.20 tavanlı basit faiz. Borç 120.0X (anapara
+    /// alacak hesabı) / Alacak gecikme-geliri. İdempotency partial index (source=0)
+    /// kapsamı dışındadır; bir dönemde birden çok run serbesttir.
+    /// </summary>
+    LateFee = 3
 }
