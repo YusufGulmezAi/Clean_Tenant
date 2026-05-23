@@ -151,6 +151,9 @@ public sealed class UpdateTenantCommandHandler : IRequestHandler<UpdateTenantCom
 
         // Cache invalidate — by-id + list + global companies (TenantName denormalize)
         await _cacheInvalidator.InvalidateTenantAsync(command.TenantId, cancellationToken);
+        // Context Switcher (System kullanıcı dropdown'u) ad/statü değişimini hemen
+        // yansıtsın — tüm user-context cache'i tazele.
+        await _cacheInvalidator.InvalidateAllUserContextsAsync(cancellationToken);
 
         return Result.Success();
     }

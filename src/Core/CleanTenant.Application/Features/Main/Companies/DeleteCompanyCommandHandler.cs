@@ -42,6 +42,8 @@ public sealed class DeleteCompanyCommandHandler : IRequestHandler<DeleteCompanyC
 
         // Cache'i invalidate et
         await _cacheInvalidator.InvalidateCompanyAsync(company.Id, company.TenantId, cancellationToken);
+        // Silinen Site Context Switcher listesinden düşsün — user-context cache tazele.
+        await _cacheInvalidator.InvalidateAllUserContextsAsync(cancellationToken);
 
         return Result<Unit>.Success(Unit.Value);
     }

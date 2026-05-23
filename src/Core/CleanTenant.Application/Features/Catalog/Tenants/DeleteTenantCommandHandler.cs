@@ -80,6 +80,8 @@ public sealed class DeleteTenantCommandHandler : IRequestHandler<DeleteTenantCom
         // Cache invalidate (tüm tenant + global company listeleri)
         await _cacheInvalidator.InvalidateTenantAsync(command.TenantId, cancellationToken);
         await _cacheInvalidator.InvalidateAllTenantsAsync(cancellationToken);
+        // Silinen Yönetim Context Switcher listesinden düşsün — user-context cache tazele.
+        await _cacheInvalidator.InvalidateAllUserContextsAsync(cancellationToken);
 
         _logger.LogInformation(
             "Yönetim soft-deleted: {TenantName} (Id={TenantId}). {AssignmentCount} rol ataması pasif edildi.",

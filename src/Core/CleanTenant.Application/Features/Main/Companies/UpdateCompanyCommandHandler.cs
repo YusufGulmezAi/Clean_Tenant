@@ -47,6 +47,9 @@ public sealed class UpdateCompanyCommandHandler : IRequestHandler<UpdateCompanyC
 
         // Cache'i invalidate et
         await _cacheInvalidator.InvalidateCompanyAsync(company.Id, company.TenantId, cancellationToken);
+        // Context Switcher (System kullanıcı dropdown'u) site ad/statü değişimini hemen
+        // yansıtsın — tüm user-context cache'i tazele.
+        await _cacheInvalidator.InvalidateAllUserContextsAsync(cancellationToken);
 
         return Result<CompanyDetail>.Success(new CompanyDetail(
             company.Id,
