@@ -1,0 +1,181 @@
+@page "/company/roles"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject IAuthorizationCatalogReader RoleReader
+@inject AuthenticationStateProvider AuthProvider
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+@inject IStringLocalizer Loc
+@implements IDisposable
+@using CleanTenant.Application.Features.Catalog.Permissions
+@using CleanTenant.Application.Features.Catalog.Readers
+@using CleanTenant.Application.Features.Catalog.Roles
+@using CleanTenant.ManagementApp.Components.Shared
+@using MediatR
+
+<PageTitle>@Loc["Roles.List.NewButton"]</PageTitle>
+
+@*
+    Site (Company) scope rol yönetimi listesi. Tenant rol listesinin Company
+    karşılığı — scope sabit Company (3), Yönetim/Birim seçeneği yok. Site admin
+    yalnız global + tenant geneli + kendi sitesine ait Company rollerini yönetir
+    (RoleAccessGuard backend'de zorlar). System operatör Support Mode'da hepsini görür.
+*@
+
+@if (_unauthorized)
+{
+    <MudAlert Severity="Severity.Warning" Class="my-3">
+        @Loc["Roles.TenantList.Unauthorized"]
+    </MudAlert>
+}
+else if (!_initialized)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else
+{
+    <div class="d-flex justify-between align-center mb-3">
+        <MudText Typo="Typo.h5">@Loc["Scope.Company"] — @Loc["NavMenu.RolesAndPermissions"]</MudText>
+        <MudButton StartIcon="@Icons.Material.Filled.Add"
+                   Color="Color.Primary"
+                   Variant="Variant.Filled"
+                   Href="/company/roles/new">
+            @Loc["Roles.List.NewButton"]
+        </MudButton>
+    </div>
+
+    <DataTable TItem="RoleListItem"
+               Items="@_items"
+               SearchPlaceholder="@Loc["Roles.List.Search"]"
+               SearchableFields="@(row => new[] { row.Name, row.Description ?? "" })"
+               ExportTitle="@Loc["Roles.List.NewButton"].Value"
+               Filterable="true">
+        <Columns>
+            <PropertyColumn T="RoleListItem" TProperty="string" Property="@(r => r.Name)" Title="@Loc["Roles.List.Col.Name"].Value" />
+            <PropertyColumn T="RoleListItem" TProperty="string" Property="@(r => r.Description)" Title="@Loc["Roles.List.Col.Description"].Value" />
+            <TemplateColumn T="RoleListItem" Title="@Loc["Roles.List.Col.Source"].Value" Filterable="false" Sortable="false">
+                <CellTemplate>
+                    @if (context.Item.IsBuiltIn)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Outlined">
+                            <MudIcon Icon="@Icons.Material.Filled.Lock" Size="Size.Small" Class="mr-1" />
+                            @Loc["Roles.List.Tag.BuiltIn"]
+                        </MudChip>
+                    }
+                    else if (context.Item.TenantId is null)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Variant="Variant.Outlined">
+                            @Loc["Roles.List.Tag.Global"]
+                        </MudChip>
+                    }
+                    else if (context.Item.CompanyId == _companyId)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled">
+                            @Loc["Roles.List.Tag.OwnTenant"]
+                        </MudChip>
+                    }
+                    else
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Outlined">
+                            @Loc["Roles.List.Tag.Global"]
+                        </MudChip>
+                    }
+                </CellTemplate>
+            </TemplateColumn>
+            <PropertyColumn T="RoleListItem" TProperty="int" Property="@(r => r.PermissionCount)" Title="@Loc["Roles.List.Col.PermCount"].Value" />
+            <TemplateColumn T="RoleListItem" CellClass="d-flex justify-end" Filterable="false" Sortable="false">
+                <CellTemplate>
+                    @{
+                        var ownable = !context.Item.IsBuiltIn
+                                      && context.Item.TenantId is not null
+                                      && (context.Item.CompanyId is null || context.Item.CompanyId == _companyId);
+                    }
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                   Size="Size.Small"
+                                   Color="@(ownable ? Color.Default : Color.Inherit)"
+                                   title="@(ownable ? Loc["Common.Edit"].Value : Loc["Roles.TenantList.Action.ViewReadOnly"].Value)"
+                                   OnClick="@(() => GoToEdit(context.Item.UrlCode))" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                   Size="Size.Small"
+                                   Color="Color.Error"
+                                   title="@Loc["Common.Delete"]"
+                                   OnClick="@(() => DeleteAsync(context.Item))"
+                                   Disabled="@(!ownable)" />
+                </CellTemplate>
+            </TemplateColumn>
+        </Columns>
+    </DataTable>
+}
+
+@code {
+    private bool _unauthorized;
+    private bool _initialized;
+    private const int CompanyScope = 3;
+    private Guid _tenantId;
+    private Guid _companyId;
+    private IReadOnlyList<RoleListItem>? _items;
+    private IMediator? _mediator;
+
+    [CascadingParameter]
+    private HttpContext? HttpContext { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        var tenantClaim = user.FindFirst("tenant_id")?.Value;
+        var companyClaim = user.FindFirst("company_id")?.Value;
+        if (user?.Identity?.IsAuthenticated != true
+            || string.IsNullOrEmpty(tenantClaim)
+            || !Guid.TryParseExact(tenantClaim, "N", out _tenantId)
+            || string.IsNullOrEmpty(companyClaim)
+            || !Guid.TryParseExact(companyClaim, "N", out _companyId))
+        {
+            _unauthorized = true;
+            _initialized = true;
+            return;
+        }
+
+        _mediator = HttpContext?.RequestServices.GetService<IMediator>();
+
+        await LoadRolesAsync();
+        _initialized = true;
+    }
+
+    private async Task LoadRolesAsync()
+    {
+        try
+        {
+            // Global + bu tenant'a ait Company-scope roller. Site filtrelemesi
+            // (yalnız kendi sitesi) RoleAccessGuard ile yönetim katmanında zorlanır.
+            _items = await RoleReader.GetRolesByScopeForTenantAsync(CompanyScope, _tenantId);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(Loc["Roles.List.LoadError", ex.Message].Value, Severity.Error);
+        }
+    }
+
+    private void GoToEdit(string urlCode) => Nav.NavigateTo($"/company/roles/{urlCode}/edit");
+
+    private async Task DeleteAsync(RoleListItem role)
+    {
+        var confirmed = await JS.InvokeAsync<bool>("confirm", Loc["Roles.List.DeleteConfirm", role.Name].Value);
+        if (!confirmed) return;
+
+        try
+        {
+            if (_mediator is null) return;
+            await _mediator.Send(new DeleteRoleCommand(role.Id));
+            Snackbar.Add(Loc["Roles.List.DeleteSuccess"].Value, Severity.Success);
+            await LoadRolesAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(Loc["Lookup.ErrorPrefix", ex.Message].Value, Severity.Error);
+        }
+    }
+
+    public void Dispose() { }
+}

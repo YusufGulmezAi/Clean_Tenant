@@ -171,15 +171,25 @@
     @* ─── SİTE (COMPANY) BAĞLAMI ─────────────────────────────────── *@
     @if (_effectiveScope == "Company")
     {
-        @* Kullanıcılar — Company scope kullanıcı yönetimi (permission-gated). /users
-           etkin bağlamı company_id'den çözer; tek route, scope-aware panel. *@
+        @* Kullanıcılar + Roller — Company scope erişim yönetimi. /users etkin bağlamı
+           company_id'den çözer; /company/roles site-scope rol/izin yönetimidir. *@
         var companyUsersLabel = Loc["NavMenu.Users"].Value;
-        @if (_canManageCompanyUsers && Matches(companyUsersLabel))
+        var companyRolesLabel = Loc["NavMenu.RolesAndPermissions"].Value;
+        @if ((_canManageCompanyUsers && Matches(companyUsersLabel)) || Matches(companyRolesLabel))
         {
             <MudNavGroup Title="@Loc["NavMenu.RolesAndUsers"]" Icon="@Icons.Material.Filled.ManageAccounts" Expanded="@IsSearching">
-                <MudNavLink Href="/users" Icon="@Icons.Material.Filled.People">
-                    @companyUsersLabel
-                </MudNavLink>
+                @if (_canManageCompanyUsers && Matches(companyUsersLabel))
+                {
+                    <MudNavLink Href="/users" Icon="@Icons.Material.Filled.People">
+                        @companyUsersLabel
+                    </MudNavLink>
+                }
+                @if (Matches(companyRolesLabel))
+                {
+                    <MudNavLink Href="/company/roles" Icon="@Icons.Material.Filled.Security">
+                        @companyRolesLabel
+                    </MudNavLink>
+                }
             </MudNavGroup>
         }
 

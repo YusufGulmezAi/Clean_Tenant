@@ -1,0 +1,91 @@
+@page "/company/roles/new"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject MediatR.IMediator Mediator
+@inject AuthenticationStateProvider AuthProvider
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+@inject IStringLocalizer Loc
+@using CleanTenant.Application.Features.Catalog.Roles
+@using CleanTenant.ManagementApp.Components.Shared
+
+<PageTitle>@Loc["Roles.New.Title"]</PageTitle>
+
+@*
+    Site (Company) scope rol oluşturma. Scope sabit Company (3). TenantId/CompanyId
+    System operatör (Support Mode, scope=System) için claim'lerden geçirilir;
+    Company admin için handler session'dan doldurur (request göz ardı edilir).
+*@
+
+@if (_unauthorized)
+{
+    <MudAlert Severity="Severity.Warning">
+        @Loc["Roles.TenantList.Unauthorized"]
+    </MudAlert>
+}
+else
+{
+    <MudText Typo="Typo.h5" Class="mb-4">@Loc["Scope.Company"] — @Loc["Roles.New.Title"]</MudText>
+    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-3">
+        @Loc["Roles.TenantNew.Info"]
+    </MudAlert>
+
+    <RoleForm Model="_model"
+              OnSubmit="@SubmitAsync"
+              IsSubmitting="@_busy"
+              SubmitButtonText="@Loc["Roles.New.SubmitButton"]"
+              CancelHref="/company/roles"
+              ScopeReadOnly="true"
+              HideSystemScope="true" />
+}
+
+@code {
+    // Site context'inde scope sabit Company (3).
+    private readonly RoleFormModel _model = new() { Scope = 3 };
+    private bool _busy;
+    private bool _unauthorized;
+    private Guid? _tenantId;
+    private Guid? _companyId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        var tenantClaim = user.FindFirst("tenant_id")?.Value;
+        var companyClaim = user.FindFirst("company_id")?.Value;
+
+        if (user?.Identity?.IsAuthenticated != true
+            || string.IsNullOrEmpty(tenantClaim)
+            || string.IsNullOrEmpty(companyClaim))
+        {
+            _unauthorized = true;
+            return;
+        }
+
+        if (Guid.TryParseExact(tenantClaim, "N", out var t)) _tenantId = t;
+        if (Guid.TryParseExact(companyClaim, "N", out var c)) _companyId = c;
+    }
+
+    private async Task SubmitAsync(RoleFormModel model)
+    {
+        _busy = true;
+
+        try
+        {
+            // TenantId/CompanyId yalnız System scope assigner'da kullanılır
+            // (CreateRoleCommandHandler); Company admin'de session'dan dolar.
+            var command = new CreateRoleCommand(model.Name, model.Scope, model.Description, _tenantId, _companyId);
+            await Mediator.Send(command);
+
+            Snackbar.Add(Loc["Roles.New.Success"].Value, Severity.Success);
+            Nav.NavigateTo("/company/roles");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(Loc["Lookup.ErrorPrefix", ex.Message].Value, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}
