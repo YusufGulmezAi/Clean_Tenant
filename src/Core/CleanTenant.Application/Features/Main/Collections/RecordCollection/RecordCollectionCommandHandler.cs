@@ -2,6 +2,7 @@ using CleanTenant.Application.Common.Auth;
 using CleanTenant.Application.Common.Persistence;
 using CleanTenant.Domain.Tenant.Accounting;
 using CleanTenant.Domain.Tenant.Accounting.Enums;
+using CleanTenant.Domain.Tenant.Accruals.Enums;
 using CleanTenant.Domain.Tenant.Collections;
 using CleanTenant.SharedKernel.Time;
 using MediatR;
@@ -61,7 +62,7 @@ public sealed class RecordCollectionCommandHandler
             join a in _db.Accruals on d.AccrualId equals a.Id
             where d.UnitId == request.UnitId && a.CompanyId == request.CompanyId
                 && !d.IsDeleted && !a.IsDeleted
-            select new { d.Id, d.Amount, d.DueDate, a.ReceivableAccountCodeId }
+            select new { d.Id, d.Amount, d.DueDate, a.ReceivableAccountCodeId, a.Source }
         ).ToListAsync(cancellationToken);
 
         var detailIds = details.Select(x => x.Id).ToList();
@@ -78,10 +79,14 @@ public sealed class RecordCollectionCommandHandler
                 d.Id,
                 d.ReceivableAccountCodeId,
                 d.DueDate,
+                d.Source,
                 Remaining = d.Amount - allocatedMap.GetValueOrDefault(d.Id, 0m),
             })
             .Where(d => d.Remaining > 0m)
-            .OrderBy(d => d.DueDate).ThenBy(d => d.Id)
+            // TBK m.101: en eski vade içinde önce gecikme faizi, sonra anapara
+            .OrderBy(d => d.DueDate)
+            .ThenByDescending(d => d.Source == AccrualSource.LateFee)
+            .ThenBy(d => d.Id)
             .ToList();
 
         var totalOpen = open.Sum(d => d.Remaining);
