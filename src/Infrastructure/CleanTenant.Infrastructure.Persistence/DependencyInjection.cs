@@ -233,6 +233,10 @@ public static class DependencyInjection
             sp.GetRequiredService<IDbContextFactory<MainDbContext>>().CreateDbContext());
         services.AddScoped<IMainDbContext>(sp => sp.GetRequiredService<MainDbContext>());
 
+        // ---- Tahakkuk: hesap kodu üretici (Catalog + Main DB kullanır) ----
+        services.AddScoped<Application.Features.Main.Accruals.IAccountCodeAllocator,
+            Main.Accruals.AccountCodeAllocator>();
+
         return services;
     }
 }
