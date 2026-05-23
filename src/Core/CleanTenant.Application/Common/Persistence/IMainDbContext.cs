@@ -1,4 +1,5 @@
 using CleanTenant.Domain.Tenant.Accounting;
+using CleanTenant.Domain.Tenant.Accruals;
 using CleanTenant.Domain.Tenant.Budgeting;
 using CleanTenant.Domain.Tenant.BuildingSchema;
 using CleanTenant.Domain.Tenant.Companies;
@@ -103,6 +104,13 @@ public interface IMainDbContext
 
     /// <summary>Muafiyet kuralları.</summary>
     DbSet<ExemptionRule> ExemptionRules { get; }
+
+    // ── Tahakkuk Modülü (FAZ 6+) ─────────────────────────────────────────────
+    /// <summary>Tahakkuk başlıkları (Bütçe/Fatura/Doğrudan).</summary>
+    DbSet<Accrual> Accruals { get; }
+
+    /// <summary>Tahakkuk detayları (BB-bazlı yardımcı defter).</summary>
+    DbSet<AccrualDetail> AccrualDetails { get; }
 
     /// <summary>Bekleyen değişiklikleri persist eder.</summary>
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);

@@ -1,5 +1,6 @@
 using CleanTenant.Application.Common.Persistence;
 using CleanTenant.Domain.Tenant.Accounting;
+using CleanTenant.Domain.Tenant.Accruals;
 using CleanTenant.Domain.Tenant.Budgeting;
 using CleanTenant.Domain.Tenant.BuildingSchema;
 using CleanTenant.Domain.Tenant.Companies;
@@ -112,6 +113,13 @@ public sealed class MainDbContext : DbContext, IMainDbContext
 
     /// <summary>Muafiyet kuralları.</summary>
     public DbSet<ExemptionRule> ExemptionRules => Set<ExemptionRule>();
+
+    // ── Tahakkuk Modülü (FAZ 6+) ─────────────────────────────────────────────
+    /// <summary>Tahakkuk başlıkları.</summary>
+    public DbSet<Accrual> Accruals => Set<Accrual>();
+
+    /// <summary>Tahakkuk detayları (BB-bazlı).</summary>
+    public DbSet<AccrualDetail> AccrualDetails => Set<AccrualDetail>();
 
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder modelBuilder)
