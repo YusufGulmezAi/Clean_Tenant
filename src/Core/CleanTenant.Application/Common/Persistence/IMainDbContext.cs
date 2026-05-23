@@ -2,6 +2,7 @@ using CleanTenant.Domain.Tenant.Accounting;
 using CleanTenant.Domain.Tenant.Accruals;
 using CleanTenant.Domain.Tenant.Budgeting;
 using CleanTenant.Domain.Tenant.BuildingSchema;
+using CleanTenant.Domain.Tenant.Collections;
 using CleanTenant.Domain.Tenant.Companies;
 using Microsoft.EntityFrameworkCore;
 
@@ -111,6 +112,13 @@ public interface IMainDbContext
 
     /// <summary>Tahakkuk detayları (BB-bazlı yardımcı defter).</summary>
     DbSet<AccrualDetail> AccrualDetails { get; }
+
+    // ── Tahsilat Modülü (FAZ 7+) ─────────────────────────────────────────────
+    /// <summary>Tahsilat başlıkları (BB ödemeleri).</summary>
+    DbSet<Collection> Collections { get; }
+
+    /// <summary>Tahsilat dağıtım satırları (AccrualDetail'lere).</summary>
+    DbSet<CollectionAllocation> CollectionAllocations { get; }
 
     /// <summary>Bekleyen değişiklikleri persist eder.</summary>
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);

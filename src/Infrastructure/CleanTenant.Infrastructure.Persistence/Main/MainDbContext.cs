@@ -3,6 +3,7 @@ using CleanTenant.Domain.Tenant.Accounting;
 using CleanTenant.Domain.Tenant.Accruals;
 using CleanTenant.Domain.Tenant.Budgeting;
 using CleanTenant.Domain.Tenant.BuildingSchema;
+using CleanTenant.Domain.Tenant.Collections;
 using CleanTenant.Domain.Tenant.Companies;
 using CleanTenant.SharedKernel.Context;
 using CleanTenant.SharedKernel.Entities;
@@ -120,6 +121,13 @@ public sealed class MainDbContext : DbContext, IMainDbContext
 
     /// <summary>Tahakkuk detayları (BB-bazlı).</summary>
     public DbSet<AccrualDetail> AccrualDetails => Set<AccrualDetail>();
+
+    // ── Tahsilat Modülü (FAZ 7+) ─────────────────────────────────────────────
+    /// <summary>Tahsilat başlıkları.</summary>
+    public DbSet<Collection> Collections => Set<Collection>();
+
+    /// <summary>Tahsilat dağıtım satırları.</summary>
+    public DbSet<CollectionAllocation> CollectionAllocations => Set<CollectionAllocation>();
 
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder modelBuilder)
