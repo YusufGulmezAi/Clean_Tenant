@@ -45,6 +45,8 @@ public static class PermissionCatalog
         new("Role.Delete",          "Rol silme",                         "Identity", ScopeLevel.Tenant),
         new("Role.AssignPermissions", "Role permission atama/kaldırma",  "Identity", ScopeLevel.Tenant),
         new("Permission.Read",      "Permission kataloğunu görüntüleme", "Identity", ScopeLevel.Tenant),
+        new("Tenant.Users.Manage",  "Yönetim (tenant) kullanıcılarını yönetme", "Identity", ScopeLevel.Tenant),
+        new("Company.Users.Manage", "Site (company) kullanıcılarını yönetme",   "Identity", ScopeLevel.Company),
 
         // ---------- Tenant (yalnız System) ----------
         new("Tenant.Read",          "Tenant kayıtlarını görüntüleme",    "Tenant", ScopeLevel.System),

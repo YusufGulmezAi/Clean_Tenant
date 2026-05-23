@@ -1,5 +1,6 @@
 @using CleanTenant.Application.Features.System.Users
 @using CleanTenant.Application.Features.Tenant.Users
+@using CleanTenant.Application.Features.CompanyUsers
 @using CleanTenant.SharedKernel.Context
 @using MediatR
 @using MudBlazor
@@ -193,6 +194,7 @@ else if (_state == WizardState.NewUser)
 @code {
     [Parameter] public ScopeLevel Scope { get; set; } = ScopeLevel.Tenant;
     [Parameter] public Guid? TenantId { get; set; }
+    [Parameter] public Guid? CompanyId { get; set; }
     [Parameter] public IReadOnlyList<RoleOption> AvailableRoles { get; set; } = [];
     [Parameter] public EventCallback<UserListItem> OnSuccess { get; set; }
     [Parameter] public EventCallback OnCancel { get; set; }
@@ -439,26 +441,36 @@ else if (_state == WizardState.NewUser)
     private async Task HandleAssignAsync()
     {
         if (_foundUser is null || !_selectedRoleIds.Any()) return;
-        if (Scope != ScopeLevel.Tenant || !TenantId.HasValue) return;
+        if (!TenantId.HasValue) return;
+        if (Scope != ScopeLevel.Tenant && Scope != ScopeLevel.Company) return;
 
         _isSubmitting = true;
         _errorMessage = string.Empty;
 
         try
         {
-            var cmd = new AssignUserToTenantCommand(
-                TenantId.Value,
-                _foundUser.Email,
-                [.. _selectedRoleIds]);
-
-            var result = await Mediator.Send(cmd);
-            if (result.IsSuccess)
+            if (Scope == ScopeLevel.Company && CompanyId.HasValue)
             {
-                await OnSuccess.InvokeAsync(result.Value);
+                var result = await Mediator.Send(new AssignUserToCompanyCommand(
+                    TenantId.Value,
+                    CompanyId.Value,
+                    _foundUser.Email,
+                    [.. _selectedRoleIds]));
+                if (result.IsSuccess)
+                    await OnSuccess.InvokeAsync(result.Value);
+                else
+                    _errorMessage = result.FirstError.Message;
             }
             else
             {
-                _errorMessage = result.FirstError.Message;
+                var result = await Mediator.Send(new AssignUserToTenantCommand(
+                    TenantId.Value,
+                    _foundUser.Email,
+                    [.. _selectedRoleIds]));
+                if (result.IsSuccess)
+                    await OnSuccess.InvokeAsync(result.Value);
+                else
+                    _errorMessage = result.FirstError.Message;
             }
         }
         finally
@@ -480,6 +492,24 @@ else if (_state == WizardState.NewUser)
             {
                 var cmd = new CreateTenantUserCommand(
                     TenantId.Value,
+                    _firstName,
+                    _lastName,
+                    _email,
+                    string.IsNullOrWhiteSpace(_phone) ? null : _phone,
+                    _password,
+                    [.. _selectedRoleIds]);
+
+                var result = await Mediator.Send(cmd);
+                if (result.IsSuccess)
+                    await OnSuccess.InvokeAsync(result.Value);
+                else
+                    _errorMessage = result.FirstError.Message;
+            }
+            else if (Scope == ScopeLevel.Company && TenantId.HasValue && CompanyId.HasValue)
+            {
+                var cmd = new CreateCompanyUserCommand(
+                    TenantId.Value,
+                    CompanyId.Value,
                     _firstName,
                     _lastName,
                     _email,

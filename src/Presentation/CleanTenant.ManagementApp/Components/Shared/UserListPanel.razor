@@ -1,5 +1,6 @@
 @using CleanTenant.Application.Features.System.Users
 @using CleanTenant.Application.Features.Tenant.Users
+@using CleanTenant.Application.Features.CompanyUsers
 @using CleanTenant.Application.Common.Export
 @using CleanTenant.SharedKernel.Common.Results
 @using CleanTenant.SharedKernel.Context
@@ -90,6 +91,7 @@
         <div class="pa-4 overflow-auto" style="height: calc(100% - 64px);">
             <UserOnboardingWizard Scope="@Scope"
                                   TenantId="@TenantId"
+                                  CompanyId="@CompanyId"
                                   AvailableRoles="@_availableRoles"
                                   OnSuccess="@HandleOnboardingSuccessAsync"
                                   OnCancel="@CloseDrawer" />
@@ -413,6 +415,19 @@ else
                         _formModel.SelectedRoleIds);
                     result = await Mediator.Send(cmd);
                 }
+                else if (Scope == ScopeLevel.Company && TenantId.HasValue && CompanyId.HasValue)
+                {
+                    var cmd = new CreateCompanyUserCommand(
+                        TenantId.Value,
+                        CompanyId.Value,
+                        _formModel.FirstName,
+                        _formModel.LastName,
+                        _formModel.Email,
+                        _formModel.PhoneNumber,
+                        _formModel.Password ?? string.Empty,
+                        _formModel.SelectedRoleIds);
+                    result = await Mediator.Send(cmd);
+                }
                 else
                 {
                     var cmd = new CreateSystemUserCommand(
@@ -517,12 +532,23 @@ else
         _isSubmitting = true;
         try
         {
-            var cmd = new AssignUserToTenantCommand(
-                TenantId.Value,
-                _assignEmail.Trim(),
-                _assignRoleIds.ToList());
+            Result<UserListItem> result;
+            if (Scope == ScopeLevel.Company && TenantId.HasValue && CompanyId.HasValue)
+            {
+                result = await Mediator.Send(new AssignUserToCompanyCommand(
+                    TenantId.Value,
+                    CompanyId.Value,
+                    _assignEmail.Trim(),
+                    _assignRoleIds.ToList()));
+            }
+            else
+            {
+                result = await Mediator.Send(new AssignUserToTenantCommand(
+                    TenantId.Value,
+                    _assignEmail.Trim(),
+                    _assignRoleIds.ToList()));
+            }
 
-            var result = await Mediator.Send(cmd);
             if (result.IsSuccess)
             {
                 Snackbar.Add(Loc["SystemUsers.AssignSuccess"].Value, Severity.Success);
@@ -593,6 +619,14 @@ else
                 : result.FirstError.Message,
                 result.IsSuccess ? Severity.Success : Severity.Error);
         }
+        else if (Scope == ScopeLevel.Company && TenantId.HasValue && CompanyId.HasValue)
+        {
+            var result = await Mediator.Send(new ReactivateCompanyUserCommand(user.UrlCode, TenantId.Value, CompanyId.Value));
+            Snackbar.Add(result.IsSuccess
+                ? Loc["SystemUsers.ReactivateSuccess"].Value
+                : result.FirstError.Message,
+                result.IsSuccess ? Severity.Success : Severity.Error);
+        }
         else
         {
             var result = await Mediator.Send(new ReactivateUserCommand(user.UrlCode));
@@ -626,6 +660,14 @@ else
             var result = await Mediator.Send(new DeactivateTenantUserCommand(user.UrlCode, TenantId.Value));
             Snackbar.Add(result.IsSuccess
                 ? Loc["TenantUsers.DeactivateSuccess"].Value
+                : result.FirstError.Message,
+                result.IsSuccess ? Severity.Success : Severity.Error);
+        }
+        else if (Scope == ScopeLevel.Company && TenantId.HasValue && CompanyId.HasValue)
+        {
+            var result = await Mediator.Send(new DeactivateCompanyUserCommand(user.UrlCode, TenantId.Value, CompanyId.Value));
+            Snackbar.Add(result.IsSuccess
+                ? Loc["SystemUsers.DeactivateSuccess"].Value
                 : result.FirstError.Message,
                 result.IsSuccess ? Severity.Success : Severity.Error);
         }
