@@ -197,6 +197,14 @@
             </MudNavGroup>
         }
 
+        @* ── Yapı Şeması ────────────────────────────────────────────── *@
+        @if (Matches("Yapı Şeması"))
+        {
+            <MudNavLink Href="/company/building-schema" Icon="@Icons.Material.Filled.AccountTree">
+                Yapı Şeması
+            </MudNavLink>
+        }
+
         @* ── Muhasebe Grubu ─────────────────────────────────────────── *@
         var accountingChildren = new[]
         {
