@@ -4,6 +4,7 @@ using CleanTenant.Domain.Tenant.Budgeting;
 using CleanTenant.Domain.Tenant.BuildingSchema;
 using CleanTenant.Domain.Tenant.Collections;
 using CleanTenant.Domain.Tenant.Companies;
+using CleanTenant.Domain.Tenant.LateFees;
 using Microsoft.EntityFrameworkCore;
 
 namespace CleanTenant.Application.Common.Persistence;
@@ -119,6 +120,10 @@ public interface IMainDbContext
 
     /// <summary>Tahsilat dağıtım satırları (AccrualDetail'lere).</summary>
     DbSet<CollectionAllocation> CollectionAllocations { get; }
+
+    // ── Gecikme Faizi Modülü (FAZ 7B+) ───────────────────────────────────────
+    /// <summary>Gecikme faizi politikaları (şirket varsayılanı + bütçe override).</summary>
+    DbSet<LateFeePolicy> LateFeePolicies { get; }
 
     /// <summary>Bekleyen değişiklikleri persist eder.</summary>
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);

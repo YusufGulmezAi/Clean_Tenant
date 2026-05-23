@@ -5,6 +5,7 @@ using CleanTenant.Domain.Tenant.Budgeting;
 using CleanTenant.Domain.Tenant.BuildingSchema;
 using CleanTenant.Domain.Tenant.Collections;
 using CleanTenant.Domain.Tenant.Companies;
+using CleanTenant.Domain.Tenant.LateFees;
 using CleanTenant.SharedKernel.Context;
 using CleanTenant.SharedKernel.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -128,6 +129,10 @@ public sealed class MainDbContext : DbContext, IMainDbContext
 
     /// <summary>Tahsilat dağıtım satırları.</summary>
     public DbSet<CollectionAllocation> CollectionAllocations => Set<CollectionAllocation>();
+
+    // ── Gecikme Faizi Modülü (FAZ 7B+) ───────────────────────────────────────
+    /// <summary>Gecikme faizi politikaları (şirket varsayılanı + bütçe override).</summary>
+    public DbSet<LateFeePolicy> LateFeePolicies => Set<LateFeePolicy>();
 
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder modelBuilder)
