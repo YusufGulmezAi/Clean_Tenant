@@ -122,3 +122,8 @@ hangfire-data/
 
 # Claude Code proje-içi ayarlar (per-developer)
 .claude/
+
+# Çalışma zamanı artefaktları (uygulama çıktı log'ları + yerel seed/storage verisi)
+mgmt*.log
+*.run.log
+/data/
