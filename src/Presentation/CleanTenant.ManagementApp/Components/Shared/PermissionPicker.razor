@@ -11,14 +11,19 @@
 @*
     İzin seçici — klasik CRUD checkbox matrisi (v0.2.13.c).
 
-    Her modül bir bölüm; bölüm içinde satır = kaynak (entity), sütunlar
-    Oluştur / Görüntüle / Güncelle / Sil checkbox'larıdır. CRUD dışı izinler
-    (onayla, iptal, kesinleştir vb.) ilgili kaynağın "Diğer" sütununda
-    checkbox olarak listelenir.
+    Gruplama: izin kodu "<...>.<entity>.<action>" biçiminde ayrıştırılır —
+    action = SON segment, entity = SONDAN İKİNCİ segment, modül = ayrı Module
+    alanı (gruplama). Örn. "company.accounting.account-plan.read" →
+    Modül "Accounting" > Kaynak "Account-plan" > sütun "Okuma".
 
-    Güvenlik: VisiblePermissions yalnız (a) rol scope'una uygun (MinimumRoleScope)
-    ve (b) atayan kullanıcının sahip olduğu izinleri gösterir — privilege
+    Sütunlar: Oluşturma / Okuma / Yazma / Güncelleme / Silme / Yönetim. Bu altı
+    standart eylem dışındaki izinler (onayla, yevmiyeleştir, iptal, görüntüle...)
+    "Diğerleri" sütununda Türkçe açıklamasıyla (Description) listelenir.
+
+    Güvenlik: VisiblePermissions yalnız (a) rol scope tavanına uygun
+    (MinimumRoleScope) ve (b) atayanın sahip olduğu izinleri gösterir — privilege
     escalation'ı UI'da da engeller (backend RoleAccessGuard zaten zorlar).
+    "Kapsama verilen izinlerden yeni izinler oluşturulur" kuralı bu filtreyle korunur.
 *@
 
 @if (_initialized && VisiblePermissions.Count == 0)
@@ -67,10 +72,10 @@ else if (_initialized)
             <MudSimpleTable Dense="true" Hover="true" Bordered="true" Elevation="0" Striped="true">
                 <thead>
                     <tr>
-                        <th style="width:28%">@Loc["Roles.List.Col.Source"]</th>
+                        <th style="width:16%">@Loc["Permissions.Picker.Col.Resource"]</th>
                         @foreach (var (action, labelKey) in CrudColumns)
                         {
-                            <th style="text-align:center;width:13%">@Loc[labelKey]</th>
+                            <th style="text-align:center;width:9%">@Loc[labelKey]</th>
                         }
                         <th>@Loc["Permissions.Picker.Legend.Other"]</th>
                     </tr>
@@ -95,7 +100,7 @@ else if (_initialized)
                                 <td style="text-align:center">
                                     @if (crudByAction.TryGetValue(action, out var perm))
                                     {
-                                        <MudTooltip Text="@($"{perm.Code} — {perm.Description}")" Placement="Placement.Top">
+                                        <MudTooltip Text="@($"{perm.Description} ({perm.Code})")" Placement="Placement.Top">
                                             <MudCheckBox T="bool"
                                                          Value="@Selection.Contains(perm.Id)"
                                                          ValueChanged="@(_ => TogglePermission(perm))"
@@ -120,7 +125,7 @@ else if (_initialized)
                                     <div class="d-flex flex-column">
                                         @foreach (var perm in otherPerms)
                                         {
-                                            <MudTooltip Text="@($"{perm.Code} — {perm.Description}")" Placement="Placement.Top">
+                                            <MudTooltip Text="@perm.Code" Placement="Placement.Top">
                                                 <MudCheckBox T="bool"
                                                              Value="@Selection.Contains(perm.Id)"
                                                              ValueChanged="@(_ => TogglePermission(perm))"
@@ -128,7 +133,7 @@ else if (_initialized)
                                                              Dense="true"
                                                              Size="Size.Small"
                                                              Color="Color.Secondary"
-                                                             Label="@FormatOtherActionLabel(perm.Code)" />
+                                                             Label="@perm.Description" />
                                             </MudTooltip>
                                         }
                                     </div>
@@ -162,13 +167,15 @@ else if (_initialized)
     private HashSet<string> _assignerCodes = new(StringComparer.Ordinal);
     private bool _assignerIsSystem;
 
-    // CRUD sütunları: action kodu + lokalize başlık anahtarı.
+    // Standart eylem sütunları: action kodu + lokalize başlık anahtarı.
     private static readonly (string Action, string LabelKey)[] CrudColumns =
     [
         ("create", "Permissions.Picker.Legend.Create"),
         ("read",   "Permissions.Picker.Legend.Read"),
+        ("write",  "Permissions.Picker.Legend.Write"),
         ("update", "Permissions.Picker.Legend.Update"),
         ("delete", "Permissions.Picker.Legend.Delete"),
+        ("manage", "Permissions.Picker.Legend.Manage"),
     ];
 
     private IReadOnlyList<PermissionDto> VisiblePermissions =>
@@ -209,23 +216,23 @@ else if (_initialized)
         return true;
     }
 
+    // Kod ayrıştırma: action = SON segment, entity = SONDAN İKİNCİ segment.
+    // Örn. "company.accounting.account-plan.read" → (Account-plan, read).
+    //      "User.Create" → (User, create).
     private static (string Entity, string Action) ParseCode(string code)
     {
         var parts = code.Split('.', StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length < 2) return (code, "");
-        var entity = char.ToUpperInvariant(parts[0][0]) + parts[0][1..];
-        return (entity, parts[1].ToLowerInvariant());
+        if (parts.Length < 2) return (Capitalize(code), string.Empty);
+        var action = parts[^1].ToLowerInvariant();
+        var entity = Capitalize(parts[^2]);
+        return (entity, action);
     }
+
+    private static string Capitalize(string s) =>
+        string.IsNullOrEmpty(s) ? s : char.ToUpperInvariant(s[0]) + s[1..];
 
     private static bool IsCrudAction(string action) =>
-        action is "create" or "read" or "update" or "delete";
-
-    private static string FormatOtherActionLabel(string code)
-    {
-        var parts = code.Split('.', StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length < 2) return code;
-        return string.Join(".", parts.Skip(1).Select(s => char.ToUpperInvariant(s[0]) + s[1..]));
-    }
+        action is "create" or "read" or "write" or "update" or "delete" or "manage";
 
     private async Task TogglePermission(PermissionDto p)
     {
