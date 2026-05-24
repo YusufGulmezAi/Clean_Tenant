@@ -1,5 +1,6 @@
 using CleanTenant.Application.Common.Authorization;
 using CleanTenant.Application.Common.Persistence;
+using CleanTenant.Application.Features.Main.Parties.Responsibility;
 using FluentValidation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -35,9 +36,14 @@ public sealed class UpdateUnitTenancyCommandValidator : AbstractValidator<Update
 public sealed class UpdateUnitTenancyCommandHandler : IRequestHandler<UpdateUnitTenancyCommand, Result>
 {
     private readonly IMainDbContext _db;
+    private readonly ISender _sender;
 
     /// <summary>DI bağımlılıklarını alır.</summary>
-    public UpdateUnitTenancyCommandHandler(IMainDbContext db) => _db = db;
+    public UpdateUnitTenancyCommandHandler(IMainDbContext db, ISender sender)
+    {
+        _db = db;
+        _sender = sender;
+    }
 
     /// <inheritdoc />
     public async Task<Result> Handle(UpdateUnitTenancyCommand request, CancellationToken cancellationToken)
@@ -55,7 +61,10 @@ public sealed class UpdateUnitTenancyCommandHandler : IRequestHandler<UpdateUnit
         entity.Notes = string.IsNullOrWhiteSpace(request.Notes) ? null : request.Notes.Trim();
 
         await _db.SaveChangesAsync(cancellationToken);
-        // NOT: S3'te ReattributeAccrualResponsibilityCommand + GUARD tetiklenecek (çıkış tarihi değişimi).
+
+        await _sender.Send(new ReattributeAccrualResponsibilityCommand(
+            request.TenantId, request.CompanyId, entity.UnitId), cancellationToken);
+
         return Result.Success();
     }
 }

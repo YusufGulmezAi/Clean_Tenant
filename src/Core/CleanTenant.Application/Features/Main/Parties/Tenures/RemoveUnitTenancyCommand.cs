@@ -1,5 +1,6 @@
 using CleanTenant.Application.Common.Authorization;
 using CleanTenant.Application.Common.Persistence;
+using CleanTenant.Application.Features.Main.Parties.Responsibility;
 using FluentValidation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -30,9 +31,14 @@ public sealed class RemoveUnitTenancyCommandValidator : AbstractValidator<Remove
 public sealed class RemoveUnitTenancyCommandHandler : IRequestHandler<RemoveUnitTenancyCommand, Result>
 {
     private readonly IMainDbContext _db;
+    private readonly ISender _sender;
 
     /// <summary>DI bağımlılıklarını alır.</summary>
-    public RemoveUnitTenancyCommandHandler(IMainDbContext db) => _db = db;
+    public RemoveUnitTenancyCommandHandler(IMainDbContext db, ISender sender)
+    {
+        _db = db;
+        _sender = sender;
+    }
 
     /// <inheritdoc />
     public async Task<Result> Handle(RemoveUnitTenancyCommand request, CancellationToken cancellationToken)
@@ -47,6 +53,10 @@ public sealed class RemoveUnitTenancyCommandHandler : IRequestHandler<RemoveUnit
 
         entity.IsDeleted = true;
         await _db.SaveChangesAsync(cancellationToken);
+
+        await _sender.Send(new ReattributeAccrualResponsibilityCommand(
+            request.TenantId, request.CompanyId, entity.UnitId), cancellationToken);
+
         return Result.Success();
     }
 }

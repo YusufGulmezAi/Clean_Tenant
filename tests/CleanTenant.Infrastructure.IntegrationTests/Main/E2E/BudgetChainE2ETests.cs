@@ -7,6 +7,10 @@ using CleanTenant.Application.Features.Main.Budgeting.Templates;
 using CleanTenant.Application.Features.Main.Collections.RecordCollection;
 using CleanTenant.Application.Features.Main.LateFees.GenerateLateFeeCharges;
 using CleanTenant.Application.Features.Main.LateFees.SetLateFeePolicy;
+using CleanTenant.Application.Features.Main.Parties.Responsibility;
+using CleanTenant.Application.Features.Main.Parties.Tenures;
+using CleanTenant.Domain.Tenant.Parties;
+using CleanTenant.Domain.Tenant.Parties.Enums;
 using CleanTenant.Domain.Tenant.Accounting;
 using CleanTenant.Domain.Tenant.Accounting.Enums;
 using CleanTenant.Domain.Tenant.Accruals.Enums;
@@ -508,6 +512,85 @@ public sealed class BudgetChainE2ETests : IClassFixture<BudgetE2EFixture>
         await db.SaveChangesAsync();
 
         return (tenantId, company.Id, budget.Id, lvA.Id, lvB.Id);
+    }
+
+    [Fact]
+    public async Task Senaryo8_sorumluluk_proration_reattribution_ve_guard()
+    {
+        var s = await SeedScenarioAsync(unitCount: 3, plannedAnnual: 36_000m, DistributionModel.Equal);
+        var unit0 = s.UnitIds[0];
+
+        // BB#1'e malik + kiracı (ikisi de 2026-01-01'den açık)
+        Guid ownerId, tenantPartyId, tenancyId;
+        using (var scope = _fixture.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<MainDbContext>();
+            var owner = new Party { TenantId = s.TenantId, CompanyId = s.CompanyId, Kind = PartyKind.Individual, FullName = "Malik Bey" };
+            var tenant = new Party { TenantId = s.TenantId, CompanyId = s.CompanyId, Kind = PartyKind.Individual, FullName = "Kiraci Bey" };
+            db.Parties.AddRange(owner, tenant);
+            var own = new UnitOwnership { TenantId = s.TenantId, UnitId = unit0, PartyId = owner.Id, StartDate = new DateOnly(2026, 1, 1), SharePercent = 100m };
+            var ten = new UnitTenancy { TenantId = s.TenantId, UnitId = unit0, PartyId = tenant.Id, StartDate = new DateOnly(2026, 1, 1) };
+            db.UnitOwnerships.Add(own);
+            db.UnitTenancies.Add(ten);
+            await db.SaveChangesAsync();
+            ownerId = owner.Id; tenantPartyId = tenant.Id; tenancyId = ten.Id;
+        }
+
+        // ── 1. Mart tahakkuğu — mode TenantThenOwner → BB#1 sorumlusu kiracı ──────
+        _fixture.Clock.UtcNow = new DateTimeOffset(2026, 3, 10, 0, 0, 0, TimeSpan.Zero);
+        var acc = Ok(await SendAsync(new GenerateBudgetAccrualCommand(s.TenantId, s.CompanyId, s.BudgetId, 2026, 3)));
+
+        Guid detailId;
+        using (var scope = _fixture.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<MainDbContext>();
+            var detail = await db.AccrualDetails.FirstAsync(d => d.AccrualId == acc.AccrualId && d.UnitId == unit0);
+            detailId = detail.Id;
+            detail.PrimaryResponsiblePartyId.Should().Be(tenantPartyId, "kiracı aktif → sorumlu kiracı");
+            var splits = await db.AccrualResponsibilitySplits.Where(x => x.AccrualDetailId == detailId && !x.IsDeleted).ToListAsync();
+            splits.Should().ContainSingle();
+            splits[0].Kind.Should().Be(ResponsibilityKind.Tenant);
+            splits[0].Amount.Should().Be(1_000m);
+            splits[0].DayCount.Should().Be(31);
+        }
+
+        // ── 2. Kiracı çıkışı Şubat sonuna çekilir → reattribution: Mart sorumlusu malik ──
+        Done(await SendAsync(new UpdateUnitTenancyCommand(
+            s.TenantId, s.CompanyId, tenancyId, new DateOnly(2026, 1, 1), new DateOnly(2026, 2, 28))));
+
+        using (var scope = _fixture.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<MainDbContext>();
+            var detail = await db.AccrualDetails.FirstAsync(d => d.Id == detailId);
+            detail.PrimaryResponsiblePartyId.Should().Be(ownerId, "kiracı Mart'ta yok → sorumlu malik");
+            detail.Amount.Should().Be(1_000m, "borç toplamı değişmez");
+            var splits = await db.AccrualResponsibilitySplits.Where(x => x.AccrualDetailId == detailId && !x.IsDeleted).ToListAsync();
+            splits.Should().ContainSingle();
+            splits[0].Kind.Should().Be(ResponsibilityKind.Owner);
+            splits[0].Amount.Should().Be(1_000m);
+        }
+
+        // ── 3. GUARD: BB#1'e tam ödeme → o dönem artık "kirli" ───────────────────
+        Ok(await SendAsync(new RecordCollectionCommand(
+            s.TenantId, s.CompanyId, unit0, s.PeriodId,
+            new DateOnly(2026, 3, 20), 1_000m, PaymentMethod.Cash, s.CashAccountCodeId)));
+
+        // Kiracı tekrar Mart'ta aktif edilir; ama ödeme var → reattribution ATLAR
+        Done(await SendAsync(new UpdateUnitTenancyCommand(
+            s.TenantId, s.CompanyId, tenancyId, new DateOnly(2026, 1, 1), null)));
+
+        using (var scope = _fixture.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<MainDbContext>();
+            var detail = await db.AccrualDetails.FirstAsync(d => d.Id == detailId);
+            detail.PrimaryResponsiblePartyId.Should().Be(ownerId,
+                "GUARD: ödenmiş dönem sessizce yeniden yansıtılmaz (kiracı aktif olsa bile malik kalır)");
+        }
+
+        // Doğrudan reattribute → atlanan dönem sayısı raporlanır
+        var reatt = Ok(await SendAsync(new ReattributeAccrualResponsibilityCommand(s.TenantId, s.CompanyId, unit0)));
+        reatt.Skipped.Should().Be(1, "ödenmiş dönem GUARD ile atlanır");
+        reatt.Recomputed.Should().Be(0);
     }
 
     /// <summary>Non-generic Result'ı başarı doğrular.</summary>

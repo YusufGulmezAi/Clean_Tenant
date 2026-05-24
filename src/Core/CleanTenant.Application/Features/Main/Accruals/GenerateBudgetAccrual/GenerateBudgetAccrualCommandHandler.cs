@@ -3,7 +3,9 @@ using CleanTenant.Application.Common.Auth;
 using CleanTenant.Application.Common.Persistence;
 using CleanTenant.Application.Features.Main.Accruals.Distribution;
 using CleanTenant.Application.Features.Main.Accruals.Posting;
+using CleanTenant.Application.Features.Main.Parties.Responsibility;
 using CleanTenant.Domain.Tenant.Accruals;
+using CleanTenant.Domain.Tenant.Parties;
 using CleanTenant.Domain.Tenant.Accruals.Enums;
 using CleanTenant.Domain.Tenant.Budgeting;
 using CleanTenant.Domain.Tenant.Budgeting.Enums;
@@ -25,6 +27,7 @@ public sealed class GenerateBudgetAccrualCommandHandler
     private readonly IAccrualJournalPoster _journalPoster;
     private readonly IClock _clock;
     private readonly ICurrentSessionAccessor _session;
+    private readonly IResponsibilityResolver _responsibility;
 
     /// <summary>DI bağımlılıklarını alır.</summary>
     public GenerateBudgetAccrualCommandHandler(
@@ -33,7 +36,8 @@ public sealed class GenerateBudgetAccrualCommandHandler
         IAccountCodeAllocator allocator,
         IAccrualJournalPoster journalPoster,
         IClock clock,
-        ICurrentSessionAccessor session)
+        ICurrentSessionAccessor session,
+        IResponsibilityResolver responsibility)
     {
         _db = db;
         _distribution = distribution;
@@ -41,6 +45,7 @@ public sealed class GenerateBudgetAccrualCommandHandler
         _journalPoster = journalPoster;
         _clock = clock;
         _session = session;
+        _responsibility = responsibility;
     }
 
     /// <inheritdoc />
@@ -240,6 +245,13 @@ public sealed class GenerateBudgetAccrualCommandHandler
             await _db.SaveChangesAsync(cancellationToken);
         }
 
+        // ── 11.5 Sorumluluk çözümleme (gün-bazlı proration, F0) ──────────────────
+        // Her BB için, tahakkuk ayı boyunca aktif tenure'a göre borcun sorumlu
+        // taraflara gün-bazlı dağılımı. Tenure yoksa PrimaryResponsiblePartyId null.
+        var prorateInputs = unitTotals.Select(kv => new UnitAccrualInput(kv.Key, kv.Value)).ToList();
+        var responsibility = await _responsibility.ProrateBatchAsync(
+            prorateInputs, request.Year, request.Month, budget.ResponsibilityMode, cancellationToken);
+
         // ── 12. Accrual + Details ─────────────────────────────────────────────────
         var total = unitTotals.Values.Sum();
         var accrual = new Accrual
@@ -255,6 +267,7 @@ public sealed class GenerateBudgetAccrualCommandHandler
             TotalAmount = total,
             ReceivableAccountCodeId = budget.ReceivableAccountCodeId,
             IncomeAccountCodeId = budget.IncomeAccountCodeId,
+            ResponsibilityMode = budget.ResponsibilityMode,
             Description = $"{budget.Title} — {request.Month:00}/{request.Year} Tahakkuk",
             GeneratedAt = _clock.UtcNow,
             GeneratedBy = _session.Current?.UserId,
@@ -264,7 +277,7 @@ public sealed class GenerateBudgetAccrualCommandHandler
         {
             var breakdown = unitBreakdown[unitId];
             var shareRatio = total == 0m ? 0m : amount / total;
-            accrual.Details.Add(new AccrualDetail
+            var detail = new AccrualDetail
             {
                 TenantId = request.TenantId,
                 AccrualId = accrual.Id,
@@ -273,7 +286,27 @@ public sealed class GenerateBudgetAccrualCommandHandler
                 DistributionShare = shareRatio,
                 DueDate = dueDate,
                 LineBreakdownJson = JsonSerializer.Serialize(breakdown),
-            });
+            };
+
+            if (responsibility.TryGetValue(unitId, out var resp))
+            {
+                detail.PrimaryResponsiblePartyId = resp.PrimaryPartyId;
+                detail.ResponsibleResolvedNote = resp.Note;
+                foreach (var sp in resp.Splits)
+                    detail.Responsibilities.Add(new AccrualResponsibilitySplit
+                    {
+                        TenantId = request.TenantId,
+                        AccrualDetailId = detail.Id,
+                        PartyId = sp.PartyId,
+                        Kind = sp.Kind,
+                        FromDate = sp.FromDate,
+                        ToDate = sp.ToDate,
+                        DayCount = sp.DayCount,
+                        Amount = sp.Amount,
+                    });
+            }
+
+            accrual.Details.Add(detail);
         }
 
         _db.Accruals.Add(accrual);
