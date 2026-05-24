@@ -1,6 +1,7 @@
 using System.Globalization;
 using CleanTenant.Application.Features.Main.Accruals.GenerateBudgetAccrual;
 using CleanTenant.Application.Features.Main.Accruals.Queries;
+using CleanTenant.Application.Features.Main.Budgeting.Budgets;
 using CleanTenant.Application.Features.Main.Collections.RecordCollection;
 using CleanTenant.Application.Features.Main.LateFees.GenerateLateFeeCharges;
 using CleanTenant.Application.Features.Main.LateFees.SetLateFeePolicy;
@@ -272,6 +273,100 @@ public sealed class BudgetChainE2ETests : IClassFixture<BudgetE2EFixture>
 
             lateAllocated.Should().Be(30m, "TBK m.101: önce gecikme faizi kapatılır");
             principalAllocated.Should().Be(0m, "anaparaya henüz dokunulmaz");
+        }
+    }
+
+    [Fact]
+    public async Task Senaryo5_butce_yenileme_klon_kalem_tutar_taksit_kopyalar()
+    {
+        var s = await SeedScenarioAsync(unitCount: 3, plannedAnnual: 36_000m, DistributionModel.Equal);
+
+        Guid fy2027Id, sourceVersionId, monthlyLineId, installmentLineId;
+        using (var scope = _fixture.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<MainDbContext>();
+            var budget = await db.Budgets.FirstAsync(b => b.Id == s.BudgetId);
+            sourceVersionId = budget.CurrentVersionId!.Value;
+            monthlyLineId = (await db.BudgetLines.FirstAsync(l => l.CompanyId == s.CompanyId)).Id;
+            var categoryId = (await db.ExpenseCategories.FirstAsync(c => c.CompanyId == s.CompanyId)).Id;
+
+            // 2027 mali yıl (klon hedefi)
+            var fy = new FiscalYear
+            {
+                TenantId = s.TenantId, CompanyId = s.CompanyId, Label = "2027",
+                StartDate = new DateOnly(2027, 1, 1), EndDate = new DateOnly(2027, 12, 31),
+                Status = PeriodStatus.Open,
+            };
+            db.FiscalYears.Add(fy);
+            fy2027Id = fy.Id;
+
+            // Kaynak yayınlı versiyona bir Installment kalemi + 2 taksit (2026-03, 2026-04)
+            var instLine = new BudgetLine
+            {
+                TenantId = s.TenantId, CompanyId = s.CompanyId, ExpenseCategoryId = categoryId,
+                Code = "YAT-01", Name = "Asansör Yatırımı", IsActive = true, DisplayOrder = 1,
+            };
+            db.BudgetLines.Add(instLine);
+            installmentLineId = instLine.Id;
+            var instLv = new BudgetLineVersion
+            {
+                TenantId = s.TenantId, BudgetVersionId = sourceVersionId, BudgetLineId = instLine.Id,
+                PlannedAmount = 10_000m, PaymentSchedule = PaymentSchedule.Installment,
+                DistributionModel = DistributionModel.Equal, DueDayOfMonth = 15,
+                InstallmentStartYear = 2026, InstallmentStartMonth = 3,
+                InstallmentEndYear = 2026, InstallmentEndMonth = 4, InstallmentIntervalMonths = 1,
+            };
+            db.BudgetLineVersions.Add(instLv);
+            db.BudgetLineInstallments.Add(new BudgetLineInstallment
+            {
+                TenantId = s.TenantId, BudgetLineVersionId = instLv.Id,
+                InstallmentNumber = 1, Year = 2026, Month = 3, Amount = 5_000m,
+            });
+            db.BudgetLineInstallments.Add(new BudgetLineInstallment
+            {
+                TenantId = s.TenantId, BudgetLineVersionId = instLv.Id,
+                InstallmentNumber = 2, Year = 2026, Month = 4, Amount = 5_000m,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        // Klonla → 2027
+        var newBudgetId = Ok(await SendAsync(new CloneBudgetCommand(
+            s.TenantId, s.CompanyId, s.BudgetId, fy2027Id, "2027 Yıllık Aidat")));
+
+        using (var scope = _fixture.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<MainDbContext>();
+            var clone = await db.Budgets.Include(b => b.Versions).FirstAsync(b => b.Id == newBudgetId);
+
+            clone.Status.Should().Be(BudgetStatus.Draft);
+            clone.FiscalYearId.Should().Be(fy2027Id);
+            clone.Type.Should().Be(BudgetType.Aidat);
+            clone.ReceivableAccountCodeId.Should().BeNull("hesap kodları ilk tahakkukta açılır");
+            clone.Versions.Should().ContainSingle();
+            var v1 = clone.Versions.Single();
+            v1.VersionNumber.Should().Be(1);
+            v1.PublishedAt.Should().BeNull("klon Draft'tır");
+
+            var cloneLines = await db.BudgetLineVersions
+                .Where(lv => lv.BudgetVersionId == v1.Id).ToListAsync();
+            cloneLines.Should().HaveCount(2);
+            // Aynı şirket → kalem ID'leri YENİDEN kullanıldı (yeni tanım üretilmedi)
+            cloneLines.Select(lv => lv.BudgetLineId)
+                .Should().BeEquivalentTo(new[] { monthlyLineId, installmentLineId });
+
+            cloneLines.First(lv => lv.BudgetLineId == monthlyLineId)
+                .PlannedAmount.Should().Be(36_000m, "tutarlar aynen kopyalanır (yenileme)");
+
+            var inst = cloneLines.First(lv => lv.BudgetLineId == installmentLineId);
+            inst.InstallmentStartYear.Should().Be(2027, "taksit başlangıç yılı yeni döneme ötelendi");
+            inst.InstallmentEndYear.Should().Be(2027);
+
+            var cloneInstallments = await db.BudgetLineInstallments
+                .Where(i => i.BudgetLineVersionId == inst.Id).OrderBy(i => i.Month).ToListAsync();
+            cloneInstallments.Should().HaveCount(2);
+            cloneInstallments.Select(i => (i.Year, i.Month)).Should().Equal((2027, 3), (2027, 4));
+            cloneInstallments.Sum(i => i.Amount).Should().Be(10_000m);
         }
     }
 
