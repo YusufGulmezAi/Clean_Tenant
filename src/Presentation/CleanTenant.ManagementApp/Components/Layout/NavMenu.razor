@@ -205,6 +205,14 @@
             </MudNavLink>
         }
 
+        @* ── Tahsilat Yönetimi ──────────────────────────────────────── *@
+        @if (_canViewCollections && Matches("Tahsilat"))
+        {
+            <MudNavLink Href="/company/collections" Icon="@Icons.Material.Filled.Payments">
+                Tahsilat
+            </MudNavLink>
+        }
+
         @* ── Muhasebe Grubu ─────────────────────────────────────────── *@
         var accountingChildren = new[]
         {
@@ -274,6 +282,7 @@
     private bool _canManageUsers;
     private bool _canViewBudget;
     private bool _canManageCompanyUsers;
+    private bool _canViewCollections;
 
     private bool IsSearching => !string.IsNullOrWhiteSpace(_search);
 
@@ -303,6 +312,7 @@
             _canManageUsers = true;
             _canViewBudget = true;
             _canManageCompanyUsers = true;
+            _canViewCollections = true;
         }
         else
         {
@@ -310,6 +320,7 @@
             _canManageUsers = session is not null && session.Permissions.Contains("Tenant.Users.Manage");
             _canViewBudget = session is not null && session.Permissions.Contains("tenant.budget.view");
             _canManageCompanyUsers = session is not null && session.Permissions.Contains("Company.Users.Manage");
+            _canViewCollections = session is not null && session.Permissions.Contains("tenant.collection.view");
         }
 
         // Etkin bağlam: tenant_id/company_id doluysa (System operatörü destek bağlamına

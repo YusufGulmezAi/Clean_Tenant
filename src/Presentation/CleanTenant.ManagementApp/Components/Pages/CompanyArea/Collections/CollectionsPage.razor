@@ -1,0 +1,704 @@
+@page "/company/collections"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject AuthenticationStateProvider AuthProvider
+@inject MediatR.IMediator Mediator
+@inject ISnackbar Snackbar
+@inject ICurrentSessionAccessor SessionAccessor
+
+@using CleanTenant.Application.Common.Auth
+@using CleanTenant.SharedKernel.Common.Results
+@using CleanTenant.Application.Features.Main.BuildingSchema.Queries
+@using CleanTenant.Application.Features.Main.Accruals.Queries
+@using CleanTenant.Application.Features.Main.Collections.Queries
+@using CleanTenant.Application.Features.Main.Collections.RecordCollection
+@using CleanTenant.Application.Features.Main.Accounting.FiscalYears
+@using CleanTenant.Application.Features.Main.Accounting.AccountCodes
+@using CleanTenant.Domain.Tenant.Accounting.Enums
+@using CleanTenant.Domain.Tenant.Collections.Enums
+@using CleanTenant.Domain.Tenant.Accruals.Enums
+
+<PageTitle>Tahsilat Yönetimi</PageTitle>
+
+@if (!_initialized)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="my-3" />
+}
+else if (!_authorized)
+{
+    <MudAlert Severity="Severity.Warning" Class="my-3">
+        Bu sayfaya erişim yetkiniz bulunmuyor.
+    </MudAlert>
+}
+else
+{
+    @* ── Form Açıklama Bloğu ──────────────────────────────────────────── *@
+    @if (_descriptionVisible)
+    {
+        <MudAlert Severity="Severity.Info" Class="mb-3" ShowCloseIcon="true"
+                  CloseIconClicked="@(() => _descriptionVisible = false)">
+            <MudText Typo="Typo.subtitle2" Class="mb-1">Tahsilat Yönetimi</MudText>
+            <MudText Typo="Typo.body2">
+                Sol panelden bir bağımsız bölüm (BB) seçerek tahakkuk geçmişini,
+                ödeme kayıtlarını ve güncel borç durumunu görüntüleyin.
+                Üstteki dönem seçici, listelen tahakkuk ve ödemeleri filtreler.
+                Tahsilat kaydetmek için muhasebe modülünün aktif ve seçili döneme
+                ait hesap döneminin açık olması gerekir.
+                İlgili sayfalar:
+                <MudLink Href="/company/building-schema">Yapı Şeması</MudLink>,
+                <MudLink Href="/company/accounting/fiscal-years">Hesap Dönemleri</MudLink>.
+            </MudText>
+        </MudAlert>
+    }
+
+    @* ── Üst araç çubuğu ─────────────────────────────────────────────── *@
+    <MudPaper Class="pa-3 mb-3" Elevation="1">
+        <MudGrid AlignItems="AlignItems.Center">
+            <MudItem xs="12" md="8">
+                <MudText Typo="Typo.h6">Tahsilat Yönetimi</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                    Bağımsız bölüm tahakkuk, borç ve ödeme durumu
+                </MudText>
+            </MudItem>
+            <MudItem xs="12" md="4">
+                @if (_periods.Count > 0)
+                {
+                    <MudSelect T="PeriodSummary"
+                               Value="@_selectedPeriod"
+                               ValueChanged="@OnPeriodChangedAsync"
+                               Label="Dönem"
+                               Dense="true"
+                               Variant="Variant.Outlined"
+                               ToStringFunc="@(p => p == null ? "Tüm geçmiş" : $"{TurkishMonth(p.Month)} {p.Year}")">
+                        <MudSelectItem T="PeriodSummary" Value="@((PeriodSummary?)null)">Tüm geçmiş</MudSelectItem>
+                        @foreach (var p in _periods)
+                        {
+                            <MudSelectItem T="PeriodSummary" Value="@p">
+                                @TurkishMonth(p.Month) @p.Year
+                                @if (p.Status == PeriodStatus.Open)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Success" Class="ml-1">Açık</MudChip>
+                                }
+                                @if (p.Status == PeriodStatus.Locked)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="ml-1">Kilitli</MudChip>
+                                }
+                            </MudSelectItem>
+                        }
+                    </MudSelect>
+                }
+                else
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        Muhasebe dönemi tanımlanmamış — tüm geçmiş gösterilir
+                    </MudText>
+                }
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    @* ── Ana içerik: sol ağaç + sağ detay ───────────────────────────── *@
+    <MudGrid Spacing="2">
+
+        @* Sol panel — Yapı Ağacı *@
+        <MudItem xs="12" md="3">
+            <MudPaper Elevation="1" Style="max-height:calc(100vh - 300px); overflow-y:auto;">
+                <div class="pa-2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-1">Yapı Ağacı</MudText>
+                </div>
+                <MudDivider />
+                @if (_schema is null || _schema.Lands.Count == 0)
+                {
+                    <MudText Class="pa-4" Color="Color.Secondary" Typo="Typo.body2">
+                        Yapı şeması bulunamadı.
+                    </MudText>
+                }
+                else
+                {
+                    @foreach (var land in _schema.Lands.OrderBy(l => l.SortOrder))
+                    {
+                        <div class="pa-1 pl-2 d-flex align-center">
+                            <MudIcon Icon="@Icons.Material.Filled.Landscape" Size="Size.Small" Color="Color.Secondary" Class="mr-1" />
+                            <MudText Typo="Typo.caption" Class="font-weight-bold">@land.Name</MudText>
+                        </div>
+                        @foreach (var parcel in land.Parcels.OrderBy(p => p.SortOrder))
+                        {
+                            <div class="pa-1 pl-4 d-flex align-center">
+                                <MudIcon Icon="@Icons.Material.Filled.CropSquare" Size="Size.Small" Color="Color.Secondary" Class="mr-1" />
+                                <MudText Typo="Typo.caption">@parcel.Name</MudText>
+                            </div>
+                            @foreach (var building in parcel.Buildings.OrderBy(b => b.SortOrder))
+                            {
+                                <div class="pa-1 pl-6 d-flex align-center">
+                                    <MudIcon Icon="@Icons.Material.Filled.Apartment" Size="Size.Small" Color="Color.Primary" Class="mr-1" />
+                                    <MudText Typo="Typo.caption" Class="font-weight-bold">@building.Name</MudText>
+                                </div>
+                                @foreach (var block in building.Blocks.OrderBy(b => b.SortOrder))
+                                {
+                                    <div class="pa-1 pl-8 d-flex align-center">
+                                        <MudIcon Icon="@Icons.Material.Filled.GridView" Size="Size.Small" Color="Color.Tertiary" Class="mr-1" />
+                                        <MudText Typo="Typo.caption">@block.Name</MudText>
+                                    </div>
+                                    @foreach (var unit in block.Units.OrderBy(u => u.SortOrder))
+                                    {
+                                        var uLand = land; var uParcel = parcel;
+                                        var uBuilding = building; var uBlock = block;
+                                        var uUnit = unit;
+                                        var breadcrumb = $"{uLand.Name} / {uParcel.Name} / {uBuilding.Name} / {uBlock.Name}";
+                                        var isSelected = _selectedUnit?.Id == uUnit.Id;
+                                        <div class="@($"pa-1 pl-10 d-flex align-center cursor-pointer {(isSelected ? "mud-theme-primary" : "")}")"
+                                             style="@(isSelected ? "background:var(--mud-palette-primary-lighten);border-left:3px solid var(--mud-palette-primary);" : "border-left:3px solid transparent;")"
+                                             @onclick="@(() => SelectUnitAsync(uUnit, breadcrumb))">
+                                            <MudIcon Icon="@Icons.Material.Filled.Home"
+                                                     Size="Size.Small"
+                                                     Color="@(isSelected ? Color.Primary : Color.Default)"
+                                                     Class="mr-1" />
+                                            <MudText Typo="Typo.caption"
+                                                     Color="@(isSelected ? Color.Primary : Color.Default)">
+                                                @uUnit.Number
+                                            </MudText>
+                                        </div>
+                                    }
+                                }
+                                @* Bloksuz BB'ler *@
+                                @foreach (var unit in building.Units.OrderBy(u => u.SortOrder))
+                                {
+                                    var uLand = land; var uParcel = parcel;
+                                    var uBuilding = building;
+                                    var uUnit = unit;
+                                    var breadcrumb = $"{uLand.Name} / {uParcel.Name} / {uBuilding.Name}";
+                                    var isSelected = _selectedUnit?.Id == uUnit.Id;
+                                    <div class="@($"pa-1 pl-8 d-flex align-center cursor-pointer")"
+                                         style="@(isSelected ? "background:var(--mud-palette-primary-lighten);border-left:3px solid var(--mud-palette-primary);" : "border-left:3px solid transparent;")"
+                                         @onclick="@(() => SelectUnitAsync(uUnit, breadcrumb))">
+                                        <MudIcon Icon="@Icons.Material.Filled.Home"
+                                                 Size="Size.Small"
+                                                 Color="@(isSelected ? Color.Primary : Color.Default)"
+                                                 Class="mr-1" />
+                                        <MudText Typo="Typo.caption"
+                                                 Color="@(isSelected ? Color.Primary : Color.Default)">
+                                            @uUnit.Number
+                                        </MudText>
+                                    </div>
+                                }
+                            }
+                        }
+                    }
+                }
+            </MudPaper>
+        </MudItem>
+
+        @* Sağ panel — BB Detayı *@
+        <MudItem xs="12" md="9">
+            @if (_selectedUnit is null)
+            {
+                <MudPaper Class="pa-8 d-flex flex-column justify-center align-center" Elevation="0"
+                          Style="min-height:420px; border:2px dashed var(--mud-palette-divider);">
+                    <MudIcon Icon="@Icons.Material.Filled.TouchApp" Size="Size.Large" Color="Color.Tertiary" Class="mb-3" />
+                    <MudText Typo="Typo.body1" Color="Color.Secondary">Soldan bir bağımsız bölüm seçin</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Tertiary" Class="mt-1">Tahakkuk ve ödeme geçmişi görüntülenecek</MudText>
+                </MudPaper>
+            }
+            else
+            {
+                @* BB Başlığı *@
+                <MudPaper Class="pa-3 mb-2" Elevation="1">
+                    <div class="d-flex align-center justify-space-between">
+                        <div>
+                            <MudText Typo="Typo.h6">BB @_selectedUnit.Number</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">@_selectedUnitBreadcrumb</MudText>
+                        </div>
+                        @if (_canRecord && _selectedPeriod is not null)
+                        {
+                            <MudButton Variant="Variant.Filled"
+                                       Color="Color.Primary"
+                                       StartIcon="@Icons.Material.Filled.Add"
+                                       OnClick="@OpenRecordFormAsync"
+                                       Size="Size.Small">
+                                Tahsilat Kaydet
+                            </MudButton>
+                        }
+                        else if (_canRecord && _selectedPeriod is null)
+                        {
+                            <MudTooltip Text="Tahsilat kaydı için önce bir muhasebe dönemi seçin">
+                                <MudButton Variant="Variant.Outlined" Size="Size.Small" Disabled="true"
+                                           StartIcon="@Icons.Material.Filled.Add">
+                                    Tahsilat Kaydet
+                                </MudButton>
+                            </MudTooltip>
+                        }
+                    </div>
+                </MudPaper>
+
+                @if (_detailLoading)
+                {
+                    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-2" />
+                }
+
+                @* 3 Özet Kart *@
+                @if (_debtStatus is not null)
+                {
+                    <MudGrid Class="mb-2" Spacing="2">
+                        <MudItem xs="12" md="4">
+                            <MudPaper Class="pa-3 text-center" Elevation="1">
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">Toplam Tahakkuk</MudText>
+                                <MudText Typo="Typo.h6" Class="mt-1">@FormatAmount(_debtStatus.TotalAccrued)</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">@_debtStatus.AccrualCount tahakkuk kalemi</MudText>
+                            </MudPaper>
+                        </MudItem>
+                        <MudItem xs="12" md="4">
+                            <MudPaper Class="pa-3 text-center" Elevation="1">
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">Ödenen</MudText>
+                                <MudText Typo="Typo.h6" Color="Color.Success" Class="mt-1">@FormatAmount(_debtStatus.PaidAmount)</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    Kalan: @FormatAmount(_debtStatus.RemainingAmount)
+                                </MudText>
+                            </MudPaper>
+                        </MudItem>
+                        <MudItem xs="12" md="4">
+                            <MudPaper Class="pa-3 text-center" Elevation="1"
+                                      Style="@(_debtStatus.OverdueAmount > 0 ? "border:1px solid var(--mud-palette-error);" : "")">
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">Geciken</MudText>
+                                <MudText Typo="Typo.h6"
+                                         Color="@(_debtStatus.OverdueAmount > 0 ? Color.Error : Color.Default)"
+                                         Class="mt-1">
+                                    @if (_debtStatus.OverdueAmount > 0)
+                                    {
+                                        <MudIcon Icon="@Icons.Material.Filled.Warning" Size="Size.Small" Class="mr-1" />
+                                    }
+                                    @FormatAmount(_debtStatus.OverdueAmount)
+                                </MudText>
+                                @if (_debtStatus.EarliestDueDate.HasValue && _debtStatus.OverdueAmount > 0)
+                                {
+                                    <MudText Typo="Typo.caption" Color="Color.Error">
+                                        İlk vade: @_debtStatus.EarliestDueDate.Value.ToString("dd.MM.yyyy")
+                                    </MudText>
+                                }
+                            </MudPaper>
+                        </MudItem>
+                    </MudGrid>
+                }
+
+                @* Inline Tahsilat Formu *@
+                @if (_showRecordForm)
+                {
+                    <MudPaper Class="pa-4 mb-2" Elevation="2" Style="border-left:4px solid var(--mud-palette-primary);">
+                        <MudText Typo="Typo.subtitle1" Class="mb-3">Yeni Tahsilat Kaydı</MudText>
+                        <MudGrid Spacing="2">
+                            <MudItem xs="12" md="4">
+                                <MudDatePicker @bind-Date="@_dialogPaymentDateDT"
+                                               Label="Ödeme Tarihi"
+                                               Variant="Variant.Outlined"
+                                               DateFormat="dd.MM.yyyy" />
+                            </MudItem>
+                            <MudItem xs="12" md="4">
+                                <MudNumericField T="decimal"
+                                                 @bind-Value="@_dialogAmount"
+                                                 Label="Tutar (TL)"
+                                                 Variant="Variant.Outlined"
+                                                 Min="0.01m"
+                                                 Format="N2" />
+                            </MudItem>
+                            <MudItem xs="12" md="4">
+                                <MudSelect T="PaymentMethod"
+                                           @bind-Value="@_dialogMethod"
+                                           Label="Ödeme Yöntemi"
+                                           Variant="Variant.Outlined">
+                                    <MudSelectItem Value="PaymentMethod.Cash">Nakit</MudSelectItem>
+                                    <MudSelectItem Value="PaymentMethod.BankTransfer">Havale / EFT</MudSelectItem>
+                                    <MudSelectItem Value="PaymentMethod.CreditCard">Kredi Kartı</MudSelectItem>
+                                    <MudSelectItem Value="PaymentMethod.Check">Çek</MudSelectItem>
+                                    <MudSelectItem Value="PaymentMethod.Other">Diğer</MudSelectItem>
+                                </MudSelect>
+                            </MudItem>
+                            <MudItem xs="12" md="6">
+                                <MudAutocomplete T="AccountCodeListItem"
+                                                 @bind-Value="@_dialogCashAccount"
+                                                 Label="Kasa / Banka Hesabı (100-102)"
+                                                 Variant="Variant.Outlined"
+                                                 SearchFunc="@SearchAccountCodeAsync"
+                                                 ToStringFunc="@(a => a == null ? "" : $"{a.Code} — {a.Name}")"
+                                                 Clearable="true"
+                                                 HelperText="Hesap kodu veya adıyla arayın" />
+                            </MudItem>
+                            <MudItem xs="12" md="6">
+                                <MudTextField @bind-Value="@_dialogReference"
+                                              Label="Referans / Dekont No"
+                                              Variant="Variant.Outlined" />
+                            </MudItem>
+                            <MudItem xs="12">
+                                <MudTextField @bind-Value="@_dialogDescription"
+                                              Label="Açıklama"
+                                              Variant="Variant.Outlined"
+                                              Lines="2" />
+                            </MudItem>
+                        </MudGrid>
+                        <div class="d-flex gap-2 mt-3">
+                            <MudButton Variant="Variant.Filled"
+                                       Color="Color.Primary"
+                                       OnClick="@SubmitCollectionAsync"
+                                       Disabled="@(_dialogAmount <= 0 || _dialogCashAccount is null)">
+                                Kaydet
+                            </MudButton>
+                            <MudButton Variant="Variant.Outlined"
+                                       OnClick="@(() => _showRecordForm = false)">
+                                İptal
+                            </MudButton>
+                        </div>
+                    </MudPaper>
+                }
+
+                @* Tahakkuklar *@
+                <MudPaper Class="pa-3 mb-2" Elevation="1">
+                    <div class="d-flex align-center mb-2">
+                        <MudText Typo="Typo.subtitle2">Tahakkuklar</MudText>
+                        @if (_selectedPeriod is not null)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Default" Class="ml-2">
+                                @TurkishMonth(_selectedPeriod.Month) @_selectedPeriod.Year
+                            </MudChip>
+                        }
+                    </div>
+                    @if (_accruals is null && !_detailLoading)
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">Yükleniyor...</MudText>
+                    }
+                    else if (_accruals is not null && _accruals.Count == 0)
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">Bu dönemde tahakkuk bulunamadı.</MudText>
+                    }
+                    else if (_accruals is not null)
+                    {
+                        <MudSimpleTable Dense="true" Hover="true" Style="overflow-x:auto;">
+                            <thead>
+                                <tr>
+                                    <th>Dönem</th>
+                                    <th>Kaynak</th>
+                                    <th>Açıklama</th>
+                                    <th>Vade</th>
+                                    <th style="text-align:right">Tutar</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var a in _accruals.OrderBy(x => x.DueDate))
+                                {
+                                    var isOverdue = a.DueDate < DateOnly.FromDateTime(DateTime.Today);
+                                    <tr>
+                                        <td>
+                                            <MudText Typo="Typo.caption">
+                                                @TurkishMonth(a.Month) @a.Year
+                                            </MudText>
+                                        </td>
+                                        <td>
+                                            <MudChip T="string" Size="Size.Small"
+                                                     Color="@SourceColor(a.Source)">
+                                                @SourceLabel(a.Source)
+                                            </MudChip>
+                                        </td>
+                                        <td>
+                                            <MudText Typo="Typo.caption">@a.Description</MudText>
+                                        </td>
+                                        <td>
+                                            <MudText Typo="Typo.caption"
+                                                     Color="@(isOverdue ? Color.Error : Color.Default)">
+                                                @if (isOverdue)
+                                                {
+                                                    <MudIcon Icon="@Icons.Material.Filled.Warning" Size="Size.Small" Class="mr-1" />
+                                                }
+                                                @a.DueDate.ToString("dd.MM.yyyy")
+                                            </MudText>
+                                        </td>
+                                        <td style="text-align:right">
+                                            <MudText Typo="Typo.caption" Class="font-weight-bold"
+                                                     Color="@(isOverdue ? Color.Error : Color.Default)">
+                                                @FormatAmount(a.Amount)
+                                            </MudText>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </MudSimpleTable>
+                    }
+                </MudPaper>
+
+                @* Ödemeler *@
+                <MudPaper Class="pa-3" Elevation="1">
+                    <div class="d-flex align-center mb-2">
+                        <MudText Typo="Typo.subtitle2">Ödemeler</MudText>
+                        @if (_selectedPeriod is not null)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Default" Class="ml-2">
+                                @TurkishMonth(_selectedPeriod.Month) @_selectedPeriod.Year
+                            </MudChip>
+                        }
+                    </div>
+                    @if (_collections is null && !_detailLoading)
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">Yükleniyor...</MudText>
+                    }
+                    else if (_collections is not null && _collections.Count == 0)
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">Bu dönemde ödeme kaydı bulunamadı.</MudText>
+                    }
+                    else if (_collections is not null)
+                    {
+                        <MudSimpleTable Dense="true" Hover="true" Style="overflow-x:auto;">
+                            <thead>
+                                <tr>
+                                    <th>Tarih</th>
+                                    <th>Yöntem</th>
+                                    <th>Referans</th>
+                                    <th>Tahsis</th>
+                                    <th style="text-align:right">Tutar</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var c in _collections.OrderByDescending(x => x.PaymentDate))
+                                {
+                                    <tr>
+                                        <td>
+                                            <MudText Typo="Typo.caption">@c.PaymentDate.ToString("dd.MM.yyyy")</MudText>
+                                        </td>
+                                        <td>
+                                            <MudText Typo="Typo.caption">@MethodLabel(c.Method)</MudText>
+                                        </td>
+                                        <td>
+                                            <MudText Typo="Typo.caption">@(c.Reference ?? "—")</MudText>
+                                        </td>
+                                        <td>
+                                            <MudText Typo="Typo.caption">@c.AllocationCount tahakkuk</MudText>
+                                        </td>
+                                        <td style="text-align:right">
+                                            <MudText Typo="Typo.caption" Class="font-weight-bold" Color="Color.Success">
+                                                @FormatAmount(c.Amount)
+                                            </MudText>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </MudSimpleTable>
+                    }
+                </MudPaper>
+            }
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    // ── Kimlik doğrulama ──────────────────────────────────────────────────
+    private bool _authorized;
+    private bool _initialized;
+    private bool _descriptionVisible = true;
+    private Guid _companyId;
+    private Guid _tenantId;
+    private bool _canRecord;
+
+    // ── Yapı şeması + dönem ───────────────────────────────────────────────
+    private BuildingSchemaDto? _schema;
+    private List<PeriodSummary> _periods = [];
+    private PeriodSummary? _selectedPeriod;
+
+    // ── Seçili BB ─────────────────────────────────────────────────────────
+    private UnitDto? _selectedUnit;
+    private string _selectedUnitBreadcrumb = "";
+    private bool _detailLoading;
+    private UnitDebtStatus? _debtStatus;
+    private IReadOnlyList<UnitAccrualItem>? _accruals;
+    private IReadOnlyList<CollectionListItem>? _collections;
+
+    // ── Inline tahsilat formu ─────────────────────────────────────────────
+    private bool _showRecordForm;
+    private DateTime? _dialogPaymentDateDT = DateTime.Today;
+    private decimal _dialogAmount;
+    private PaymentMethod _dialogMethod = PaymentMethod.Cash;
+    private AccountCodeListItem? _dialogCashAccount;
+    private string _dialogReference = "";
+    private string _dialogDescription = "";
+    private IReadOnlyList<AccountCodeListItem>? _accountCodes;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user?.Identity?.IsAuthenticated != true) { _initialized = true; return; }
+
+        var scope = user.FindFirst("scope")?.Value ?? "";
+        var isSystem = string.Equals(scope, "System", StringComparison.OrdinalIgnoreCase);
+
+        if (user.FindFirst("company_id") is not { Value: var cidStr } ||
+            !Guid.TryParseExact(cidStr, "N", out _companyId))
+        {
+            _initialized = true;
+            return;
+        }
+
+        if (user.FindFirst("tenant_id") is { Value: var tidStr })
+            Guid.TryParseExact(tidStr, "N", out _tenantId);
+
+        var session = SessionAccessor.Current;
+        _authorized = isSystem || (session?.Permissions.Contains("tenant.collection.view") ?? false);
+        _canRecord  = isSystem || (session?.Permissions.Contains("tenant.collection.record") ?? false);
+
+        if (!_authorized) { _initialized = true; return; }
+
+        var schemaTask = Mediator.Send(new GetBuildingSchemaQuery(_companyId));
+        var fyTask     = Mediator.Send(new GetCurrentFiscalYearQuery(_companyId));
+
+        await Task.WhenAll(schemaTask, fyTask);
+
+        var schemaResult = await schemaTask;
+        if (schemaResult.IsSuccess) _schema = schemaResult.Value;
+
+        var fyResult = await fyTask;
+        if (fyResult.IsSuccess && fyResult.Value is { } fy)
+        {
+            _periods = fy.Periods
+                .OrderByDescending(p => p.Year).ThenByDescending(p => p.Month)
+                .ToList();
+            _selectedPeriod = _periods.FirstOrDefault(p => p.Status == PeriodStatus.Open)
+                           ?? _periods.FirstOrDefault();
+        }
+
+        _initialized = true;
+    }
+
+    private async Task SelectUnitAsync(UnitDto unit, string breadcrumb)
+    {
+        if (_selectedUnit?.Id == unit.Id) return;
+        _selectedUnit = unit;
+        _selectedUnitBreadcrumb = breadcrumb;
+        _showRecordForm = false;
+        _debtStatus = null;
+        _accruals   = null;
+        _collections = null;
+        await LoadUnitDetailAsync();
+    }
+
+    private async Task LoadUnitDetailAsync()
+    {
+        if (_selectedUnit is null) return;
+        _detailLoading = true;
+        StateHasChanged();
+
+        var from = _selectedPeriod?.StartDate;
+        var to   = _selectedPeriod?.EndDate;
+
+        var t1 = Mediator.Send(new GetUnitDebtStatusQuery(_companyId, _selectedUnit.Id));
+        var t2 = Mediator.Send(new GetUnitAccrualHistoryQuery(_companyId, _selectedUnit.Id, from, to));
+        var t3 = Mediator.Send(new GetUnitCollectionHistoryQuery(_companyId, _selectedUnit.Id, from, to));
+
+        await Task.WhenAll(t1, t2, t3);
+
+        var r1 = await t1; if (r1.IsSuccess) _debtStatus   = r1.Value;
+        var r2 = await t2; if (r2.IsSuccess) _accruals      = r2.Value;
+        var r3 = await t3; if (r3.IsSuccess) _collections   = r3.Value;
+
+        _detailLoading = false;
+    }
+
+    private async Task OnPeriodChangedAsync(PeriodSummary? period)
+    {
+        _selectedPeriod = period;
+        if (_selectedUnit is not null)
+            await LoadUnitDetailAsync();
+    }
+
+    private async Task OpenRecordFormAsync()
+    {
+        if (_accountCodes is null)
+        {
+            var result = await Mediator.Send(
+                new GetAccountCodesQuery(_companyId, OnlyActive: true, OnlyDetail: true));
+            if (result.IsSuccess && result.Value is { } codes)
+                _accountCodes = codes
+                    .Where(a => a.Code.StartsWith("100") ||
+                                a.Code.StartsWith("101") ||
+                                a.Code.StartsWith("102"))
+                    .OrderBy(a => a.Code)
+                    .ToList();
+        }
+        _dialogPaymentDateDT = DateTime.Today;
+        _dialogAmount        = 0;
+        _dialogMethod        = PaymentMethod.Cash;
+        _dialogCashAccount   = _accountCodes?.FirstOrDefault(a => a.Code.StartsWith("100"));
+        _dialogReference     = "";
+        _dialogDescription   = "";
+        _showRecordForm      = true;
+    }
+
+    private async Task SubmitCollectionAsync()
+    {
+        if (_selectedUnit is null || _selectedPeriod is null || _dialogCashAccount is null)
+            return;
+
+        var payDate = _dialogPaymentDateDT.HasValue
+            ? DateOnly.FromDateTime(_dialogPaymentDateDT.Value)
+            : DateOnly.FromDateTime(DateTime.Today);
+
+        var result = await Mediator.Send(new RecordCollectionCommand(
+            _tenantId, _companyId, _selectedUnit.Id, _selectedPeriod.Id,
+            payDate, _dialogAmount, _dialogMethod,
+            _dialogCashAccount.Id, _dialogReference, _dialogDescription));
+
+        if (result.IsSuccess)
+        {
+            _showRecordForm = false;
+            Snackbar.Add("Tahsilat başarıyla kaydedildi.", Severity.Success);
+            await LoadUnitDetailAsync();
+        }
+        else
+        {
+            Snackbar.Add(result.FirstError.Message, Severity.Error);
+        }
+    }
+
+    private Task<IEnumerable<AccountCodeListItem>> SearchAccountCodeAsync(string? value, CancellationToken ct)
+    {
+        if (_accountCodes is null)
+            return Task.FromResult<IEnumerable<AccountCodeListItem>>([]);
+        if (string.IsNullOrWhiteSpace(value))
+            return Task.FromResult<IEnumerable<AccountCodeListItem>>(_accountCodes);
+        return Task.FromResult(_accountCodes.Where(a =>
+            a.Code.Contains(value, StringComparison.OrdinalIgnoreCase) ||
+            a.Name.Contains(value, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private static string TurkishMonth(int m) => m switch
+    {
+        1 => "Ocak",   2 => "Şubat",   3 => "Mart",   4 => "Nisan",
+        5 => "Mayıs",  6 => "Haziran", 7 => "Temmuz", 8 => "Ağustos",
+        9 => "Eylül", 10 => "Ekim",   11 => "Kasım", 12 => "Aralık",
+        _ => m.ToString()
+    };
+
+    private static string FormatAmount(decimal amount) =>
+        amount.ToString("N2", System.Globalization.CultureInfo.GetCultureInfo("tr-TR")) + " ₺";
+
+    private static string SourceLabel(AccrualSource s) => s switch
+    {
+        AccrualSource.Budget       => "Aidat",
+        AccrualSource.Invoice      => "Fatura",
+        AccrualSource.DirectCharge => "Direkt",
+        AccrualSource.LateFee      => "Gecikme",
+        _                          => s.ToString()
+    };
+
+    private static Color SourceColor(AccrualSource s) => s switch
+    {
+        AccrualSource.Budget       => Color.Primary,
+        AccrualSource.Invoice      => Color.Secondary,
+        AccrualSource.DirectCharge => Color.Tertiary,
+        AccrualSource.LateFee      => Color.Error,
+        _                          => Color.Default
+    };
+
+    private static string MethodLabel(PaymentMethod m) => m switch
+    {
+        PaymentMethod.Cash         => "Nakit",
+        PaymentMethod.BankTransfer => "Havale / EFT",
+        PaymentMethod.CreditCard   => "Kredi Kartı",
+        PaymentMethod.Check        => "Çek",
+        PaymentMethod.Other        => "Diğer",
+        _                          => m.ToString()
+    };
+}
