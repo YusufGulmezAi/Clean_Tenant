@@ -93,6 +93,13 @@ public interface ICatalogDbContext
     /// <summary>Bütçe tipi sistem kataloğu (Aidat/Yatırım/Kömür/Kuruluş base hesap kodları).</summary>
     DbSet<BudgetTypeMetadata> BudgetTypeMetadata { get; }
 
+    // ── Bütçe Şablonları — tenant'lar-arası paylaşım (Catalog) ───────────────
+    /// <summary>Paylaşılabilir bütçe şablonları (Public kütüphane + sistem küratörlü).</summary>
+    DbSet<BudgetTemplate> BudgetTemplates { get; }
+
+    /// <summary>Bütçe şablonu kalemleri (yapı-only, denormalize).</summary>
+    DbSet<BudgetTemplateLine> BudgetTemplateLines { get; }
+
     /// <summary>Bekleyen değişiklikleri persist eder. Cancellation desteği var.</summary>
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

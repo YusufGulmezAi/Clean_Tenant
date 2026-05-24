@@ -97,6 +97,12 @@ public sealed class CatalogDbContext : IdentityDbContext<User, Role, Guid>, ICat
     /// <summary>Bütçe tipi sistem kataloğu (Aidat/Yatırım/Kömür/Kuruluş base hesap kodları).</summary>
     public DbSet<BudgetTypeMetadata> BudgetTypeMetadata => Set<BudgetTypeMetadata>();
 
+    /// <summary>Paylaşılabilir bütçe şablonları (tenant'lar-arası).</summary>
+    public DbSet<BudgetTemplate> BudgetTemplates => Set<BudgetTemplate>();
+
+    /// <summary>Bütçe şablonu kalemleri (yapı-only).</summary>
+    public DbSet<BudgetTemplateLine> BudgetTemplateLines => Set<BudgetTemplateLine>();
+
     /// <summary>
     /// URL kod havuzu (Infrastructure-only; <see cref="ICatalogDbContext"/>
     /// üzerinden expose edilmez — yalnız UrlCodeGeneratingInterceptor v0.1.4.b'de erişir).
