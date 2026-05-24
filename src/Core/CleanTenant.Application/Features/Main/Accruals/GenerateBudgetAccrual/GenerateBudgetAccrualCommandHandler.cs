@@ -234,6 +234,10 @@ public sealed class GenerateBudgetAccrualCommandHandler
                 budget.TenantId, budget.CompanyId, budget.Type, budget.Title, cancellationToken);
             budget.ReceivableAccountCodeId = pair.ReceivableAccountCodeId;
             budget.IncomeAccountCodeId = pair.IncomeAccountCodeId;
+
+            // Yeni hesap kodlarını hemen persist et: AccrualJournalPoster fiş satırları
+            // için Code string'lerini DB'den okur (allocator yalnız Add eder, kaydetmez).
+            await _db.SaveChangesAsync(cancellationToken);
         }
 
         // ── 12. Accrual + Details ─────────────────────────────────────────────────
