@@ -55,6 +55,7 @@ public sealed class CatalogSeeder
         await SeedInflationIndexesAsync(cancellationToken);
         await SeedChartOfAccountsTemplatesAsync(cancellationToken);
         await SeedBudgetTypeMetadataAsync(cancellationToken);
+        await SeedOfficialBudgetTemplatesAsync(cancellationToken);
     }
 
     // SystemAdmin built-in rolüne her deployment'ta otomatik atanması gereken
@@ -834,6 +835,53 @@ public sealed class CatalogSeeder
 
         _logger.LogInformation(
             "BudgetTypeMetadata seed: {Added} eklendi, {Updated} güncellendi.", added, updated);
+    }
+
+    /// <summary>
+    /// Sistem küratörlü resmi bütçe şablonu (B6) — tüm tenant'lara açık örnek Aidat
+    /// iskeleti. Seed-once: <c>OwnerTenantId == null</c> bir şablon varsa atlanır.
+    /// </summary>
+    private async Task SeedOfficialBudgetTemplatesAsync(CancellationToken cancellationToken)
+    {
+        if (await _db.BudgetTemplates.AnyAsync(t => t.OwnerTenantId == null, cancellationToken))
+        {
+            _logger.LogInformation("Resmi bütçe şablonu seed: mevcut, atlandı.");
+            return;
+        }
+
+        var template = new BudgetTemplate
+        {
+            OwnerTenantId = null,
+            Visibility = TemplateVisibility.Public,
+            Type = BudgetType.Aidat,
+            Name = "Standart Konut Sitesi Aidat Şablonu",
+            Description = "Tipik bir konut sitesi için örnek aidat kalemleri (resmi/küratörlü iskelet).",
+            SourceLabel = "CleanTenant",
+        };
+
+        // CategoryCode, CategoryName, LineCode, LineName
+        string[][] lines =
+        [
+            ["YON", "Yönetim",     "PERSONEL", "Personel Giderleri"],
+            ["TEM", "Temizlik",    "TEMIZLIK", "Temizlik Hizmeti"],
+            ["GUV", "Güvenlik",    "GUVENLIK", "Güvenlik Hizmeti"],
+            ["ORT", "Ortak Alan",  "ELEKTRIK", "Ortak Alan Elektrik"],
+            ["ORT", "Ortak Alan",  "ASANSOR",  "Asansör Bakım"],
+        ];
+        var order = 0;
+        foreach (var l in lines)
+        {
+            template.Lines.Add(new BudgetTemplateLine
+            {
+                CategoryCode = l[0], CategoryName = l[1], LineCode = l[2], LineName = l[3],
+                PaymentSchedule = PaymentSchedule.MonthlyEqual, DistributionModel = DistributionModel.Equal,
+                DueDayOfMonth = 15, DisplayOrder = order++,
+            });
+        }
+
+        _db.BudgetTemplates.Add(template);
+        await _db.SaveChangesAsync(cancellationToken);
+        _logger.LogInformation("Resmi bütçe şablonu seed: 1 şablon ({Lines} kalem) eklendi.", template.Lines.Count);
     }
 
     /// <summary>Varsayılan bütçe tipleri — base hesap kodları (120.0X / 600.0X).</summary>
