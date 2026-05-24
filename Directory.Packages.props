@@ -151,6 +151,15 @@
     <PackageVersion Include="UAParser" Version="3.1.47" />
   </ItemGroup>
 
+  <ItemGroup Label="Hangfire — arka plan job altyapısı (FAZ 6.8 / otomatik tahakkuk)">
+    <!-- Hangfire.PostgreSql 1.21.1: Npgsql >= 6.0.11 (üst sınır yok) → pinli Npgsql 10 ile uyumlu -->
+    <PackageVersion Include="Hangfire.Core" Version="1.8.23" />
+    <PackageVersion Include="Hangfire.AspNetCore" Version="1.8.23" />
+    <PackageVersion Include="Hangfire.PostgreSql" Version="1.21.1" />
+    <!-- Hangfire.Core transitive Newtonsoft.Json 11.0.1 (NU1903 güvenlik açığı) → güvenli 13.0.3'e yükselt -->
+    <PackageVersion Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+
   <!--
     İlerleyen alt fazlarda eklenecek paketler:
     - v0.1.4.b: Testcontainers.PostgreSql, Dapper
@@ -158,7 +167,7 @@
     - v0.1.6: MediatR, FluentValidation 11.x (12.x ücretli; ignore!)
     - v0.1.7: Serilog, Serilog.AspNetCore, Serilog.Sinks.PostgreSQL
     - v0.1.8: StackExchange.Redis veya Microsoft.Extensions.Caching.StackExchangeRedis
-    - v0.1.9: Hangfire, Hangfire.PostgreSql
+    - v0.1.9: Hangfire, Hangfire.PostgreSql → EKLENDİ (FAZ 6.8, otomatik tahakkuk)
     - v0.1.10: bUnit, WireMock.Net, Bogus, OWASP ZAP CI
   -->
 
