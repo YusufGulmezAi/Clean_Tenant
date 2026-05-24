@@ -13,6 +13,7 @@
 @using CleanTenant.Application.Features.Main.Budgeting.Budgets
 @using CleanTenant.Application.Features.Main.Budgeting.BudgetLineVersions
 @using CleanTenant.Application.Features.Main.Budgeting.BudgetLines
+@using CleanTenant.Application.Features.Main.Budgeting.ExpenseCategories
 @using CleanTenant.Application.Features.Main.Budgeting.ParticipationGroups
 @using CleanTenant.Domain.Tenant.Budgeting.Enums
 @using CleanTenant.ManagementApp.Components.Shared
@@ -92,30 +93,87 @@ else
             <MudPaper Elevation="1" Class="pa-4" Style="min-height:360px;">
                 @if (_addMode)
                 {
-                    <MudText Typo="Typo.subtitle1" Class="mb-3">@Loc["Budget.Edit.AddLine"]</MudText>
-                    @if (_masterLines.Count == 0)
-                    {
-                        <MudAlert Severity="Severity.Info">@Loc["Budget.Edit.NoMasterLine"]</MudAlert>
-                    }
-                    else
-                    {
-                        <MudGrid Spacing="2">
+                    <div class="d-flex align-center justify-space-between mb-3">
+                        <MudText Typo="Typo.subtitle1">@Loc["Budget.Edit.AddLine"]</MudText>
+                        <MudSwitch T="bool" @bind-Value="_newLineMode" Color="Color.Primary" Label="@Loc["Budget.Edit.NewLineToggle"]" />
+                    </div>
+
+                    <MudGrid Spacing="2">
+                        @if (!_newLineMode)
+                        {
+                            @if (_availableMasters.Count == 0)
+                            {
+                                <MudItem xs="12">
+                                    <MudAlert Severity="Severity.Info">@Loc["Budget.Edit.NoMasterLine"]</MudAlert>
+                                </MudItem>
+                            }
+                            else
+                            {
+                                <MudItem xs="12">
+                                    <MudSelect T="Guid?" @bind-Value="_addLineId" Label="@Loc["Budget.Edit.SelectLine"]"
+                                               Variant="Variant.Outlined" Margin="Margin.Dense">
+                                        @foreach (var ml in _availableMasters)
+                                        {
+                                            <MudSelectItem Value="@((Guid?)ml.Id)">@ml.CategoryName / @ml.Name (@ml.Code)</MudSelectItem>
+                                        }
+                                    </MudSelect>
+                                </MudItem>
+                            }
+                        }
+                        else
+                        {
                             <MudItem xs="12">
-                                <MudSelect T="Guid?" @bind-Value="_addLineId" Label="@Loc["Budget.Edit.SelectLine"]"
-                                           Variant="Variant.Outlined" Margin="Margin.Dense">
-                                    @foreach (var ml in _masterLines.Where(m => _lines.All(l => l.BudgetLineId != m.Id)))
-                                    {
-                                        <MudSelectItem Value="@((Guid?)ml.Id)">@ml.CategoryName / @ml.Name (@ml.Code)</MudSelectItem>
-                                    }
-                                </MudSelect>
+                                <MudSwitch T="bool" @bind-Value="_newCategoryMode" Color="Color.Secondary" Label="@Loc["Budget.Edit.NewCategoryToggle"]" />
                             </MudItem>
-                            @RenderLineFields(isAdd: true)
-                            <MudItem xs="12" Class="d-flex justify-end gap-2">
-                                <MudButton Variant="Variant.Text" OnClick="@(() => _addMode = false)">@Loc["Common.Cancel"]</MudButton>
-                                <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="AddAsync" Disabled="@(_busy || _addLineId is null)">@Loc["Budget.Edit.AddLine"]</MudButton>
+                            @if (_newCategoryMode)
+                            {
+                                <MudItem xs="12" sm="4">
+                                    <MudTextField T="string" @bind-Value="_newCatCode" Label="@Loc["Budget.Edit.CategoryCode"]"
+                                                  Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="20" />
+                                </MudItem>
+                                <MudItem xs="12" sm="8">
+                                    <MudTextField T="string" @bind-Value="_newCatName" Label="@Loc["Budget.Edit.CategoryName"]"
+                                                  Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="200" />
+                                </MudItem>
+                            }
+                            else
+                            {
+                                <MudItem xs="12">
+                                    <MudSelect T="Guid?" @bind-Value="_selCategoryId" Label="@Loc["Budget.Edit.SelectCategory"]"
+                                               Variant="Variant.Outlined" Margin="Margin.Dense">
+                                        @foreach (var c in _categories)
+                                        {
+                                            <MudSelectItem Value="@((Guid?)c.Id)">@c.Name (@c.Code)</MudSelectItem>
+                                        }
+                                    </MudSelect>
+                                </MudItem>
+                            }
+                            <MudItem xs="12" sm="4">
+                                <MudTextField T="string" @bind-Value="_newLineCode" Label="@Loc["Budget.Edit.LineCode"]"
+                                              Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="40" />
                             </MudItem>
-                        </MudGrid>
-                    }
+                            <MudItem xs="12" sm="8">
+                                <MudTextField T="string" @bind-Value="_newLineName" Label="@Loc["Budget.Edit.LineName"]"
+                                              Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="200" />
+                            </MudItem>
+                        }
+
+                        @RenderLineFields(isAdd: true)
+
+                        <MudItem xs="12" Class="d-flex justify-end gap-2">
+                            <MudButton Variant="Variant.Text" OnClick="@(() => _addMode = false)">@Loc["Common.Cancel"]</MudButton>
+                            @if (!_newLineMode)
+                            {
+                                <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="AddAsync"
+                                           Disabled="@(_busy || _addLineId is null)">@Loc["Budget.Edit.AddLine"]</MudButton>
+                            }
+                            else
+                            {
+                                <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="CreateAndAddAsync"
+                                           Disabled="@_createDisabled">@Loc["Budget.Edit.CreateAndAdd"]</MudButton>
+                            }
+                        </MudItem>
+                    </MudGrid>
                 }
                 else if (_selected is not null)
                 {
@@ -164,6 +222,7 @@ else
     private BudgetDetail? _budget;
     private IReadOnlyList<BudgetLineVersionDto> _lines = [];
     private IReadOnlyList<BudgetLineListItem> _masterLines = [];
+    private IReadOnlyList<ExpenseCategoryListItem> _categories = [];
     private IReadOnlyList<ParticipationGroupListItem> _groups = [];
     private BudgetLineVersionDto? _selected;
 
@@ -174,6 +233,23 @@ else
     private DistributionModel _fDistribution = DistributionModel.Equal;
     private Guid? _fGroupId;
     private int _fDueDay = 15;
+
+    // Yeni kalem oluşturma (satır içi)
+    private bool _newLineMode, _newCategoryMode;
+    private Guid? _selCategoryId;
+    private string _newCatCode = "", _newCatName = "", _newLineCode = "", _newLineName = "";
+
+    // Henüz bütçeye eklenmemiş master kalemler
+    private List<BudgetLineListItem> _availableMasters =>
+        _masterLines.Where(m => _lines.All(l => l.BudgetLineId != m.Id)).ToList();
+
+    private bool _createDisabled =>
+        _busy
+        || string.IsNullOrWhiteSpace(_newLineCode)
+        || string.IsNullOrWhiteSpace(_newLineName)
+        || (_newCategoryMode
+            ? string.IsNullOrWhiteSpace(_newCatCode) || string.IsNullOrWhiteSpace(_newCatName)
+            : _selCategoryId is null);
 
     protected override async Task OnParametersSetAsync()
     {
@@ -213,6 +289,8 @@ else
 
         var masters = await Mediator.Send(new GetBudgetLinesByCompanyQuery(CompanyId));
         _masterLines = masters.IsSuccess && masters.Value is not null ? masters.Value : [];
+        var categories = await Mediator.Send(new GetExpenseCategoriesByCompanyQuery(CompanyId));
+        _categories = categories.IsSuccess && categories.Value is not null ? categories.Value : [];
         var groups = await Mediator.Send(new GetParticipationGroupsByCompanyQuery(CompanyId));
         _groups = groups.IsSuccess && groups.Value is not null ? groups.Value : [];
 
@@ -242,6 +320,11 @@ else
         _fDistribution = DistributionModel.Equal;
         _fGroupId = null;
         _fDueDay = 15;
+        // Yeni kalem formu sıfırla; hiç seçilebilir master yoksa doğrudan oluşturma moduna geç
+        _newLineMode = _availableMasters.Count == 0;
+        _newCategoryMode = _categories.Count == 0;
+        _selCategoryId = null;
+        _newCatCode = _newCatName = _newLineCode = _newLineName = "";
     }
 
     private RenderFragment RenderLineFields(bool isAdd) => __builder =>
@@ -304,6 +387,43 @@ else
             _tenantId, CompanyId, _editVersionId, _addLineId.Value, _fAmount, _fSchedule, _fDistribution, _fGroupId, null, _fDueDay));
         _busy = false;
         await AfterMutation(result.IsSuccess, result.IsSuccess ? Loc["Budget.Edit.Added"].Value : result.FirstError.Message, result.IsSuccess);
+    }
+
+    private async Task CreateAndAddAsync()
+    {
+        if (_createDisabled) return;
+        _busy = true;
+        try
+        {
+            // 1) Kategori (yeni veya mevcut)
+            Guid categoryId;
+            if (_newCategoryMode)
+            {
+                var catRes = await Mediator.Send(new CreateExpenseCategoryCommand(
+                    _tenantId, CompanyId, null, _newCatCode.Trim(), _newCatName.Trim(), null, 0));
+                if (catRes.IsFailure) { Snackbar.Add(catRes.FirstError.Message, Severity.Error); return; }
+                categoryId = catRes.Value;
+            }
+            else
+            {
+                if (_selCategoryId is null) return;
+                categoryId = _selCategoryId.Value;
+            }
+
+            // 2) Master kalem tanımı
+            var lineRes = await Mediator.Send(new CreateBudgetLineCommand(
+                _tenantId, CompanyId, categoryId, null, _newLineCode.Trim(), _newLineName.Trim(), null, 0));
+            if (lineRes.IsFailure) { Snackbar.Add(lineRes.FirstError.Message, Severity.Error); return; }
+
+            // 3) Bütçeye ekle
+            var addRes = await Mediator.Send(new AddBudgetLineToVersionCommand(
+                _tenantId, CompanyId, _editVersionId, lineRes.Value, _fAmount, _fSchedule, _fDistribution, _fGroupId, null, _fDueDay));
+            if (addRes.IsFailure) { Snackbar.Add(addRes.FirstError.Message, Severity.Error); return; }
+
+            Snackbar.Add(Loc["Budget.Edit.Added"].Value, Severity.Success);
+            await LoadAsync();
+        }
+        finally { _busy = false; }
     }
 
     private async Task RemoveAsync()
