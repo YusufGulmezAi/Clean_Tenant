@@ -1,5 +1,8 @@
 using Blazored.LocalStorage;
 using CleanTenant.Application;
+using CleanTenant.Infrastructure.BackgroundJobs;
+using CleanTenant.Infrastructure.BackgroundJobs.Dashboard;
+using CleanTenant.Infrastructure.BackgroundJobs.Jobs;
 using CleanTenant.Infrastructure.Caching;
 using CleanTenant.Infrastructure.Export;
 using CleanTenant.Infrastructure.Identity;
@@ -7,6 +10,7 @@ using CleanTenant.Infrastructure.Identity.Middleware;
 using CleanTenant.Infrastructure.Logging;
 using CleanTenant.Infrastructure.Persistence;
 using CleanTenant.Infrastructure.Storage;
+using Hangfire;
 using CleanTenant.ManagementApp.Auth;
 using CleanTenant.ManagementApp.Components;
 using CleanTenant.ManagementApp.Services;
@@ -39,6 +43,7 @@ var redisConnection = builder.Configuration.GetConnectionString("Redis")
 var auditConnection = builder.Configuration.GetConnectionString("Audit");
 var logConnection = builder.Configuration.GetConnectionString("Log");
 var mainConnection = builder.Configuration.GetConnectionString("Main");
+var jobsConnection = builder.Configuration.GetConnectionString("Jobs");
 
 // ─── Backend services — WebApi ile aynı pipeline (in-process IMediator) ───
 builder.Services.AddApplicationServices();
@@ -60,6 +65,15 @@ if (!string.IsNullOrWhiteSpace(logConnection))
 if (!string.IsNullOrWhiteSpace(mainConnection))
 {
     builder.Services.AddMainPersistence(mainConnection, auditConnection);
+}
+
+// v0.2.14 (FAZ 6.8) — Hangfire arka plan job altyapısı (otomatik tahakkuk).
+// Yalnız Jobs connection + Main DB varsa etkin (job tahakkuk üretir → Main gerekir).
+var jobsEnabled = !string.IsNullOrWhiteSpace(jobsConnection) && !string.IsNullOrWhiteSpace(mainConnection);
+if (jobsEnabled)
+{
+    builder.Services.AddBackgroundJobs(jobsConnection!);
+    builder.Services.AddScoped<MonthlyAccrualJob>();
 }
 
 // ─── UI services ───
@@ -178,6 +192,22 @@ app.UseAuthentication();
 app.UseSessionLookup();
 app.UseAuthorization();
 app.UseAntiforgery();
+
+// v0.2.14 (FAZ 6.8) — Hangfire dashboard + recurring job. Dashboard session lookup'tan
+// SONRA gelmeli (filtre ICurrentSessionAccessor.Current'a bakar). Yalnız System scope.
+if (jobsEnabled)
+{
+    app.UseHangfireDashboard("/hangfire", new DashboardOptions
+    {
+        Authorization = [new SystemScopeDashboardFilter()],
+    });
+
+    // Her ayın 1'i, 03:00 (sunucu yerel saati) — otomatik tahakkuk.
+    RecurringJob.AddOrUpdate<MonthlyAccrualJob>(
+        MonthlyAccrualJob.RecurringJobId,
+        job => job.RunAsync(CancellationToken.None),
+        Cron.Monthly(day: 1, hour: 3));
+}
 
 app.MapStaticAssets();
 app.MapAuthEndpoints();
