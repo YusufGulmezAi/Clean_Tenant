@@ -154,5 +154,6 @@ public static class PermissionCatalog
         new("tenant.collection.view",                "Tahsilat / borç görüntüleme",   "Budget",     ScopeLevel.Tenant),
         new("tenant.collection.record",              "Tahsilat kaydetme",             "Budget",     ScopeLevel.Tenant),
         new("tenant.latefee.configure",              "Gecikme parametre yönetimi",    "Budget",     ScopeLevel.Tenant),
+        new("tenant.budget.template.publish",        "Bütçe şablonu paylaşma",        "Budget",     ScopeLevel.Tenant),
     ];
 }
