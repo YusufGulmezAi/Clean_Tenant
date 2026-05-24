@@ -353,6 +353,39 @@ public static class LocalizationCatalog
         new("Login.Error.IdentifierRequired","Kullanıcı kimliği ve şifre zorunlu.", "Username and password are required."),
         new("Login.Error.Invalid",           "Geçersiz kimlik veya şifre.", "Invalid identifier or password."),
         new("Login.Error.Lockout",           "Hesap geçici olarak kilitli (çok fazla başarısız deneme).", "Account temporarily locked (too many failed attempts)."),
+        new("Login.Locked.Title",            "Hesabınız geçici olarak kilitlendi", "Your account is temporarily locked"),
+        new("Login.Locked.Message",          "Çok sayıda hatalı giriş denemesi yapıldı. Lütfen aşağıdaki süre dolduğunda tekrar deneyin.",
+                                             "Too many failed login attempts. Please try again when the time below expires."),
+        new("Login.Locked.RemainingLabel",   "Kalan süre",                  "Time remaining"),
+
+        // ========== Portal (Site Portalı) — v0.2.14 lokalizasyon ==========
+        new("Portal.Brand",                  "Site Portalı",                "Resident Portal"),
+        new("Portal.Layout.Brand",           "Toplu Yapı Portalı",          "Community Portal"),
+        new("Portal.Layout.SignOut",         "Çıkış",                       "Sign out"),
+        new("Portal.Nav.Home",               "Anasayfa",                    "Home"),
+        new("Portal.Nav.Profile",            "Profilim",                    "My Profile"),
+
+        new("Portal.Login.PageTitle",        "Giriş — Site Portalı",        "Sign in — Resident Portal"),
+        new("Portal.Login.Identifier",       "E-posta / TCKN / Telefon",    "Email / National ID / Phone"),
+        new("Portal.Login.Password",         "Şifre",                       "Password"),
+        new("Portal.Login.RememberMe",       "Beni hatırla (7 gün)",        "Remember me (7 days)"),
+        new("Portal.Login.SubmitButton",     "Giriş Yap",                   "Sign in"),
+        new("Portal.Login.Error.IdentifierRequired", "Kullanıcı kimliği ve şifre zorunlu.", "Username and password are required."),
+        new("Portal.Login.Error.Invalid",    "Geçersiz kimlik veya şifre.", "Invalid identifier or password."),
+        new("Portal.Login.Error.Lockout",    "Hesap geçici olarak kilitli.", "Account temporarily locked."),
+        new("Portal.Login.Error.NoAccess",   "Portal erişimi için yetkiniz yok.", "You are not authorized to access the portal."),
+        new("Portal.Login.Error.IdentifierType", "Kimlik tipi tanınamadı.", "Identifier type not recognized."),
+        new("Portal.Login.Error.TwoFactorExpired", "2FA süresi doldu. Tekrar giriş yapın.", "Two-factor session expired. Please sign in again."),
+        new("Portal.Login.Error.Unknown",    "Hata: {0}",                   "Error: {0}"),
+
+        new("Portal.Home.PageTitle",         "Anasayfa — Site Portalı",     "Home — Resident Portal"),
+        new("Portal.Home.Welcome",           "Hoş geldiniz",                "Welcome"),
+        new("Portal.Home.Site",              "Siteniz",                     "Your community"),
+        new("Portal.Home.Management",        "Yönetim",                     "Management"),
+
+        new("Portal.Profile.PageTitle",      "Profilim — Site Portalı",     "My Profile — Resident Portal"),
+        new("Portal.Profile.Title",          "Profilim",                    "My Profile"),
+        new("Portal.Profile.ComingSoon",     "Profil yönetimi ilerleyen fazlarda gelecektir.", "Profile management will be available in a future release."),
 
         // ========== Auth - 2FA Challenge ==========
         new("TwoFactor.Challenge.Title",     "İki Faktörlü Doğrulama", "Two-Factor Authentication"),
@@ -498,6 +531,21 @@ public static class LocalizationCatalog
         new("TenantForm.Tab.Contact",          "İletişim",                               "Contact"),
         new("TenantForm.Tab.Contract",         "Sözleşme",                               "Contract"),
         new("TenantForm.Tab.Plan",             "Paket ve Limitler",                      "Plan & Limits"),
+        new("TenantForm.Tab.Security",         "Güvenlik",                               "Security"),
+
+        // Hesap kilitleme politikası (Güvenlik tab)
+        new("TenantForm.Security.Title",       "Hesap Kilitleme Politikası",             "Account Lockout Policy"),
+        new("TenantForm.Security.Caption",     "Hatalı giriş denemelerinde bu yönetimin kullanıcı hesaplarının nasıl kilitleneceğini belirler.",
+                                               "Controls how this management's user accounts are locked after failed login attempts."),
+        new("TenantForm.Security.LockoutEnabled",      "Hesap kilitleme aktif",          "Account lockout enabled"),
+        new("TenantForm.Security.LockoutEnabled.Help", "Kapalıyken hatalı denemeler sayılır ama hesap hiç kilitlenmez.",
+                                                       "When off, failed attempts are counted but the account is never locked."),
+        new("TenantForm.Security.MaxAttempts",         "Maksimum hatalı deneme",         "Max failed attempts"),
+        new("TenantForm.Security.MaxAttempts.Help",    "Bu sayıya ulaşınca hesap kilitlenir (1–50).",
+                                                       "The account is locked when this count is reached (1–50)."),
+        new("TenantForm.Security.DurationMinutes",     "Kilit süresi (dakika)",          "Lockout duration (minutes)"),
+        new("TenantForm.Security.DurationMinutes.Help","Hesabın kilitli kalacağı süre (1–1440 dk).",
+                                                       "How long the account stays locked (1–1440 min)."),
 
         new("TenantForm.Section.Address",      "Adres",                                  "Address"),
         new("TenantForm.Province",             "İl",                                     "Province"),
@@ -510,6 +558,9 @@ public static class LocalizationCatalog
 
         new("TenantForm.ContractStartDate",    "Sözleşme Başlangıç Tarihi",              "Contract Start Date"),
         new("TenantForm.ContractEndDate",      "Sözleşme Bitiş Tarihi",                  "Contract End Date"),
+        new("TenantForm.Date.Invalid",
+            "Geçerli bir tarih giriniz (örn. 31.12.2026 veya 31/12/2026).",
+            "Enter a valid date (e.g. 31.12.2026 or 31/12/2026)."),
         new("TenantForm.TransitionGraceDays",  "Devir Ek Süresi (gün)",                  "Transition Grace (days)"),
         new("TenantForm.TransitionGraceDays.Help",
             "Sözleşme bitişi sonrası veri taşıma ve son fatura için verilen ek süre.",
@@ -1166,6 +1217,13 @@ public static class LocalizationCatalog
         new("SystemUsers.Reactivate.Confirm",   "{name} kullanıcısının hesabı tekrar aktif edilecek. Devam edilsin mi?",
                                                 "{name} user account will be reactivated. Continue?"),
         new("SystemUsers.ReactivateSuccess",    "Kullanıcı başarıyla devreye alındı.", "User reactivated successfully."),
+
+        // Hesap kilidi açma akışı (User.Lockout izni)
+        new("SystemUsers.List.Action.Unlock",   "Kilidi Aç",                     "Unlock"),
+        new("SystemUsers.Unlock.Title",         "Hesap Kilidini Aç",             "Unlock Account"),
+        new("SystemUsers.Unlock.Confirm",       "{name} kullanıcısının hesap kilidi açılacak ve hatalı deneme sayacı sıfırlanacak. Devam edilsin mi?",
+                                                "The account lock for {name} will be cleared and the failed-attempt counter reset. Continue?"),
+        new("SystemUsers.UnlockSuccess",        "Kullanıcının hesap kilidi açıldı.", "User account unlocked."),
 
         // Login hata mesajları — ek kodlar
         new("Login.Error.Deactivated",          "Bu hesap devre dışı bırakılmış. Yöneticinizle iletişime geçin.",

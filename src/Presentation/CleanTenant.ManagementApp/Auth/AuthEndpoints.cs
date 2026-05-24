@@ -277,7 +277,15 @@ public static class AuthEndpoints
         if (result.IsFailure)
         {
             var error = result.FirstError;
-            return Results.Redirect($"/login?error={Uri.EscapeDataString(error.Code)}");
+            var url = $"/login?error={Uri.EscapeDataString(error.Code)}";
+            // Hesap kilitliyse (AUTH-003) login ekranı canlı geri sayım
+            // gösterebilsin diye kilit bitiş zamanını query string'e ekle.
+            if (error.Metadata is not null
+                && error.Metadata.TryGetValue("lockedUntil", out var lockedUntil))
+            {
+                url += $"&lockedUntil={Uri.EscapeDataString(lockedUntil)}";
+            }
+            return Results.Redirect(url);
         }
 
         var login = result.Value!;

@@ -40,6 +40,7 @@ public sealed class LoginCommandHandler : IRequestHandler<LoginCommand, Result<L
     private readonly ITwoFactorChallengeStore _challengeStore;
     private readonly IPreAuthEnrollmentStore _enrollmentStore;
     private readonly IPasswordChangeChallengeStore _passwordChangeStore;
+    private readonly IAccountLockoutService _lockout;
     private readonly IClock _clock;
 
     /// <summary>DI bağımlılıklarını alır.</summary>
@@ -50,6 +51,7 @@ public sealed class LoginCommandHandler : IRequestHandler<LoginCommand, Result<L
         ITwoFactorChallengeStore challengeStore,
         IPreAuthEnrollmentStore enrollmentStore,
         IPasswordChangeChallengeStore passwordChangeStore,
+        IAccountLockoutService lockout,
         IClock clock)
     {
         _userManager = userManager;
@@ -58,6 +60,7 @@ public sealed class LoginCommandHandler : IRequestHandler<LoginCommand, Result<L
         _challengeStore = challengeStore;
         _enrollmentStore = enrollmentStore;
         _passwordChangeStore = passwordChangeStore;
+        _lockout = lockout;
         _clock = clock;
     }
 
@@ -87,16 +90,19 @@ public sealed class LoginCommandHandler : IRequestHandler<LoginCommand, Result<L
 
         if (await _userManager.IsLockedOutAsync(user))
         {
-            return Result<LoginResult>.Failure(
-                Error.Unauthorized("AUTH-003", "Hesap geçici olarak kilitli."));
+            var lockoutEnd = await _userManager.GetLockoutEndDateAsync(user);
+            return LockedOut(lockoutEnd);
         }
 
         var passwordOk = await _userManager.CheckPasswordAsync(user, command.Password);
         if (!passwordOk)
         {
-            await _userManager.AccessFailedAsync(user);
-            return Result<LoginResult>.Failure(
-                Error.Unauthorized("AUTH-002", "Geçersiz e-posta veya şifre."));
+            // Tenant-başına politikaya göre sayacı artır; eşik aşıldıysa kilitle.
+            var lockedUntil = await _lockout.RegisterFailedAttemptAsync(user, cancellationToken);
+            return lockedUntil is not null
+                ? LockedOut(lockedUntil)
+                : Result<LoginResult>.Failure(
+                    Error.Unauthorized("AUTH-002", "Geçersiz kimlik veya şifre."));
         }
 
         await _userManager.ResetAccessFailedCountAsync(user);
@@ -126,6 +132,26 @@ public sealed class LoginCommandHandler : IRequestHandler<LoginCommand, Result<L
         return finalize.IsSuccess
             ? Result<LoginResult>.Success(new LoginResult(LoginStatus.Success, finalize.Value, null))
             : Result<LoginResult>.Failure(finalize.FirstError);
+    }
+
+    /// <summary>
+    /// <c>AUTH-003</c> kilit hatasını üretir. Kilit bitiş zamanı biliniyorsa,
+    /// login ekranının canlı geri sayım gösterebilmesi için
+    /// <c>Metadata["lockedUntil"]</c> (ISO 8601 / UTC) eklenir. Kalan deneme
+    /// sayısı bilinçli olarak istemciye verilmez (güvenlik — enumeration).
+    /// </summary>
+    private static Result<LoginResult> LockedOut(DateTimeOffset? lockoutEnd)
+    {
+        var error = Error.Unauthorized("AUTH-003", "Hesap geçici olarak kilitli.");
+        if (lockoutEnd is { } until)
+        {
+            error = error.WithMetadata(new Dictionary<string, string>
+            {
+                ["lockedUntil"] = until.ToUniversalTime().ToString("O"),
+            });
+        }
+
+        return Result<LoginResult>.Failure(error);
     }
 
     private async Task<Result<LoginResult>> IssuePasswordChangeChallengeAsync(

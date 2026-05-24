@@ -19,6 +19,12 @@ public interface IUserRepository
 
     /// <summary>Kullanıcının şifresini sıfırlar (mevcut şifre doğrulaması olmadan).</summary>
     Task<IdentityOperationResult> ResetPasswordAsync(User user, string newPassword, CancellationToken ct = default);
+
+    /// <summary>
+    /// Kilitli kullanıcının kilidini açar: kilit bitiş zamanını temizler ve
+    /// hatalı deneme sayacını sıfırlar. Zaten kilitli olmayanlarda da güvenle çağrılabilir.
+    /// </summary>
+    Task<IdentityOperationResult> UnlockAsync(User user, CancellationToken ct = default);
 }
 
 /// <summary>Identity operasyon sonucu (başarı/hata listesi).</summary>

@@ -54,6 +54,20 @@ builder.Services.AddRazorComponents()
 builder.Services.AddMudServices();
 builder.Services.AddLocalization(opts => opts.ResourcesPath = "Localization/Resources");
 
+// Lokalizasyon — DbStringLocalizer + LocalizationStore zaten AddCatalogPersistence
+// içinde kayıtlı (ManagementApp ile ortak Catalog DB / localized_resources).
+// Burada yalnız desteklenen kültürler + varsayılan tanımlanır; dil .AspNetCore.Culture
+// cookie'siyle seçilir (login sonrası kullanıcının PreferredCulture'ı uygulanır).
+var supportedCultures = new[] { "tr-TR", "en-US", "de-DE", "ru-RU", "ar-SA" };
+builder.Services.Configure<Microsoft.AspNetCore.Builder.RequestLocalizationOptions>(opts =>
+{
+    opts.SetDefaultCulture("tr-TR")
+        .AddSupportedCultures(supportedCultures)
+        .AddSupportedUICultures(supportedCultures);
+    opts.FallBackToParentCultures = true;
+    opts.FallBackToParentUICultures = true;
+});
+
 // ─── Cookie auth (Portal scheme) ───
 builder.Services.AddAuthentication(opts =>
 {
@@ -81,6 +95,17 @@ builder.Services.AddHttpContextAccessor();
 
 var app = builder.Build();
 
+// Lokalizasyon: çevirileri DB'ye idempotent ekle (ortak Catalog) ve bu process'in
+// singleton in-memory store'una yükle (her app kendi store'unu preload etmeli).
+using (var scope = app.Services.CreateScope())
+{
+    var locSeeder = scope.ServiceProvider.GetRequiredService<CleanTenant.Infrastructure.Persistence.Seeding.LocalizationSeeder>();
+    await locSeeder.SeedAsync();
+
+    var locStore = app.Services.GetRequiredService<CleanTenant.Infrastructure.Persistence.Localization.LocalizationStore>();
+    await locStore.ReloadAsync();
+}
+
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
@@ -89,6 +114,7 @@ if (!app.Environment.IsDevelopment())
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseHttpsRedirection();
 
+app.UseRequestLocalization();
 app.UseAuthentication();
 app.UseSessionLookup();
 app.UseAuthorization();

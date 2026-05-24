@@ -7,8 +7,11 @@
     İnteraktivite minimum (loading state SignalR-bağımsız). Hata gösterimi
     query string'den (?error=CODE) alınır.
 
-    v0.2.10.e.6 — Login.* + Layout.AppBar.Brand anahtarlarıyla lokalize edildi.
-    MessageFor static method → instance method (Loc erişimi için).
+    v0.2.14 — Hesap kilitleme revizesi (Tasarım C görsel dili):
+      - Hatalı kimlik/şifre → jenerik uyarı (kalan deneme sayısı GÖSTERİLMEZ,
+        güvenlik/enumeration tercihi).
+      - Hesap kilitliyse (AUTH-003 + ?lockedUntil=ISO) → şık kırmızı kilit kartı +
+        canlı geri sayım (mm:ss). Süre dolunca form otomatik tekrar açılır.
 *@
 
 <PageTitle>@Loc["Login.PageTitle"]</PageTitle>
@@ -26,7 +29,27 @@
         </MudAlert>
     }
 
-    @if (!string.IsNullOrEmpty(ErrorCode))
+    @if (IsLockout)
+    {
+        @* ── Kilit kartı (Tasarım C) — kırmızı şerit + canlı geri sayım ── *@
+        <div class="lockout-card mb-4">
+            <div class="lockout-card__head">
+                <MudIcon Icon="@Icons.Material.Filled.LockClock" Color="Color.Error" Size="Size.Medium" />
+                <span class="lockout-card__title">@Loc["Login.Locked.Title"]</span>
+            </div>
+            <div class="lockout-card__body">@Loc["Login.Locked.Message"]</div>
+            @if (LockedUntilUtc is not null)
+            {
+                <div class="lockout-card__countdown">
+                    <span class="lockout-card__countdown-label">@Loc["Login.Locked.RemainingLabel"]</span>
+                    <span id="lockout-countdown"
+                          class="lockout-card__countdown-value"
+                          data-until="@LockedUntilUtc.Value.ToString("O")">--:--</span>
+                </div>
+            }
+        </div>
+    }
+    else if (!string.IsNullOrEmpty(ErrorCode))
     {
         <MudAlert Severity="@SeverityFor(ErrorCode)" Class="mb-4" ShowCloseIcon="true">
             @MessageFor(ErrorCode)
@@ -46,6 +69,7 @@
                    required
                    autocomplete="username"
                    autofocus
+                   disabled="@IsLockout"
                    class="mud-input-control-input-container"
                    style="width: 100%; padding: 10px; border: 1px solid rgba(0,0,0,0.23); border-radius: 4px; font-size: 1rem;" />
         </div>
@@ -57,15 +81,18 @@
                    type="password"
                    required
                    autocomplete="current-password"
+                   disabled="@IsLockout"
                    style="width: 100%; padding: 10px; border: 1px solid rgba(0,0,0,0.23); border-radius: 4px; font-size: 1rem;" />
         </div>
 
         <div class="mb-4 d-flex align-center">
-            <input id="rememberMe" name="rememberMe" type="checkbox" value="true" />
+            <input id="rememberMe" name="rememberMe" type="checkbox" value="true" disabled="@IsLockout" />
             <label for="rememberMe" class="ml-2">@Loc["Login.RememberMe.Days"]</label>
         </div>
 
         <button type="submit"
+                id="login-submit"
+                disabled="@IsLockout"
                 style="width: 100%; padding: 12px; background-color: var(--mud-palette-primary); color: white; border: none; border-radius: 4px; font-size: 1rem; font-weight: 500; cursor: pointer;">
             @Loc["Login.SubmitButton"]
         </button>
@@ -78,9 +105,51 @@
     </MudText>
 
     <MudText Typo="Typo.caption" Color="Color.Default" Align="Align.Center" Class="d-block mt-1">
-        v0.2.2 · @Loc["Login.Footer"]
+        v0.2.14 · @Loc["Login.Footer"]
     </MudText>
 </MudPaper>
+
+@* Kilit kartı görünümü — sade, tema değişkenleriyle uyumlu. *@
+<style>
+    .lockout-card {
+        border: 1px solid var(--mud-palette-error);
+        border-left: 4px solid var(--mud-palette-error);
+        border-radius: 8px;
+        background-color: rgba(244, 67, 54, 0.06);
+        padding: 16px;
+    }
+    .lockout-card__head { display: flex; align-items: center; gap: 8px; }
+    .lockout-card__title { font-weight: 600; color: var(--mud-palette-error); }
+    .lockout-card__body { margin-top: 6px; font-size: 0.9rem; color: var(--mud-palette-text-secondary); }
+    .lockout-card__countdown {
+        margin-top: 12px; display: flex; flex-direction: column; align-items: center;
+    }
+    .lockout-card__countdown-label { font-size: 0.75rem; color: var(--mud-palette-text-secondary); }
+    .lockout-card__countdown-value {
+        font-size: 2rem; font-weight: 700; font-variant-numeric: tabular-nums;
+        color: var(--mud-palette-error); letter-spacing: 2px;
+    }
+</style>
+
+@if (IsLockout && LockedUntilUtc is not null)
+{
+    @* Canlı geri sayım — Static SSR olduğu için saf JS. Süre dolunca /login'e döner. *@
+    <script>
+        (function () {
+            var el = document.getElementById('lockout-countdown');
+            if (!el) return;
+            var until = new Date(el.getAttribute('data-until')).getTime();
+            function pad(n) { return (n < 10 ? '0' : '') + n; }
+            function tick() {
+                var diff = Math.max(0, Math.floor((until - Date.now()) / 1000));
+                el.textContent = pad(Math.floor(diff / 60)) + ':' + pad(diff % 60);
+                if (diff <= 0) { clearInterval(timer); window.location.href = '/login'; }
+            }
+            tick();
+            var timer = setInterval(tick, 1000);
+        })();
+    </script>
+}
 
 @code {
     [SupplyParameterFromQuery(Name = "error")]
@@ -88,6 +157,23 @@
 
     [SupplyParameterFromQuery(Name = "info")]
     public string? Info { get; set; }
+
+    /// <summary>Kilit bitiş zamanı (ISO 8601 / UTC) — yalnız AUTH-003'te dolu.</summary>
+    [SupplyParameterFromQuery(Name = "lockedUntil")]
+    public string? LockedUntil { get; set; }
+
+    /// <summary>Hesap kilitli mi? AUTH-003 hata kodu kilit demektir.</summary>
+    private bool IsLockout => string.Equals(ErrorCode, "AUTH-003", StringComparison.Ordinal);
+
+    /// <summary>Kilit bitiş zamanının parse edilmiş UTC hali (geçersizse null).</summary>
+    private DateTimeOffset? LockedUntilUtc =>
+        DateTimeOffset.TryParse(
+            LockedUntil,
+            System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal,
+            out var parsed)
+            ? parsed
+            : null;
 
     private string InfoMessageFor(string info) => info switch
     {

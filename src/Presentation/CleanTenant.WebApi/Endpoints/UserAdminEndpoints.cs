@@ -1,4 +1,5 @@
 using CleanTenant.Application.Features.System.ForceLogoutUser;
+using CleanTenant.Application.Features.System.Users;
 using CleanTenant.Infrastructure.Identity.Authorization;
 using CleanTenant.SharedKernel.Common.Errors;
 using MediatR;
@@ -19,7 +20,22 @@ public static class UserAdminEndpoints
         group.MapPost("/{userUrlCode}/force-logout", ForceLogoutUserAsync)
              .RequireAuthorization(AuthorizationPolicies.TenantScope);
 
+        group.MapPost("/{userUrlCode}/unlock", UnlockUserAsync)
+             .RequireAuthorization(AuthorizationPolicies.TenantScope);
+
         return routes;
+    }
+
+    private static async Task<IResult> UnlockUserAsync(
+        string userUrlCode,
+        [FromServices] IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new UnlockUserCommand(userUrlCode), cancellationToken);
+
+        return result.IsSuccess
+            ? Results.Ok(new { message = "Kullanıcının hesap kilidi açıldı." })
+            : Results.Json(new { errors = result.Errors }, statusCode: MapErrorTypeToStatus(result.FirstError.Type));
     }
 
     private static async Task<IResult> ForceLogoutUserAsync(

@@ -33,4 +33,7 @@ public sealed record TenantDetail(
     BillingTier BillingTier,
     bool HasDedicatedDatabase,
     string? DatabaseSchemaName,
-    bool AllowSystemWriteAccess);
+    bool AllowSystemWriteAccess,
+    bool LockoutEnabled,
+    int LockoutMaxFailedAttempts,
+    int LockoutDurationMinutes);

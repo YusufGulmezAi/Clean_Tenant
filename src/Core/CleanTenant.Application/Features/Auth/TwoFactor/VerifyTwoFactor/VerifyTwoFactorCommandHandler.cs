@@ -29,16 +29,19 @@ public sealed class VerifyTwoFactorCommandHandler : IRequestHandler<VerifyTwoFac
     private readonly UserManager<User> _userManager;
     private readonly ITwoFactorChallengeStore _challengeStore;
     private readonly LoginFinalizer _finalizer;
+    private readonly IAccountLockoutService _lockout;
 
     /// <summary>DI bağımlılıklarını alır.</summary>
     public VerifyTwoFactorCommandHandler(
         UserManager<User> userManager,
         ITwoFactorChallengeStore challengeStore,
-        LoginFinalizer finalizer)
+        LoginFinalizer finalizer,
+        IAccountLockoutService lockout)
     {
         _userManager = userManager;
         _challengeStore = challengeStore;
         _finalizer = finalizer;
+        _lockout = lockout;
     }
 
     /// <summary>Verify isteğini işler.</summary>
@@ -63,8 +66,9 @@ public sealed class VerifyTwoFactorCommandHandler : IRequestHandler<VerifyTwoFac
         var isValid = await ValidateCodeAsync(user, command.Method, command.Code, challenge);
         if (!isValid)
         {
-            // Tekrar denemeye izin ver — challenge silinmez, ama lockout sayacını artır.
-            await _userManager.AccessFailedAsync(user);
+            // Tekrar denemeye izin ver — challenge silinmez, ama lockout sayacını artır
+            // (tenant-başına politika; eşik aşılırsa hesap kilitlenir).
+            await _lockout.RegisterFailedAttemptAsync(user, cancellationToken);
             return Result<TokenPair>.Failure(
                 Error.Unauthorized("AUTH-2FA-INVALID-CODE", "Doğrulama kodu hatalı veya süresi dolmuş."));
         }

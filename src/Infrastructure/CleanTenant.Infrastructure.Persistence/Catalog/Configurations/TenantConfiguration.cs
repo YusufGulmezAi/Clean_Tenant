@@ -88,6 +88,12 @@ public sealed class TenantConfiguration : IEntityTypeConfiguration<Tenant>
         builder.Property(t => t.ContractEndDate);
         builder.Property(t => t.TransitionGraceDays);
 
+        // Hesap kilitleme politikası — global varsayılanla (5 deneme / 15 dk) uyumlu
+        // başlangıç değerleri. Login akışı bu değerleri Catalog'dan okur.
+        builder.Property(t => t.LockoutEnabled).IsRequired().HasDefaultValue(true);
+        builder.Property(t => t.LockoutMaxFailedAttempts).IsRequired().HasDefaultValue(5);
+        builder.Property(t => t.LockoutDurationMinutes).IsRequired().HasDefaultValue(15);
+
         // xmin → RowVersion (PostgreSQL optimistic concurrency)
         builder.UseXminAsConcurrencyToken();
 

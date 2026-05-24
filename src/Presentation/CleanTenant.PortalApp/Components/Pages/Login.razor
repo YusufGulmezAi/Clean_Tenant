@@ -1,16 +1,42 @@
 @page "/login"
 @layout EmptyLayout
 @attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
+@inject IStringLocalizer Loc
+@*
+    Portal login — Static SSR. Form /auth/sign-in'e POST eder.
+    v0.2.14 — Hesap kilitleme revizesi + lokalizasyon (IStringLocalizer).
+    Kilitliyse (AUTH-003 + ?lockedUntil) kırmızı kilit kartı + canlı geri sayım;
+    hatalı girişte jenerik mesaj (kalan deneme sayısı gösterilmez — güvenlik tercihi).
+*@
 
-<PageTitle>Giriş — Site Portalı</PageTitle>
+<PageTitle>@Loc["Portal.Login.PageTitle"]</PageTitle>
 
 <MudPaper Elevation="3" Class="pa-8 mx-auto mt-16" Style="max-width: 460px;">
     <div class="d-flex align-center mb-6">
         <MudIcon Icon="@Icons.Material.Filled.HomeWork" Color="Color.Primary" Size="Size.Large" />
-        <MudText Typo="Typo.h4" Class="ml-2">Site Portalı</MudText>
+        <MudText Typo="Typo.h4" Class="ml-2">@Loc["Portal.Brand"]</MudText>
     </div>
 
-    @if (!string.IsNullOrEmpty(ErrorCode))
+    @if (IsLockout)
+    {
+        <div class="lockout-card mb-4">
+            <div class="lockout-card__head">
+                <MudIcon Icon="@Icons.Material.Filled.LockClock" Color="Color.Error" Size="Size.Medium" />
+                <span class="lockout-card__title">@Loc["Login.Locked.Title"]</span>
+            </div>
+            <div class="lockout-card__body">@Loc["Login.Locked.Message"]</div>
+            @if (LockedUntilUtc is not null)
+            {
+                <div class="lockout-card__countdown">
+                    <span class="lockout-card__countdown-label">@Loc["Login.Locked.RemainingLabel"]</span>
+                    <span id="lockout-countdown"
+                          class="lockout-card__countdown-value"
+                          data-until="@LockedUntilUtc.Value.ToString("O")">--:--</span>
+                </div>
+            }
+        </div>
+    }
+    else if (!string.IsNullOrEmpty(ErrorCode))
     {
         <MudAlert Severity="Severity.Error" Class="mb-4">@MessageFor(ErrorCode)</MudAlert>
     }
@@ -18,7 +44,7 @@
     <form method="post" action="/auth/sign-in">
         <div class="mb-3">
             <label for="identifier" class="d-block mb-1" style="font-weight: 500;">
-                E-posta / TCKN / Telefon
+                @Loc["Portal.Login.Identifier"]
             </label>
             <input id="identifier"
                    name="identifier"
@@ -26,43 +52,99 @@
                    required
                    autocomplete="username"
                    autofocus
+                   disabled="@IsLockout"
                    style="width: 100%; padding: 10px; border: 1px solid rgba(0,0,0,0.23); border-radius: 4px; font-size: 1rem;" />
         </div>
 
         <div class="mb-4">
-            <label for="password" class="d-block mb-1" style="font-weight: 500;">Şifre</label>
+            <label for="password" class="d-block mb-1" style="font-weight: 500;">@Loc["Portal.Login.Password"]</label>
             <input id="password"
                    name="password"
                    type="password"
                    required
                    autocomplete="current-password"
+                   disabled="@IsLockout"
                    style="width: 100%; padding: 10px; border: 1px solid rgba(0,0,0,0.23); border-radius: 4px; font-size: 1rem;" />
         </div>
 
         <div class="mb-4 d-flex align-center">
-            <input id="rememberMe" name="rememberMe" type="checkbox" value="true" />
-            <label for="rememberMe" class="ml-2">Beni hatırla (7 gün)</label>
+            <input id="rememberMe" name="rememberMe" type="checkbox" value="true" disabled="@IsLockout" />
+            <label for="rememberMe" class="ml-2">@Loc["Portal.Login.RememberMe"]</label>
         </div>
 
         <button type="submit"
+                disabled="@IsLockout"
                 style="width: 100%; padding: 12px; background-color: var(--mud-palette-primary); color: white; border: none; border-radius: 4px; font-size: 1rem; font-weight: 500; cursor: pointer;">
-            Giriş Yap
+            @Loc["Portal.Login.SubmitButton"]
         </button>
     </form>
 </MudPaper>
 
+<style>
+    .lockout-card {
+        border: 1px solid var(--mud-palette-error);
+        border-left: 4px solid var(--mud-palette-error);
+        border-radius: 8px;
+        background-color: rgba(244, 67, 54, 0.06);
+        padding: 16px;
+    }
+    .lockout-card__head { display: flex; align-items: center; gap: 8px; }
+    .lockout-card__title { font-weight: 600; color: var(--mud-palette-error); }
+    .lockout-card__body { margin-top: 6px; font-size: 0.9rem; color: var(--mud-palette-text-secondary); }
+    .lockout-card__countdown { margin-top: 12px; display: flex; flex-direction: column; align-items: center; }
+    .lockout-card__countdown-label { font-size: 0.75rem; color: var(--mud-palette-text-secondary); }
+    .lockout-card__countdown-value {
+        font-size: 2rem; font-weight: 700; font-variant-numeric: tabular-nums;
+        color: var(--mud-palette-error); letter-spacing: 2px;
+    }
+</style>
+
+@if (IsLockout && LockedUntilUtc is not null)
+{
+    <script>
+        (function () {
+            var el = document.getElementById('lockout-countdown');
+            if (!el) return;
+            var until = new Date(el.getAttribute('data-until')).getTime();
+            function pad(n) { return (n < 10 ? '0' : '') + n; }
+            function tick() {
+                var diff = Math.max(0, Math.floor((until - Date.now()) / 1000));
+                el.textContent = pad(Math.floor(diff / 60)) + ':' + pad(diff % 60);
+                if (diff <= 0) { clearInterval(timer); window.location.href = '/login'; }
+            }
+            tick();
+            var timer = setInterval(tick, 1000);
+        })();
+    </script>
+}
+
 @code {
-    [SupplyParameterFromQuery]
+    [SupplyParameterFromQuery(Name = "error")]
     public string? ErrorCode { get; set; }
 
-    private static string MessageFor(string code) => code switch
+    /// <summary>Kilit bitiş zamanı (ISO 8601 / UTC) — yalnız AUTH-003'te dolu.</summary>
+    [SupplyParameterFromQuery(Name = "lockedUntil")]
+    public string? LockedUntil { get; set; }
+
+    private bool IsLockout => string.Equals(ErrorCode, "AUTH-003", StringComparison.Ordinal);
+
+    private DateTimeOffset? LockedUntilUtc =>
+        DateTimeOffset.TryParse(
+            LockedUntil,
+            System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal,
+            out var parsed)
+            ? parsed
+            : null;
+
+    private string MessageFor(string code) => code switch
     {
-        "AUTH-001" => "Kullanıcı kimliği ve şifre zorunlu.",
-        "AUTH-002" => "Geçersiz kimlik veya şifre.",
-        "AUTH-003" => "Hesap geçici olarak kilitli.",
-        "AUTH-004" => "Portal erişimi için yetkiniz yok.",
-        "AUTH-009" => "Kimlik tipi tanınamadı.",
-        "AUTH-2FA-CHALLENGE-NOT-FOUND" => "2FA süresi doldu. Tekrar giriş yapın.",
-        _ => $"Hata: {code}",
+        "AUTH-001" => Loc["Portal.Login.Error.IdentifierRequired"].Value,
+        "AUTH-002" => Loc["Portal.Login.Error.Invalid"].Value,
+        "AUTH-003" => Loc["Portal.Login.Error.Lockout"].Value,
+        "AUTH-004" => Loc["Portal.Login.Error.NoAccess"].Value,
+        "AUTH-009" => Loc["Portal.Login.Error.IdentifierType"].Value,
+        "AUTH-2FA-CHALLENGE-NOT-FOUND" => Loc["Portal.Login.Error.TwoFactorExpired"].Value,
+        _ => Loc["Portal.Login.Error.Unknown", code].Value,
     };
 }

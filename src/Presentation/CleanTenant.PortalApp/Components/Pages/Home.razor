@@ -1,10 +1,11 @@
 @page "/"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @inject AuthenticationStateProvider AuthProvider
+@inject IStringLocalizer Loc
 
-<PageTitle>Anasayfa — Site Portalı</PageTitle>
+<PageTitle>@Loc["Portal.Home.PageTitle"]</PageTitle>
 
-<MudText Typo="Typo.h5" Class="mb-4">Hoş geldiniz@(_fullName is not null ? $", {_fullName}" : "")!</MudText>
+<MudText Typo="Typo.h5" Class="mb-4">@Loc["Portal.Home.Welcome"]@(_fullName is not null ? $", {_fullName}" : "")!</MudText>
 
 <MudGrid>
     <MudItem xs="12" sm="6" md="4">
@@ -12,7 +13,7 @@
             <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
                 <MudIcon Icon="@Icons.Material.Filled.Apartment" Color="Color.Primary" Size="Size.Large" />
                 <div>
-                    <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Siteniz</MudText>
+                    <MudText Typo="Typo.subtitle2" Color="Color.Secondary">@Loc["Portal.Home.Site"]</MudText>
                     <MudText Typo="Typo.h6">@(_companyName ?? "—")</MudText>
                 </div>
             </MudStack>
@@ -23,7 +24,7 @@
             <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
                 <MudIcon Icon="@Icons.Material.Filled.Domain" Color="Color.Primary" Size="Size.Large" />
                 <div>
-                    <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Yönetim</MudText>
+                    <MudText Typo="Typo.subtitle2" Color="Color.Secondary">@Loc["Portal.Home.Management"]</MudText>
                     <MudText Typo="Typo.h6">@(_tenantName ?? "—")</MudText>
                 </div>
             </MudStack>

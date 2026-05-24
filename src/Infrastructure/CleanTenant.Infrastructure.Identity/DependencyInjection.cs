@@ -67,6 +67,9 @@ public static class DependencyInjection
         // sınıf, manuel kayıt.
         services.AddScoped<LoginFinalizer>();
 
+        // Tenant-başına hesap kilitleme servisi (login + 2FA hatalı denemeleri ortak kullanır)
+        services.AddScoped<IAccountLockoutService, AccountLockoutService>();
+
         // v0.1.6 — Permission checker (Redis session permission listesinden okur)
         services.AddScoped<IPermissionChecker, SessionPermissionChecker>();
 

@@ -146,7 +146,10 @@ public sealed class TenantCatalogReader : ITenantCatalogReader
                         t.BillingTier,
                         t.HasDedicatedDatabase,
                         t.DatabaseSchemaName,
-                        t.AllowSystemWriteAccess))
+                        t.AllowSystemWriteAccess,
+                        t.LockoutEnabled,
+                        t.LockoutMaxFailedAttempts,
+                        t.LockoutDurationMinutes))
                     .FirstOrDefaultAsync(ct);
             },
             CacheOptions.DetailMediumLived,
@@ -186,7 +189,10 @@ public sealed class TenantCatalogReader : ITenantCatalogReader
                         t.BillingTier,
                         t.HasDedicatedDatabase,
                         t.DatabaseSchemaName,
-                        t.AllowSystemWriteAccess))
+                        t.AllowSystemWriteAccess,
+                        t.LockoutEnabled,
+                        t.LockoutMaxFailedAttempts,
+                        t.LockoutDurationMinutes))
                     .FirstOrDefaultAsync(ct);
             },
             CacheOptions.DetailMediumLived,

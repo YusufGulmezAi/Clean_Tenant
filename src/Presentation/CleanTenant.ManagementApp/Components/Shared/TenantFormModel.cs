@@ -85,4 +85,15 @@ public sealed class TenantFormModel
 
     /// <summary>Yönetim durumu (yalnız Sistem scope Edit modunda değiştirilebilir).</summary>
     public TenantStatus Status { get; set; } = TenantStatus.Active;
+
+    // ── Hesap kilitleme politikası (Güvenlik tab) ──
+
+    /// <summary>Hesap kilitleme aktif mi? Varsayılan true.</summary>
+    public bool LockoutEnabled { get; set; } = true;
+
+    /// <summary>Kilit için gereken ardışık hatalı deneme sayısı. Varsayılan 5.</summary>
+    public int LockoutMaxFailedAttempts { get; set; } = 5;
+
+    /// <summary>Kilit süresi (dakika). Varsayılan 15.</summary>
+    public int LockoutDurationMinutes { get; set; } = 15;
 }

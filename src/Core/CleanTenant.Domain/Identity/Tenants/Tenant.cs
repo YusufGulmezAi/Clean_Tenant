@@ -140,4 +140,28 @@ public sealed class Tenant : BaseEntity, IAggregateRoot, IHasUrlCode
     /// Null → ek süre tanımlanmamış.
     /// </summary>
     public int? TransitionGraceDays { get; set; }
+
+    // ── Hesap kilitleme politikası (tenant-başına) ──────────────────────────
+    // Login'de yanlış şifre denemeleri için kilitleme davranışı tenant bazında
+    // ayarlanır. Bu kolonlar Catalog DB'de tutulur çünkü login anında (tenant
+    // context henüz seçilmeden) Catalog'dan okunabilmeleri gerekir. System
+    // kullanıcıları ve çok-tenant'lı kullanıcılar için global varsayılan geçerlidir.
+
+    /// <summary>
+    /// True ise bu tenant'ın kullanıcıları için hesap kilitleme aktiftir.
+    /// False ise hatalı denemeler sayılır ama hesap hiç kilitlenmez. Varsayılan true.
+    /// </summary>
+    public bool LockoutEnabled { get; set; } = true;
+
+    /// <summary>
+    /// Hesabın kilitlenmesi için gereken ardışık hatalı şifre denemesi sayısı.
+    /// Varsayılan 5. <see cref="LockoutEnabled"/> false ise dikkate alınmaz.
+    /// </summary>
+    public int LockoutMaxFailedAttempts { get; set; } = 5;
+
+    /// <summary>
+    /// Kilit süresi (dakika). Eşiğe ulaşan hesap bu süre boyunca kilitli kalır.
+    /// Varsayılan 15. <see cref="LockoutEnabled"/> false ise dikkate alınmaz.
+    /// </summary>
+    public int LockoutDurationMinutes { get; set; } = 15;
 }

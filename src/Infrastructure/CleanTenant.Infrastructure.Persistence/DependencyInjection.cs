@@ -118,8 +118,13 @@ public static class DependencyInjection
                 // Kullanıcı politikası
                 opts.User.RequireUniqueEmail = true;
 
-                // Kilitleme
-                opts.Lockout.MaxFailedAccessAttempts = 5;
+                // Kilitleme — ASP.NET Identity'nin yerleşik OTOMATİK kilidi devre dışı
+                // bırakıldı (sentinel yüksek eşik). Kilit kararı artık tenant-başına
+                // ayarlanabilir politikaya göre IAccountLockoutService içinde verilir
+                // (bkz. AccountLockoutService). AccessFailedAsync yalnız sayacı artırır.
+                // Global varsayılan (5 deneme / 15 dk) LockoutPolicy.Default'ta tutulur.
+                opts.Lockout.AllowedForNewUsers = true;
+                opts.Lockout.MaxFailedAccessAttempts = int.MaxValue;
                 opts.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
 
                 // SignIn — v0.1.5'te SignInManager devreye girdiğinde detaylandırılacak

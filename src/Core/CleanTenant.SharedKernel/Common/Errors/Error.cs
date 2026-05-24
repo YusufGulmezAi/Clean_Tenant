@@ -21,6 +21,23 @@ namespace CleanTenant.SharedKernel.Common.Errors;
 public sealed record Error(string Code, string Message, ErrorType Type)
 {
     /// <summary>
+    /// <para>
+    /// Hataya iliştirilen opsiyonel yapılandırılmış veri (anahtar→değer). Hata
+    /// koduna bağlı ek bağlam taşımak için; örn. hesap kilitleme hatasında
+    /// (<c>AUTH-003</c>) kilit bitiş zamanı (<c>lockedUntil</c>).
+    /// </para>
+    /// <para>
+    /// Varsayılan null — çoğu hata ek veri taşımaz. <c>with { Metadata = ... }</c>
+    /// veya <see cref="WithMetadata"/> ile doldurulur.
+    /// </para>
+    /// </summary>
+    public IReadOnlyDictionary<string, string>? Metadata { get; init; }
+
+    /// <summary>Mevcut hatanın Metadata ile zenginleştirilmiş bir kopyasını üretir.</summary>
+    public Error WithMetadata(IReadOnlyDictionary<string, string> metadata)
+        => this with { Metadata = metadata };
+
+    /// <summary>
     /// "Hata yok" durumu. Result.Success durumlarında FirstError için kullanılır.
     /// </summary>
     public static readonly Error None = new(string.Empty, string.Empty, ErrorType.None);

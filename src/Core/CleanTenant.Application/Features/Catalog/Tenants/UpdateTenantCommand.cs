@@ -40,4 +40,7 @@ public sealed record UpdateTenantCommand(
     DateOnly? ContractStartDate = null,
     DateOnly? ContractEndDate = null,
     int? TransitionGraceDays = null,
-    TenantStatus Status = TenantStatus.Active) : IRequest<Result>;
+    TenantStatus Status = TenantStatus.Active,
+    bool LockoutEnabled = true,
+    int LockoutMaxFailedAttempts = 5,
+    int LockoutDurationMinutes = 15) : IRequest<Result>;

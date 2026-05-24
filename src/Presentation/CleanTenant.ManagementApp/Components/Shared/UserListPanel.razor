@@ -221,6 +221,15 @@ else
                                    Color="Color.Warning"
                                    Title="@Loc["SystemUsers.List.Action.ResetPassword"]"
                                    OnClick="@(() => OpenResetPasswordDrawer(context.Item))" />
+                    @if (context.Item.IsLocked)
+                    {
+                        @* Hesap kilitli — kilidi aç (User.Lockout izni). *@
+                        <MudIconButton Icon="@Icons.Material.Filled.LockOpen"
+                                       Size="Size.Small"
+                                       Color="Color.Success"
+                                       Title="@Loc["SystemUsers.List.Action.Unlock"]"
+                                       OnClick="@(() => UnlockAsync(context.Item))" />
+                    }
                     @if (context.Item.IsActive)
                     {
                         <MudIconButton Icon="@Icons.Material.Filled.Logout"
@@ -593,6 +602,33 @@ else
                 ? Loc["SystemUsers.ForceLogoutSuccess"].Value
                 : result.FirstError.Message,
             result.IsSuccess ? Severity.Success : Severity.Error);
+    }
+
+    private async Task UnlockAsync(UserListItem user)
+    {
+        var parameters = new DialogParameters<ConfirmDialog>
+        {
+            { x => x.Message, Loc["SystemUsers.Unlock.Confirm"].Value.Replace("{name}", user.FullName) },
+            { x => x.ConfirmText, Loc["SystemUsers.List.Action.Unlock"].Value },
+            { x => x.ConfirmColor, Color.Success },
+            { x => x.ConfirmIcon, Icons.Material.Filled.LockOpen },
+            { x => x.TitleIcon, Icons.Material.Filled.LockOpen },
+        };
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>(
+            Loc["SystemUsers.Unlock.Title"].Value, parameters,
+            new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true });
+        var dialogResult = await dialog.Result;
+        if (dialogResult?.Canceled == true) return;
+
+        // UnlockUserCommand scope-agnostiktir (UrlCode ile) — System.Users.Manage
+        // veya User.Lockout izniyle çalışır.
+        var result = await Mediator.Send(new UnlockUserCommand(user.UrlCode));
+        Snackbar.Add(result.IsSuccess
+            ? Loc["SystemUsers.UnlockSuccess"].Value
+            : result.FirstError.Message,
+            result.IsSuccess ? Severity.Success : Severity.Error);
+
+        await LoadDataAsync();
     }
 
     private async Task ReactivateAsync(UserListItem user)

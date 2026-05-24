@@ -82,7 +82,18 @@ public static class AuthEndpoints
 
         var result = await mediator.Send(command, cancellationToken);
         if (result.IsFailure)
-            return Results.Redirect($"/login?error={Uri.EscapeDataString(result.FirstError.Code)}");
+        {
+            var error = result.FirstError;
+            var url = $"/login?error={Uri.EscapeDataString(error.Code)}";
+            // Hesap kilitliyse (AUTH-003) login ekranı canlı geri sayım
+            // gösterebilsin diye kilit bitiş zamanını query string'e ekle.
+            if (error.Metadata is not null
+                && error.Metadata.TryGetValue("lockedUntil", out var lockedUntil))
+            {
+                url += $"&lockedUntil={Uri.EscapeDataString(lockedUntil)}";
+            }
+            return Results.Redirect(url);
+        }
 
         var login = result.Value!;
         if (login.Status == LoginStatus.TwoFactorRequired)

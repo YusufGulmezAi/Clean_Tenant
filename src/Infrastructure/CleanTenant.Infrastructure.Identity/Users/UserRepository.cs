@@ -54,4 +54,18 @@ public sealed class UserRepository : IUserRepository
             ? IdentityOperationResult.Ok()
             : IdentityOperationResult.Fail(addResult.Errors.Select(e => e.Description));
     }
+
+    /// <inheritdoc />
+    public async Task<IdentityOperationResult> UnlockAsync(User user, CancellationToken ct = default)
+    {
+        // Kilidi kaldır (LockoutEnd = null) ve hatalı deneme sayacını sıfırla.
+        var clearResult = await _userManager.SetLockoutEndDateAsync(user, null);
+        if (!clearResult.Succeeded)
+            return IdentityOperationResult.Fail(clearResult.Errors.Select(e => e.Description));
+
+        var resetResult = await _userManager.ResetAccessFailedCountAsync(user);
+        return resetResult.Succeeded
+            ? IdentityOperationResult.Ok()
+            : IdentityOperationResult.Fail(resetResult.Errors.Select(e => e.Description));
+    }
 }

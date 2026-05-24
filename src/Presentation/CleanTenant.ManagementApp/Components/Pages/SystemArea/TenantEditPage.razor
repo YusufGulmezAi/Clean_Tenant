@@ -93,6 +93,9 @@ else
         ContractEndDate = d.ContractEndDate,
         TransitionGraceDays = d.TransitionGraceDays,
         Status = d.Status,
+        LockoutEnabled = d.LockoutEnabled,
+        LockoutMaxFailedAttempts = d.LockoutMaxFailedAttempts,
+        LockoutDurationMinutes = d.LockoutDurationMinutes,
     };
 
     private async Task SubmitAsync()
@@ -119,7 +122,10 @@ else
                 ContractStartDate: _model.ContractStartDate,
                 ContractEndDate: _model.ContractEndDate,
                 TransitionGraceDays: _model.TransitionGraceDays,
-                Status: _model.Status);
+                Status: _model.Status,
+                LockoutEnabled: _model.LockoutEnabled,
+                LockoutMaxFailedAttempts: _model.LockoutMaxFailedAttempts,
+                LockoutDurationMinutes: _model.LockoutDurationMinutes);
 
             var result = await Mediator.Send(command);
             if (result.IsFailure)

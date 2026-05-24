@@ -138,6 +138,12 @@ public sealed class UpdateTenantCommandHandler : IRequestHandler<UpdateTenantCom
         tenant.ContractEndDate = command.ContractEndDate;
         tenant.TransitionGraceDays = command.TransitionGraceDays;
 
+        // Hesap kilitleme politikası — hem System hem TenantAdmin değiştirebilir.
+        // Değerler makul aralığa clamp edilir (kötüye kullanım / hatalı girişe karşı).
+        tenant.LockoutEnabled = command.LockoutEnabled;
+        tenant.LockoutMaxFailedAttempts = Math.Clamp(command.LockoutMaxFailedAttempts, 1, 50);
+        tenant.LockoutDurationMinutes = Math.Clamp(command.LockoutDurationMinutes, 1, 1440);
+
         if (isSystem)
         {
             tenant.LegalIdentityType = command.LegalIdentityType;

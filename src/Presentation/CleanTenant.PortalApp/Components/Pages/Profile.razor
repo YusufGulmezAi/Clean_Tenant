@@ -1,7 +1,8 @@
 @page "/profile"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject IStringLocalizer Loc
 
-<PageTitle>Profilim — Site Portalı</PageTitle>
+<PageTitle>@Loc["Portal.Profile.PageTitle"]</PageTitle>
 
-<MudText Typo="Typo.h5" Class="mb-3">Profilim</MudText>
-<MudAlert Severity="Severity.Info">Profil yönetimi ilerleyen fazlarda gelecektir.</MudAlert>
+<MudText Typo="Typo.h5" Class="mb-3">@Loc["Portal.Profile.Title"]</MudText>
+<MudAlert Severity="Severity.Info">@Loc["Portal.Profile.ComingSoon"]</MudAlert>
