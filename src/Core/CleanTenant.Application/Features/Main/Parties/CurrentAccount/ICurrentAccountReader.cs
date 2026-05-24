@@ -11,6 +11,9 @@ public interface ICurrentAccountReader
 
     /// <summary>Bir BB'nin cari KPI özeti (tahakkuk/tahsilat/bakiye/vadesi geçmiş).</summary>
     Task<CurrentAccountKpi> GetKpiAsync(Guid companyId, Guid unitId, DateOnly today, CancellationToken ct);
+
+    /// <summary>Şirketin tüm BB'leri + borç özeti (BB listesi / genel bakış).</summary>
+    Task<IReadOnlyList<UnitOverviewRow>> GetUnitsOverviewAsync(Guid companyId, DateOnly today, CancellationToken ct);
 }
 
 /// <summary>Cari hareket satırı (borç/alacak/bakiye).</summary>
@@ -28,4 +31,12 @@ public sealed record CurrentAccountKpi(
     decimal TotalAccrued,
     decimal TotalCollected,
     decimal NetBalance,
+    decimal OverdueAmount);
+
+/// <summary>BB listesi satırı (borç özetli).</summary>
+public sealed record UnitOverviewRow(
+    Guid UnitId,
+    string Number,
+    string BuildingName,
+    decimal RemainingBalance,
     decimal OverdueAmount);

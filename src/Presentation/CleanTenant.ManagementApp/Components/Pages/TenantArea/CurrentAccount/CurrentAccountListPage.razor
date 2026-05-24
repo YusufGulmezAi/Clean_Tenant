@@ -1,0 +1,146 @@
+@* Cari Kart — site seç → BB ara-bul-seç (borç özetli). Tenant scope, site-seçimli. *@
+@page "/tenant/current-accounts"
+@page "/tenant/current-accounts/{CompanyId:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject AuthenticationStateProvider AuthProvider
+@inject ICurrentSessionAccessor SessionAccessor
+@inject IMainCatalogReader CompanyReader
+@inject MediatR.IMediator Mediator
+@inject NavigationManager Nav
+@inject IStringLocalizer Loc
+@using CleanTenant.Application.Common.Auth
+@using CleanTenant.Application.Features.Main.Parties.CurrentAccount
+@using CleanTenant.Application.Features.Main.Readers
+@using CleanTenant.ManagementApp.Components.Shared
+
+<PageTitle>@Loc["Cari.List.PageTitle"]</PageTitle>
+
+@if (_unauthorized)
+{
+    <MudAlert Severity="Severity.Warning" Class="my-3">@Loc["Cari.Unauthorized"]</MudAlert>
+}
+else if (!_initialized)
+{
+    <MudProgressLinear Indeterminate="true" Class="my-4" />
+}
+else if (CompanyId is null)
+{
+    <MudText Typo="Typo.h5" Class="mb-4">@Loc["Cari.List.SelectSite"]</MudText>
+    <MudPaper Class="pa-4" Elevation="1">
+        @if (_companies.Count == 0)
+        {
+            <MudAlert Severity="Severity.Info">@Loc["Cari.List.NoSite"]</MudAlert>
+        }
+        else
+        {
+            <MudList T="CompanyListItem" Clickable="true">
+                @foreach (var c in _companies)
+                {
+                    <MudListItem T="CompanyListItem" Icon="@Icons.Material.Filled.Apartment"
+                                 OnClick="@(() => Nav.NavigateTo($"/tenant/current-accounts/{c.Id}"))">
+                        @c.Name
+                    </MudListItem>
+                }
+            </MudList>
+        }
+    </MudPaper>
+}
+else
+{
+    <div class="d-flex align-center justify-space-between mb-3">
+        <MudText Typo="Typo.h5">@Loc["Cari.List.PageTitle"] — @_companyName</MudText>
+        <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.SwapHoriz"
+                   OnClick="@(() => Nav.NavigateTo("/tenant/current-accounts"))">@Loc["Cari.List.ChangeSite"]</MudButton>
+    </div>
+
+    <FormDescriptionPanel FormKey="cari-list" Title="@Loc["Cari.List.PageTitle"]">
+        @Loc["Cari.List.Help"]
+    </FormDescriptionPanel>
+
+    <MudPaper Elevation="1" Class="pa-2">
+        <MudTextField @bind-Value="_search" Immediate="true" DebounceInterval="200"
+                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                      Placeholder="@Loc["Cari.List.Search"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-2" />
+        <MudTable Items="@Filtered" Hover="true" Dense="true" Loading="@_loading"
+                  Virtualize="true" FixedHeader="true" Height="60vh"
+                  OnRowClick="@((TableRowClickEventArgs<UnitOverviewRow> e) => { if (e.Item is not null) OpenCard(e.Item); })" T="UnitOverviewRow">
+            <HeaderContent>
+                <MudTh>@Loc["Cari.List.Col.Unit"]</MudTh>
+                <MudTh>@Loc["Cari.List.Col.Building"]</MudTh>
+                <MudTh Style="text-align:right">@Loc["Cari.List.Col.Remaining"]</MudTh>
+                <MudTh Style="text-align:right">@Loc["Cari.List.Col.Overdue"]</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="@Loc["Cari.List.Col.Unit"]">@context.Number</MudTd>
+                <MudTd DataLabel="@Loc["Cari.List.Col.Building"]">@context.BuildingName</MudTd>
+                <MudTd DataLabel="@Loc["Cari.List.Col.Remaining"]" Style="text-align:right">
+                    <span class="@(context.RemainingBalance > 0 ? "mud-error-text" : "")">@context.RemainingBalance.ToString("N2")</span>
+                </MudTd>
+                <MudTd DataLabel="@Loc["Cari.List.Col.Overdue"]" Style="text-align:right">
+                    @if (context.OverdueAmount > 0)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Error">@context.OverdueAmount.ToString("N2")</MudChip>
+                    }
+                    else { <span class="mud-text-secondary">—</span> }
+                </MudTd>
+            </RowTemplate>
+            <NoRecordsContent><MudText Class="pa-3">@Loc["Cari.List.Empty"]</MudText></NoRecordsContent>
+        </MudTable>
+    </MudPaper>
+}
+
+@code {
+    [Parameter] public Guid? CompanyId { get; set; }
+
+    private bool _unauthorized, _initialized, _loading;
+    private Guid _tenantId;
+    private string _companyName = string.Empty;
+    private string _search = string.Empty;
+    private IReadOnlyList<CompanyListItem> _companies = [];
+    private IReadOnlyList<UnitOverviewRow> _units = [];
+
+    private IEnumerable<UnitOverviewRow> Filtered =>
+        string.IsNullOrWhiteSpace(_search)
+            ? _units
+            : _units.Where(u => u.Number.Contains(_search, StringComparison.OrdinalIgnoreCase)
+                             || u.BuildingName.Contains(_search, StringComparison.OrdinalIgnoreCase));
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _initialized = false;
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        if (authState.User?.Identity?.IsAuthenticated != true) { _unauthorized = true; _initialized = true; return; }
+        var session = SessionAccessor.Current;
+        var isSystem = string.Equals(authState.User.FindFirst("scope")?.Value, "System", StringComparison.OrdinalIgnoreCase);
+        if (!isSystem && (session is null || !session.Permissions.Contains("tenant.party.view")))
+        {
+            _unauthorized = true; _initialized = true; return;
+        }
+        _tenantId = session?.TenantId ?? Guid.Empty;
+
+        if (CompanyId is null)
+        {
+            _companies = isSystem || _tenantId == Guid.Empty
+                ? await CompanyReader.GetAllGlobalAsync()
+                : await CompanyReader.GetByTenantAsync(_tenantId);
+        }
+        else
+        {
+            var company = await CompanyReader.GetByIdAsync(CompanyId.Value);
+            _companyName = company?.Name ?? "";
+            await LoadUnitsAsync();
+        }
+        _initialized = true;
+    }
+
+    private async Task LoadUnitsAsync()
+    {
+        _loading = true;
+        var result = await Mediator.Send(new GetUnitsOverviewQuery(CompanyId!.Value));
+        _units = result.IsSuccess && result.Value is not null ? result.Value : [];
+        _loading = false;
+    }
+
+    private void OpenCard(UnitOverviewRow row)
+        => Nav.NavigateTo($"/tenant/current-accounts/{CompanyId}/{row.UnitId}");
+}

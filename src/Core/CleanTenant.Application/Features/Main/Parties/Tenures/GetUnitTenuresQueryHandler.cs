@@ -23,6 +23,15 @@ public sealed class GetUnitTenuresQueryHandler : IRequestHandler<GetUnitTenuresQ
     {
         var today = DateOnly.FromDateTime(_clock.UtcNow.UtcDateTime);
 
+        var unitInfo = await (
+            from u in _db.Units
+            join b in _db.Buildings on u.BuildingId equals b.Id
+            where u.Id == request.UnitId && !u.IsDeleted && !b.IsDeleted
+            select new { u.Number, BuildingName = b.Name }
+        ).FirstOrDefaultAsync(cancellationToken);
+        if (unitInfo is null)
+            return Result<UnitTenures>.Failure(Error.NotFound("TEN-201", "Bağımsız bölüm bulunamadı."));
+
         var owners = await (
             from o in _db.UnitOwnerships
             join p in _db.Parties on o.PartyId equals p.Id
@@ -66,7 +75,8 @@ public sealed class GetUnitTenuresQueryHandler : IRequestHandler<GetUnitTenuresQ
             .OrderByDescending(x => x.IsActive).ThenBy(x => x.ContactRole)
             .ToList();
 
-        return Result<UnitTenures>.Success(
-            new UnitTenures(orderedOwners.AsReadOnly(), orderedTenants.AsReadOnly(), orderedContacts.AsReadOnly()));
+        return Result<UnitTenures>.Success(new UnitTenures(
+            unitInfo.Number, unitInfo.BuildingName,
+            orderedOwners.AsReadOnly(), orderedTenants.AsReadOnly(), orderedContacts.AsReadOnly()));
     }
 }

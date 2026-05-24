@@ -13,8 +13,10 @@ public sealed record GetUnitTenuresQuery(
     Guid CompanyId,
     Guid UnitId) : IRequest<Result<UnitTenures>>;
 
-/// <summary>BB tenure ağacı kökü.</summary>
+/// <summary>BB tenure ağacı kökü (BB başlık bilgisi + malik/kiracı/iletişim).</summary>
 public sealed record UnitTenures(
+    string UnitNumber,
+    string BuildingName,
     IReadOnlyList<OwnershipItem> Owners,
     IReadOnlyList<TenancyItem> Tenants,
     IReadOnlyList<ContactItem> Contacts);

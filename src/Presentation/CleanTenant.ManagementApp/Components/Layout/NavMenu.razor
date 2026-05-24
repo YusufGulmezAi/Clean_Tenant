@@ -104,6 +104,7 @@
     {
         var tenantCompaniesLabel = Loc["NavMenu.Companies"].Value;
         var tenantBudgetLabel = Loc["NavMenu.Budget"].Value;
+        var tenantCariLabel = Loc["NavMenu.CurrentAccount"].Value;
         var tenantAccessLabel = Loc["NavMenu.RolesAndUsers"].Value;
 
         @if (Matches(tenantCompaniesLabel))
@@ -118,6 +119,14 @@
         {
             <MudNavLink Href="/tenant/budgets" Icon="@Icons.Material.Filled.AccountBalanceWallet">
                 @tenantBudgetLabel
+            </MudNavLink>
+        }
+
+        @* v0.2.15 — Cari Kart (kişi/borç konsolu); tenant.party.view izinli görür *@
+        @if (_canViewCari && Matches(tenantCariLabel))
+        {
+            <MudNavLink Href="/tenant/current-accounts" Icon="@Icons.Material.Filled.ContactPage">
+                @tenantCariLabel
             </MudNavLink>
         }
 
@@ -297,6 +306,7 @@
     private Guid? _activeCompanyId;
     private bool _canManageUsers;
     private bool _canViewBudget;
+    private bool _canViewCari;
     private bool _canManageCompanyUsers;
     private bool _canViewCollections;
 
@@ -327,6 +337,7 @@
         {
             _canManageUsers = true;
             _canViewBudget = true;
+            _canViewCari = true;
             _canManageCompanyUsers = true;
             _canViewCollections = true;
         }
@@ -335,6 +346,7 @@
             var session = SessionAccessor.Current;
             _canManageUsers = session is not null && session.Permissions.Contains("Tenant.Users.Manage");
             _canViewBudget = session is not null && session.Permissions.Contains("tenant.budget.view");
+            _canViewCari = session is not null && session.Permissions.Contains("tenant.party.view");
             _canManageCompanyUsers = session is not null && session.Permissions.Contains("Company.Users.Manage");
             _canViewCollections = session is not null && session.Permissions.Contains("tenant.collection.view");
         }

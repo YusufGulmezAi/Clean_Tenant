@@ -1,0 +1,197 @@
+@* Cari Kart — BB-merkezli kişi/borç kartı (Nordic hibrit kabuk). S5a: kabuk + KPI +
+   sidebar; sekme içerikleri S5b, tahsilat sihirbazı S5c. *@
+@page "/tenant/current-accounts/{CompanyId:guid}/{UnitId:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject AuthenticationStateProvider AuthProvider
+@inject ICurrentSessionAccessor SessionAccessor
+@inject MediatR.IMediator Mediator
+@inject NavigationManager Nav
+@inject IStringLocalizer Loc
+@using CleanTenant.Application.Common.Auth
+@using CleanTenant.Application.Features.Main.Parties.CurrentAccount
+@using CleanTenant.Application.Features.Main.Parties.Tenures
+
+<PageTitle>@(_tenures is null ? Loc["Cari.Card.PageTitle"].Value : $"Daire {_tenures.UnitNumber}")</PageTitle>
+
+@if (_unauthorized)
+{
+    <MudAlert Severity="Severity.Warning" Class="my-3">@Loc["Cari.Unauthorized"]</MudAlert>
+}
+else if (!_initialized)
+{
+    <MudProgressLinear Indeterminate="true" Class="my-4" />
+}
+else if (_tenures is null)
+{
+    <MudAlert Severity="Severity.Error" Class="my-3">@Loc["Cari.Card.NotFound"]</MudAlert>
+}
+else
+{
+    <div class="cari-shell">
+        <div class="cari-topbar">
+            <button class="cari-back" @onclick="@(() => Nav.NavigateTo($"/tenant/current-accounts/{CompanyId}"))">
+                ← @Loc["Cari.Card.BackToList"]
+            </button>
+            <span class="cari-crumb">@_tenures.BuildingName ▸ <b>Daire @_tenures.UnitNumber</b></span>
+        </div>
+
+        @* ── Header card ───────────────────────────────────────────── *@
+        <section class="header-card">
+            <div class="hc-row">
+                <div class="avatar">@Initials</div>
+                <div class="hc-identity">
+                    <h1>@Loc["Cari.Card.Unit"] @_tenures.UnitNumber</h1>
+                    <div class="hc-meta">
+                        @if (_activeOwner is not null)
+                        {
+                            <span class="tag tag-malik">@Loc["Cari.Tag.Owner"]: @_activeOwner.PartyName</span>
+                        }
+                        @if (_activeTenant is not null)
+                        {
+                            <span class="tag tag-kiraci">@Loc["Cari.Tag.Tenant"]: @_activeTenant.PartyName</span>
+                        }
+                        @if (_activeOwner is null && _activeTenant is null)
+                        {
+                            <span class="tag tag-none">@Loc["Cari.Card.NoResponsible"]</span>
+                        }
+                    </div>
+                    <div class="hc-bb-ref">🏢 @_tenures.BuildingName ▸ @Loc["Cari.Card.Unit"] @_tenures.UnitNumber</div>
+                </div>
+                <div class="quick-actions">
+                    <button class="qa-btn primary" disabled title="@Loc["Cari.Card.WizardSoon"]">
+                        + @Loc["Cari.Card.RecordCollection"]
+                    </button>
+                </div>
+            </div>
+
+            <div class="kpi-strip">
+                <div class="kpi">
+                    <div class="kpi-label">@Loc["Cari.Kpi.Accrued"]</div>
+                    <div class="kpi-value">@Fmt(_kpi.TotalAccrued)</div>
+                </div>
+                <div class="kpi">
+                    <div class="kpi-label">@Loc["Cari.Kpi.Collected"]</div>
+                    <div class="kpi-value pos">@Fmt(_kpi.TotalCollected)</div>
+                </div>
+                <div class="kpi">
+                    <div class="kpi-label">@Loc["Cari.Kpi.Overdue"]</div>
+                    <div class="kpi-value @(_kpi.OverdueAmount > 0 ? "neg" : "")">@Fmt(_kpi.OverdueAmount)</div>
+                </div>
+                <div class="kpi">
+                    <div class="kpi-label">@Loc["Cari.Kpi.Balance"]</div>
+                    <div class="kpi-value @(_kpi.NetBalance > 0 ? "neg" : "pos")">
+                        @Fmt(_kpi.NetBalance) @(_kpi.NetBalance > 0 ? Loc["Cari.Kpi.Debtor"].Value : "")
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        @* ── Body: sidebar + content ───────────────────────────────── *@
+        <div class="body-layout">
+            <aside class="sidebar">
+                @foreach (var grp in TabGroups)
+                {
+                    <div class="nav-group">
+                        <div class="nav-group-label">@grp.Label</div>
+                        @foreach (var t in grp.Tabs)
+                        {
+                            <button class="nav-item @(_tab == t.Key ? "active" : "")"
+                                    disabled="@(!t.Active)"
+                                    @onclick="@(() => _tab = t.Key)">
+                                @t.Title
+                                @if (!t.Active)
+                                {
+                                    <span class="nav-soon">@Loc["Cari.Tab.Soon"]</span>
+                                }
+                            </button>
+                        }
+                    </div>
+                }
+            </aside>
+
+            <main class="cari-content">
+                <div class="cari-panel">
+                    <div class="cari-panel-head">@CurrentTabTitle</div>
+                    <div class="cari-panel-body">
+                        @if (IsActiveTab(_tab))
+                        {
+                            <p class="cari-placeholder">@Loc["Cari.Panel.ComingS5b"]</p>
+                        }
+                        else
+                        {
+                            <p class="cari-placeholder">@Loc["Cari.Panel.NextPhase"]</p>
+                        }
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid CompanyId { get; set; }
+    [Parameter] public Guid UnitId { get; set; }
+
+    private bool _unauthorized, _initialized;
+    private string _tab = "genel";
+    private UnitTenures? _tenures;
+    private CurrentAccountKpi _kpi = new(0, 0, 0, 0);
+    private OwnershipItem? _activeOwner;
+    private TenancyItem? _activeTenant;
+
+    private string Initials => _tenures is null ? "?" : $"D{_tenures.UnitNumber}";
+
+    private sealed record TabDef(string Key, string Title, bool Active);
+    private sealed record TabGroup(string Label, TabDef[] Tabs);
+
+    private TabGroup[] TabGroups => [
+        new(Loc["Cari.Group.Identity"].Value, [
+            new("genel", Loc["Cari.Tab.General"].Value, true),
+            new("sozlesme", Loc["Cari.Tab.Contract"].Value, false),
+            new("hissedar", Loc["Cari.Tab.Shareholders"].Value, true),
+            new("oturan", Loc["Cari.Tab.Residents"].Value, true),
+            new("iletisimkisi", Loc["Cari.Tab.Contacts"].Value, true),
+        ]),
+        new(Loc["Cari.Group.Financial"].Value, [
+            new("cari", Loc["Cari.Tab.Ledger"].Value, true),
+            new("tahakkuk", Loc["Cari.Tab.Accruals"].Value, true),
+            new("abonelik", Loc["Cari.Tab.Subscriptions"].Value, false),
+            new("icra", Loc["Cari.Tab.Enforcement"].Value, false),
+        ]),
+        new(Loc["Cari.Group.Interaction"].Value, [
+            new("iletisim", Loc["Cari.Tab.CommHistory"].Value, false),
+            new("dosyalar", Loc["Cari.Tab.Files"].Value, false),
+            new("sikayet", Loc["Cari.Tab.Complaints"].Value, false),
+            new("araclar", Loc["Cari.Tab.Vehicles"].Value, false),
+        ]),
+    ];
+
+    private bool IsActiveTab(string key) => TabGroups.SelectMany(g => g.Tabs).First(t => t.Key == key).Active;
+    private string CurrentTabTitle => TabGroups.SelectMany(g => g.Tabs).First(t => t.Key == _tab).Title;
+
+    private static string Fmt(decimal v) => v.ToString("N2") + " ₺";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _initialized = false;
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        if (authState.User?.Identity?.IsAuthenticated != true) { _unauthorized = true; _initialized = true; return; }
+        var session = SessionAccessor.Current;
+        var isSystem = string.Equals(authState.User.FindFirst("scope")?.Value, "System", StringComparison.OrdinalIgnoreCase);
+        if (!isSystem && (session is null || !session.Permissions.Contains("tenant.party.view")))
+        {
+            _unauthorized = true; _initialized = true; return;
+        }
+
+        var tenures = await Mediator.Send(new GetUnitTenuresQuery(CompanyId, UnitId));
+        if (tenures.IsFailure || tenures.Value is null) { _tenures = null; _initialized = true; return; }
+        _tenures = tenures.Value;
+        _activeOwner = _tenures.Owners.FirstOrDefault(o => o.IsActive);
+        _activeTenant = _tenures.Tenants.FirstOrDefault(t => t.IsActive);
+
+        var kpi = await Mediator.Send(new GetUnitCurrentAccountKpiQuery(CompanyId, UnitId));
+        if (kpi.IsSuccess && kpi.Value is not null) _kpi = kpi.Value;
+
+        _initialized = true;
+    }
+}

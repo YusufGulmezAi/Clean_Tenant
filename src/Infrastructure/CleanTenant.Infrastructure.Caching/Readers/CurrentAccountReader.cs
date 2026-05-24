@@ -109,4 +109,41 @@ public sealed class CurrentAccountReader : ICurrentAccountReader
             new CommandDefinition(sql, new { companyId, unitId, today = todayDt }, cancellationToken: ct));
         return kpi;
     }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<UnitOverviewRow>> GetUnitsOverviewAsync(
+        Guid companyId, DateOnly today, CancellationToken ct)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var conn = db.Database.GetDbConnection();
+
+        const string sql = """
+            SELECT
+                u.id     AS UnitId,
+                u.number AS Number,
+                b.name   AS BuildingName,
+                COALESCE(SUM(d.amount), 0) - COALESCE(SUM(pa.paid), 0) AS RemainingBalance,
+                COALESCE(SUM(CASE WHEN d.due_date < @today
+                                  THEN d.amount - COALESCE(pa.paid, 0) ELSE 0 END), 0) AS OverdueAmount
+            FROM units u
+            JOIN buildings b ON b.id = u.building_id AND b.is_deleted = false
+            JOIN parcels p   ON p.id = b.parcel_id AND p.is_deleted = false
+            JOIN lands l     ON l.id = p.land_id AND l.is_deleted = false AND l.company_id = @companyId
+            LEFT JOIN accrual_details d ON d.unit_id = u.id AND d.is_deleted = false
+            LEFT JOIN accruals a ON a.id = d.accrual_id AND a.is_deleted = false
+            LEFT JOIN LATERAL (
+                SELECT COALESCE(SUM(al.allocated_amount), 0) AS paid
+                FROM collection_allocations al
+                WHERE al.accrual_detail_id = d.id AND al.is_deleted = false
+            ) pa ON true
+            WHERE u.is_deleted = false
+            GROUP BY u.id, u.number, b.name, u.sort_order
+            ORDER BY u.sort_order, u.number
+            """;
+
+        var todayDt = today.ToDateTime(TimeOnly.MinValue);
+        var rows = await conn.QueryAsync<UnitOverviewRow>(
+            new CommandDefinition(sql, new { companyId, today = todayDt }, cancellationToken: ct));
+        return rows.ToList();
+    }
 }
