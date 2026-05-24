@@ -80,6 +80,12 @@ public sealed class Accrual : BaseEntity, IAggregateRoot, ITenantScoped
     /// <summary>Üreten kullanıcı; Hangfire/sistem işlemiyse null.</summary>
     public Guid? GeneratedBy { get; set; }
 
+    /// <summary>
+    /// Üretim anındaki sorumluluk modu (snapshot; bütçeden kopyalanır). Kaynağı
+    /// olmayan eski tahakkuklarda null. Bkz. <see cref="Parties.Enums.ResponsibilityMode"/>.
+    /// </summary>
+    public Parties.Enums.ResponsibilityMode? ResponsibilityMode { get; set; }
+
     /// <summary>BB-bazlı tahakkuk detayları (yardımcı defter).</summary>
     public ICollection<AccrualDetail> Details { get; set; } = [];
 }

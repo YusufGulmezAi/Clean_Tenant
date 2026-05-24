@@ -41,4 +41,18 @@ public sealed class AccrualDetail : BaseEntity, ITenantScoped
     /// Yevmiyeye girmez; PortalApp şeffaflık ekranı için.
     /// </summary>
     public string? LineBreakdownJson { get; set; }
+
+    // ── Sorumluluk (F0 — Cari Kart) ──────────────────────────────────────────
+
+    /// <summary>
+    /// Bu borcun birincil sorumlusu (denormalize — en uzun süreli/en yüksek paylı
+    /// taraf). Hızlı liste/KPI/cari atıf için. Gerçek dağılım <see cref="Responsibilities"/>'te.
+    /// </summary>
+    public Guid? PrimaryResponsiblePartyId { get; set; }
+
+    /// <summary>Sorumlu çözümleme notu (örn. "kiracı aktif", "boş dönem → malik").</summary>
+    public string? ResponsibleResolvedNote { get; set; }
+
+    /// <summary>Gün-bazlı sorumluluk parçaları (Σ Amount = <see cref="Amount"/>).</summary>
+    public ICollection<Parties.AccrualResponsibilitySplit> Responsibilities { get; set; } = [];
 }

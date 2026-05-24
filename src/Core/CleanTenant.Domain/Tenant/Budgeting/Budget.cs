@@ -83,6 +83,14 @@ public sealed class Budget : BaseEntity, IAggregateRoot, ITenantScoped, IHasUrlC
     public BudgetStatus Status { get; set; } = BudgetStatus.Draft;
 
     /// <summary>
+    /// Bu bütçeden üretilen tahakkukların borç sorumluluğu modu (F0 — Cari Kart).
+    /// <c>TenantThenOwner</c>: tahakkuk döneminde kiracı varsa kiracı, yoksa malik.
+    /// <c>OwnerOnly</c>: her zaman malik. Varsayılan TenantThenOwner.
+    /// </summary>
+    public Parties.Enums.ResponsibilityMode ResponsibilityMode { get; set; }
+        = Parties.Enums.ResponsibilityMode.TenantThenOwner;
+
+    /// <summary>
     /// Aktif yayınlı versiyonun id'si. Taslak iken null. Revizyon sonrası en son
     /// yayınlanan versiyona güncellenir; eski versiyonlar zincirde kalır.
     /// </summary>

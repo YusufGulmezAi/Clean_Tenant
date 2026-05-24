@@ -139,6 +139,9 @@ public interface IMainDbContext
     /// <summary>İletişim kişisi tenure kayıtları.</summary>
     DbSet<UnitContact> UnitContacts { get; }
 
+    /// <summary>Tahakkuk detayı gün-bazlı sorumluluk parçaları.</summary>
+    DbSet<AccrualResponsibilitySplit> AccrualResponsibilitySplits { get; }
+
     /// <summary>Bekleyen değişiklikleri persist eder.</summary>
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

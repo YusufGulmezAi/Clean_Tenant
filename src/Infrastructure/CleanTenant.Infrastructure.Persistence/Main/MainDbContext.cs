@@ -148,6 +148,9 @@ public sealed class MainDbContext : DbContext, IMainDbContext
     /// <summary>İletişim kişisi tenure kayıtları.</summary>
     public DbSet<UnitContact> UnitContacts => Set<UnitContact>();
 
+    /// <summary>Tahakkuk detayı gün-bazlı sorumluluk parçaları.</summary>
+    public DbSet<AccrualResponsibilitySplit> AccrualResponsibilitySplits => Set<AccrualResponsibilitySplit>();
+
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

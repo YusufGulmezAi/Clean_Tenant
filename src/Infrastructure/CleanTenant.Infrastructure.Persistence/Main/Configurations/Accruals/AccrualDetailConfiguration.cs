@@ -1,5 +1,6 @@
 using CleanTenant.Domain.Tenant.Accruals;
 using CleanTenant.Domain.Tenant.BuildingSchema;
+using CleanTenant.Domain.Tenant.Parties;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -39,6 +40,19 @@ internal sealed class AccrualDetailConfiguration : IEntityTypeConfiguration<Accr
         builder.Property(x => x.DistributionShare).HasPrecision(18, 8).IsRequired();
         builder.Property(x => x.DueDate).IsRequired();
         builder.Property(x => x.LineBreakdownJson).HasColumnType("jsonb");
+
+        // Sorumluluk (F0) — birincil sorumlu + çözümleme notu + gün-bazlı parçalar
+        builder.Property(x => x.PrimaryResponsiblePartyId).HasColumnType("uuid");
+        builder.HasIndex(x => x.PrimaryResponsiblePartyId);
+        builder.Property(x => x.ResponsibleResolvedNote).HasMaxLength(200);
+        builder.HasOne<Party>()
+            .WithMany()
+            .HasForeignKey(x => x.PrimaryResponsiblePartyId)
+            .OnDelete(DeleteBehavior.Restrict);
+        builder.HasMany(x => x.Responsibilities)
+            .WithOne()
+            .HasForeignKey(r => r.AccrualDetailId)
+            .OnDelete(DeleteBehavior.Cascade);
 
         // BB FK — restrict
         builder.HasOne<Unit>()

@@ -48,6 +48,10 @@ public static class DependencyInjection
         services.AddScoped<Features.Main.Accruals.Posting.IAccrualJournalPoster,
             Features.Main.Accruals.Posting.AccrualJournalPoster>();
 
+        // Sorumluluk çözümleyici / prorater (IMainDbContext kullanır → scoped)
+        services.AddScoped<Features.Main.Parties.Responsibility.IResponsibilityResolver,
+            Features.Main.Parties.Responsibility.ResponsibilityResolver>();
+
         // Gecikme faizi: saf hesaplama + politika çözümleyici (stateless → singleton)
         services.AddSingleton<Features.Main.LateFees.Calculation.ILateFeeCalculator,
             Features.Main.LateFees.Calculation.LateFeeCalculator>();

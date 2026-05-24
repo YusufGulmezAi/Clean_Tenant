@@ -28,6 +28,7 @@ internal sealed class AccrualConfiguration : IEntityTypeConfiguration<Accrual>
         builder.HasIndex(x => x.CompanyId);
 
         builder.Property(x => x.Source).HasConversion<short>().IsRequired();
+        builder.Property(x => x.ResponsibilityMode).HasConversion<short>();
 
         builder.Property(x => x.BudgetId).HasColumnType("uuid");
         builder.Property(x => x.BudgetVersionId).HasColumnType("uuid");

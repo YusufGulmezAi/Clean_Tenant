@@ -58,6 +58,9 @@ internal sealed class BudgetConfiguration : IEntityTypeConfiguration<Budget>
         builder.Property(x => x.PeriodEndMonth).IsRequired();
 
         builder.Property(x => x.Status).HasConversion<short>().IsRequired();
+        builder.Property(x => x.ResponsibilityMode).HasConversion<short>()
+            .HasDefaultValue(CleanTenant.Domain.Tenant.Parties.Enums.ResponsibilityMode.TenantThenOwner)
+            .IsRequired();
 
         builder.Property(x => x.CurrentVersionId).HasColumnType("uuid");
 
