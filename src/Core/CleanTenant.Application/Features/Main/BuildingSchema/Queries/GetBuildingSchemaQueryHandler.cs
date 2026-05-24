@@ -32,12 +32,15 @@ public sealed class GetBuildingSchemaQueryHandler
         var lands = await _db.Lands
             .Where(l => l.CompanyId == query.CompanyId)
             .OrderBy(l => l.SortOrder)
+            // Parcels/Buildings filtreleri YALNIZ ilk zincirde (EF Core: bir navigation'a
+            // tek filtre kuralı). İkinci dal (block'suz BB'ler) aynı filtrelenmiş koleksiyonu
+            // yeniden kullanır; yalnız yaprak Buildings.Units kendi filtresini taşır.
             .Include(l => l.Parcels.Where(p => !p.IsDeleted).OrderBy(p => p.SortOrder))
                 .ThenInclude(p => p.Buildings.Where(bl => !bl.IsDeleted).OrderBy(bl => bl.SortOrder))
                     .ThenInclude(bl => bl.Blocks.Where(bk => !bk.IsDeleted).OrderBy(bk => bk.SortOrder))
                         .ThenInclude(bk => bk.Units.Where(u => !u.IsDeleted).OrderBy(u => u.SortOrder))
-            .Include(l => l.Parcels.Where(p => !p.IsDeleted))
-                .ThenInclude(p => p.Buildings.Where(bl => !bl.IsDeleted))
+            .Include(l => l.Parcels)
+                .ThenInclude(p => p.Buildings)
                     .ThenInclude(bl => bl.Units.Where(u => !u.IsDeleted && u.BlockId == null).OrderBy(u => u.SortOrder))
             .ToListAsync(cancellationToken);
 

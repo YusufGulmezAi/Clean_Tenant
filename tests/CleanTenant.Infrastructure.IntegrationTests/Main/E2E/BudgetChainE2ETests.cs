@@ -4,6 +4,7 @@ using CleanTenant.Application.Features.Main.Accruals.Queries;
 using CleanTenant.Application.Features.Main.Budgeting.Budgets;
 using CleanTenant.Application.Features.Main.Budgeting.BudgetLineVersions;
 using CleanTenant.Application.Features.Main.Budgeting.Templates;
+using CleanTenant.Application.Features.Main.BuildingSchema.Queries;
 using CleanTenant.Application.Features.Main.Collections.RecordCollection;
 using CleanTenant.Application.Features.Main.LateFees.GenerateLateFeeCharges;
 using CleanTenant.Application.Features.Main.LateFees.SetLateFeePolicy;
@@ -605,6 +606,20 @@ public sealed class BudgetChainE2ETests : IClassFixture<BudgetE2EFixture>
         kpi.TotalCollected.Should().Be(1_000m);
         kpi.NetBalance.Should().Be(0m);
         kpi.OverdueAmount.Should().Be(0m);
+    }
+
+    [Fact]
+    public async Task GetBuildingSchema_cogul_filtreli_include_calisir()
+    {
+        // Regresyon: Parcels/Buildings çoğul filtreli Include "tek filtre" EF hatası
+        // veriyordu (GetBuildingSchemaQueryHandler). Fix sonrası sorgu çalışmalı.
+        var s = await SeedScenarioAsync(unitCount: 3, plannedAnnual: 36_000m, DistributionModel.Equal);
+
+        var schema = Ok(await SendAsync(new GetBuildingSchemaQuery(s.CompanyId)));
+
+        schema.Lands.Should().ContainSingle();
+        var units = schema.Lands[0].Parcels.SelectMany(p => p.Buildings).SelectMany(b => b.Units).ToList();
+        units.Should().HaveCount(3, "block'suz BB'ler building altında yüklenir");
     }
 
     /// <summary>Non-generic Result'ı başarı doğrular.</summary>
