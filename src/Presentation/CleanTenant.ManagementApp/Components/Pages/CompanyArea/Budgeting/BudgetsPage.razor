@@ -1,0 +1,861 @@
+@page "/company/budget"
+@using CleanTenant.Application.Common.Auth
+@using CleanTenant.Application.Features.Main.Budgeting.Budgets
+@using CleanTenant.Application.Features.Main.Budgeting.BudgetLineVersions
+@using CleanTenant.Application.Features.Main.Budgeting.BudgetLines
+@using CleanTenant.Application.Features.Main.Accruals.GenerateBudgetAccrual
+@using CleanTenant.Application.Features.Main.Accounting.FiscalYears
+@using CleanTenant.Domain.Tenant.Budgeting.Enums
+@inject IMediator Mediator
+@inject AuthenticationStateProvider AuthProvider
+@inject ICurrentSessionAccessor SessionAccessor
+@inject ISnackbar Snackbar
+
+<PageTitle>Bütçe Yönetimi</PageTitle>
+
+@if (!_initialized)
+{
+    <div class="d-flex justify-center align-center pa-12">
+        <MudProgressCircular Indeterminate Color="Color.Primary" />
+    </div>
+}
+else if (!_authorized)
+{
+    <MudAlert Severity="Severity.Warning">Bu sayfayı görüntüleme yetkiniz yok.</MudAlert>
+}
+else
+{
+    @if (_descriptionVisible)
+    {
+        <MudAlert Severity="Severity.Info" ShowCloseIcon CloseIconClicked="() => _descriptionVisible = false" Class="mb-3">
+            <MudText Typo="Typo.body2">
+                <b>Bütçe Yönetimi</b> — Site giderlerini kalem bazında planlayın, versiyonlayın ve yayınlayın.
+                Yayınlanan bütçeden <b>Tahakkuk Üret</b> ile aylık dönem borçları Bağımsız Bölümlere dağıtılır.
+                Her bütçe bir mali yıla aittir; birden fazla versiyon (revizyon) desteklenir.
+                Kalem ekleme öncesinde <b>Bütçe Kalemleri</b> tanımlanmış olmalıdır.
+            </MudText>
+        </MudAlert>
+    }
+
+    <MudGrid>
+        @* ────────────── Sol Panel: Bütçe Listesi ────────────── *@
+        <MudItem xs="12" md="3">
+            <MudPaper Elevation="1" Style="height:100%">
+                <MudToolBar Dense="true">
+                    <MudText Typo="Typo.subtitle1" Style="font-weight:600">Bütçeler</MudText>
+                    <MudSpacer />
+                    @if (_canEdit)
+                    {
+                        <MudTooltip Text="Yeni Bütçe Oluştur">
+                            <MudIconButton Icon="@Icons.Material.Filled.Add"
+                                           Size="Size.Small" Color="Color.Primary"
+                                           OnClick="OpenCreateDialogAsync" />
+                        </MudTooltip>
+                    }
+                </MudToolBar>
+                <MudDivider />
+
+                @if (_budgets is null || _budgets.Count == 0)
+                {
+                    <div class="pa-4">
+                        <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center">
+                            Henüz bütçe oluşturulmamış.
+                        </MudText>
+                        @if (_canEdit)
+                        {
+                            <div class="d-flex justify-center mt-2">
+                                <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                                           StartIcon="@Icons.Material.Filled.Add"
+                                           OnClick="OpenCreateDialogAsync">Yeni Bütçe</MudButton>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    @foreach (var group in _budgetsByYear)
+                    {
+                        <div class="px-3 pt-2">
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Style="font-weight:600">
+                                @group.Key
+                            </MudText>
+                        </div>
+                        @foreach (var b in group.Value)
+                        {
+                            var isSelected = _selectedBudget?.Id == b.Id;
+                            <div @onclick="() => SelectBudgetAsync(b)"
+                                 style="padding:8px 12px; cursor:pointer; display:flex; align-items:center; gap:8px;
+                                        border-left: 3px solid @(isSelected ? "var(--mud-palette-primary)" : "transparent");
+                                        background: @(isSelected ? "var(--mud-palette-primary-lighten)" : "transparent");">
+                                <div style="flex:1; min-width:0">
+                                    <MudText Typo="Typo.body2"
+                                             Style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis">
+                                        @b.Title
+                                    </MudText>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                        V@(b.VersionCount)
+                                    </MudText>
+                                </div>
+                                <MudChip T="string" Size="Size.Small" Color="@StatusColor(b.Status)"
+                                         Variant="Variant.Filled" Style="height:20px; min-width:0">
+                                    @StatusLabel(b.Status)
+                                </MudChip>
+                            </div>
+                            <MudDivider />
+                        }
+                    }
+                }
+            </MudPaper>
+        </MudItem>
+
+        @* ────────────── Sağ Panel: Bütçe Detayı ────────────── *@
+        <MudItem xs="12" md="9">
+            @if (_selectedBudget is null)
+            {
+                <MudPaper Elevation="1" Class="d-flex flex-column align-center justify-center pa-12"
+                          Style="min-height:300px">
+                    <MudIcon Icon="@Icons.Material.Filled.AccountBalanceWallet"
+                             Size="Size.Large" Color="Color.Secondary" />
+                    <MudText Typo="Typo.body1" Color="Color.Secondary" Class="mt-2">
+                        Sol panelden bir bütçe seçin.
+                    </MudText>
+                </MudPaper>
+            }
+            else if (_detailLoading)
+            {
+                <MudPaper Elevation="1" Class="d-flex justify-center align-center pa-12"
+                          Style="min-height:300px">
+                    <MudProgressCircular Indeterminate Color="Color.Primary" />
+                </MudPaper>
+            }
+            else if (_budgetDetail is null)
+            {
+                <MudAlert Severity="Severity.Error">Bütçe yüklenemedi.</MudAlert>
+            }
+            else
+            {
+                <MudPaper Elevation="1">
+                    @* Bütçe başlık alanı *@
+                    <div class="pa-3 d-flex align-center gap-3 flex-wrap">
+                        <div style="flex:1; min-width:0">
+                            <MudText Typo="Typo.h6" Style="line-height:1.2">@_budgetDetail.Title</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                Mali Yıl: @_budgetDetail.FiscalYearLabel
+                                @if (_budgetDetail.Notes is not null)
+                                {
+                                    <text> — @_budgetDetail.Notes</text>
+                                }
+                            </MudText>
+                        </div>
+                        <MudChip T="string" Color="@StatusColor(_budgetDetail.Status)" Variant="Variant.Filled">
+                            @StatusLabel(_budgetDetail.Status)
+                        </MudChip>
+
+                        @if (_budgetDetail.Status == BudgetStatus.Draft && _canPublish)
+                        {
+                            <MudButton Variant="Variant.Outlined" Color="Color.Success"
+                                       StartIcon="@Icons.Material.Filled.Publish"
+                                       OnClick="OpenPublishDialog" Disabled="@_publishing">
+                                Yayınla
+                            </MudButton>
+                        }
+                        @if (_budgetDetail.Status == BudgetStatus.Published && _canGenerate)
+                        {
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                                       StartIcon="@Icons.Material.Filled.PlayArrow"
+                                       OnClick="OpenGenerateDialog">
+                                Tahakkuk Üret
+                            </MudButton>
+                        }
+                    </div>
+                    <MudDivider />
+
+                    @* Versiyon sekmeleri *@
+                    @if (_budgetDetail.Versions.Count == 0)
+                    {
+                        <div class="pa-4">
+                            <MudAlert Severity="Severity.Info">Bu bütçede henüz versiyon yok.</MudAlert>
+                        </div>
+                    }
+                    else
+                    {
+                        <MudTabs @ref="_versionTabs" ActivePanelIndexChanged="OnVersionTabChangedAsync">
+                            @for (int vi = 0; vi < _budgetDetail.Versions.Count; vi++)
+                            {
+                                var version = _budgetDetail.Versions[vi];
+                                <MudTabPanel Text="@($"V{version.VersionNumber}")" ID="@version.Id">
+                                    <div class="pa-3">
+                                        @* Versiyon bilgi şeridi *@
+                                        <div class="d-flex align-center gap-3 mb-3 flex-wrap">
+                                            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                                <b>@version.LineCount</b> kalem —
+                                                Toplam: <b>@FormatAmount(version.TotalPlannedAmount)</b>
+                                            </MudText>
+                                            @if (version.ValidFrom.HasValue)
+                                            {
+                                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                                    Geçerlilik:
+                                                    @version.ValidFrom.Value.ToString("dd.MM.yyyy") –
+                                                    @(version.ValidTo?.ToString("dd.MM.yyyy") ?? "∞")
+                                                </MudText>
+                                            }
+                                            <MudSpacer />
+                                            @if (_budgetDetail.Status == BudgetStatus.Draft && _canEdit)
+                                            {
+                                                <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                                                           StartIcon="@Icons.Material.Filled.Add"
+                                                           OnClick="OpenAddLineDialogAsync">
+                                                    Kalem Ekle
+                                                </MudButton>
+                                            }
+                                        </div>
+
+                                        @* Kalem × Ay ızgara *@
+                                        @if (_linesLoading)
+                                        {
+                                            <div class="d-flex justify-center pa-6">
+                                                <MudProgressCircular Indeterminate Size="Size.Small" />
+                                            </div>
+                                        }
+                                        else if (_versionLines is null || _versionLines.Count == 0)
+                                        {
+                                            <MudAlert Severity="Severity.Info">
+                                                Bu versiyonda henüz kalem yok.
+                                                @if (_budgetDetail.Status == BudgetStatus.Draft && _canEdit)
+                                                {
+                                                    <text> "Kalem Ekle" butonu ile kalem ekleyebilirsiniz.</text>
+                                                }
+                                            </MudAlert>
+                                        }
+                                        else
+                                        {
+                                            <div style="overflow-x:auto">
+                                                <MudSimpleTable Dense="true" Bordered="true" Striped="true"
+                                                                Style="min-width:1000px; font-size:0.82rem">
+                                                    <thead>
+                                                        <tr>
+                                                            <th style="min-width:160px">Kalem</th>
+                                                            <th style="min-width:80px">Dağıtım</th>
+                                                            <th style="text-align:right; min-width:90px">Plan (₺)</th>
+                                                            @foreach (var m in _months)
+                                                            {
+                                                                <th style="text-align:right; min-width:70px">
+                                                                    @TurkishMonthShort(m)
+                                                                </th>
+                                                            }
+                                                            @if (_budgetDetail.Status == BudgetStatus.Draft && _canEdit)
+                                                            {
+                                                                <th style="width:40px"></th>
+                                                            }
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        @foreach (var line in _versionLines)
+                                                        {
+                                                            <tr>
+                                                                <td>
+                                                                    <div style="font-weight:500">@line.LineName</div>
+                                                                    <div style="font-size:0.75rem; color:var(--mud-palette-text-secondary)">
+                                                                        @line.CategoryName
+                                                                        @if (line.ParticipationGroupName is not null)
+                                                                        {
+                                                                            <text> · @line.ParticipationGroupName</text>
+                                                                        }
+                                                                    </div>
+                                                                </td>
+                                                                <td>
+                                                                    <MudChip T="string" Size="Size.Small"
+                                                                             Variant="Variant.Text" Color="Color.Default"
+                                                                             Style="height:18px">
+                                                                        @DistLabel(line.DistributionModel)
+                                                                    </MudChip>
+                                                                </td>
+                                                                <td style="text-align:right; font-weight:600">
+                                                                    @FormatAmount(line.PlannedAmount)
+                                                                </td>
+                                                                @foreach (var m in _months)
+                                                                {
+                                                                    var amt = GetInstallmentAmount(line.Id, m);
+                                                                    <td style="text-align:right;
+                                                                               color:@(amt > 0 ? "inherit" : "var(--mud-palette-text-disabled)")">
+                                                                        @(amt > 0 ? FormatAmount(amt) : "—")
+                                                                    </td>
+                                                                }
+                                                                @if (_budgetDetail.Status == BudgetStatus.Draft && _canEdit)
+                                                                {
+                                                                    <td style="text-align:center">
+                                                                        <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                                                                       Size="Size.Small" Color="Color.Error"
+                                                                                       OnClick="() => RemoveLineAsync(line.Id)" />
+                                                                    </td>
+                                                                }
+                                                            </tr>
+                                                        }
+
+                                                        @* Toplam satırı *@
+                                                        <tr style="font-weight:700; background:var(--mud-palette-table-striped)">
+                                                            <td colspan="2">Toplam</td>
+                                                            <td style="text-align:right">
+                                                                @FormatAmount(_versionLines.Sum(l => l.PlannedAmount))
+                                                            </td>
+                                                            @foreach (var m in _months)
+                                                            {
+                                                                var total = _versionLines.Sum(l => GetInstallmentAmount(l.Id, m));
+                                                                <td style="text-align:right">
+                                                                    @(total > 0 ? FormatAmount(total) : "—")
+                                                                </td>
+                                                            }
+                                                            @if (_budgetDetail.Status == BudgetStatus.Draft && _canEdit)
+                                                            {
+                                                                <td></td>
+                                                            }
+                                                        </tr>
+                                                    </tbody>
+                                                </MudSimpleTable>
+                                            </div>
+                                        }
+                                    </div>
+                                </MudTabPanel>
+                            }
+                        </MudTabs>
+                    }
+                </MudPaper>
+            }
+        </MudItem>
+    </MudGrid>
+}
+
+@* ══════════════════════ Diyalog: Yeni Bütçe ══════════════════════ *@
+<MudDialog @bind-IsVisible="_createDialogOpen" MaxWidth="MaxWidth.Small" FullWidth="true">
+    <TitleContent>
+        <MudText Typo="Typo.h6">Yeni Bütçe Oluştur</MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (_fiscalYears is null)
+        {
+            <MudProgressLinear Indeterminate />
+        }
+        else if (_fiscalYears.Count == 0)
+        {
+            <MudAlert Severity="Severity.Warning">
+                Önce <b>Muhasebe → Hesap Dönemleri</b> ekranından bir mali yıl oluşturun.
+            </MudAlert>
+        }
+        else
+        {
+            <MudSelect T="Guid" Label="Mali Yıl" @bind-Value="_newFiscalYearId" Required="true"
+                       Variant="Variant.Outlined">
+                @foreach (var fy in _fiscalYears)
+                {
+                    <MudSelectItem Value="fy.Id">@fy.Label</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSelect T="BudgetType" Label="Bütçe Tipi" @bind-Value="_newType" Class="mt-3"
+                       Variant="Variant.Outlined">
+                <MudSelectItem Value="BudgetType.Aidat">Aidat</MudSelectItem>
+                <MudSelectItem Value="BudgetType.Yatirim">Yatırım</MudSelectItem>
+                <MudSelectItem Value="BudgetType.Komur">Kömür / Yakıt</MudSelectItem>
+                <MudSelectItem Value="BudgetType.Kurulus">Kuruluş</MudSelectItem>
+            </MudSelect>
+            <MudTextField Label="Bütçe Başlığı" @bind-Value="_newTitle" Required="true"
+                          Variant="Variant.Outlined" Class="mt-3"
+                          Placeholder="Örn: 2026 Aidat Bütçesi" />
+            <MudTextField Label="Notlar" @bind-Value="_newNotes" Lines="2"
+                          Variant="Variant.Outlined" Class="mt-3" />
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => _createDialogOpen = false">İptal</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   Disabled="@(_creating || string.IsNullOrWhiteSpace(_newTitle) || _newFiscalYearId == Guid.Empty)"
+                   OnClick="CreateBudgetAsync">
+            @if (_creating) { <MudProgressCircular Size="Size.Small" Indeterminate="true" /> }
+            else { <text>Oluştur</text> }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@* ══════════════════════ Diyalog: Kalem Ekle ══════════════════════ *@
+<MudDialog @bind-IsVisible="_addLineDialogOpen" MaxWidth="MaxWidth.Small" FullWidth="true">
+    <TitleContent>
+        <MudText Typo="Typo.h6">Bütçe Kalemi Ekle</MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (_availableLines is null)
+        {
+            <MudProgressLinear Indeterminate />
+        }
+        else if (_availableLines.Count == 0)
+        {
+            <MudAlert Severity="Severity.Warning">
+                Önce <b>Bütçe Kalemleri</b> ekranından kalem tanımlayın.
+            </MudAlert>
+        }
+        else
+        {
+            <MudSelect T="BudgetLineListItem?" Label="Kalem" @bind-Value="_newLineItem" Required="true"
+                       Variant="Variant.Outlined"
+                       ToStringFunc="@(l => l is null ? "" : $"{l.Code} – {l.Name}")">
+                @foreach (var l in _availableLines)
+                {
+                    <MudSelectItem Value="@((BudgetLineListItem?)l)">@l.Code – @l.Name</MudSelectItem>
+                }
+            </MudSelect>
+            <MudNumericField T="decimal" Label="Planlanan Yıllık Tutar (₺)" @bind-Value="_newLineAmount"
+                             Min="0.01m" Required="true" Variant="Variant.Outlined" Class="mt-3" />
+            <MudSelect T="PaymentSchedule" Label="Ödeme Planı" @bind-Value="_newLineSchedule"
+                       Variant="Variant.Outlined" Class="mt-3">
+                <MudSelectItem Value="PaymentSchedule.MonthlyEqual">Aylık Eşit (12 taksit)</MudSelectItem>
+                <MudSelectItem Value="PaymentSchedule.AnnualLumpSum">Yıllık Toplu (1 taksit)</MudSelectItem>
+                <MudSelectItem Value="PaymentSchedule.InvoiceBased">Fatura Bazlı</MudSelectItem>
+                <MudSelectItem Value="PaymentSchedule.Installment">Taksitli (özel)</MudSelectItem>
+            </MudSelect>
+            <MudSelect T="DistributionModel" Label="Dağıtım Modeli" @bind-Value="_newLineDist"
+                       Variant="Variant.Outlined" Class="mt-3">
+                <MudSelectItem Value="DistributionModel.Equal">Eşit (BB sayısına bölünür)</MudSelectItem>
+                <MudSelectItem Value="DistributionModel.BySquareMeter">Brüt m² Oranı</MudSelectItem>
+                <MudSelectItem Value="DistributionModel.ByLandShare">Arsa Payı Oranı</MudSelectItem>
+            </MudSelect>
+            <MudNumericField T="int" Label="Vade Günü (ayın)" @bind-Value="_newLineDueDay"
+                             Min="1" Max="28" Variant="Variant.Outlined" Class="mt-3" />
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => _addLineDialogOpen = false">İptal</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   Disabled="@(_addingLine || _newLineItem is null || _newLineAmount <= 0)"
+                   OnClick="AddLineAsync">
+            @if (_addingLine) { <MudProgressCircular Size="Size.Small" Indeterminate="true" /> }
+            else { <text>Ekle</text> }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@* ══════════════════════ Diyalog: Yayınla ══════════════════════ *@
+<MudDialog @bind-IsVisible="_publishDialogOpen" MaxWidth="MaxWidth.ExtraSmall" FullWidth="true">
+    <TitleContent>
+        <MudText Typo="Typo.h6">Bütçeyi Yayınla</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Class="mb-3">
+            <b>@_selectedBudget?.Title</b> bütçesi yayınlanacak. Yayınlanan versiyon
+            değiştirilemez; değişiklik için revizyon gerekir.
+        </MudText>
+        <MudDatePicker Label="Geçerlilik Başlangıcı" @bind-Date="_publishValidFromDT"
+                       Required="true" Variant="Variant.Outlined"
+                       DateFormat="dd.MM.yyyy" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => _publishDialogOpen = false">İptal</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Success"
+                   Disabled="@(_publishing || _publishValidFromDT is null)"
+                   OnClick="PublishBudgetAsync">
+            @if (_publishing) { <MudProgressCircular Size="Size.Small" Indeterminate="true" /> }
+            else { <text>Yayınla</text> }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@* ══════════════════════ Diyalog: Tahakkuk Üret ══════════════════ *@
+<MudDialog @bind-IsVisible="_generateDialogOpen" MaxWidth="MaxWidth.ExtraSmall" FullWidth="true">
+    <TitleContent>
+        <MudText Typo="Typo.h6">Tahakkuk Üret</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Class="mb-3">
+            <b>@_selectedBudget?.Title</b> bütçesinden seçili dönem için
+            Bağımsız Bölümlere tahakkuk dağıtılacak.
+        </MudText>
+        <MudGrid>
+            <MudItem xs="6">
+                <MudSelect T="int" Label="Yıl" @bind-Value="_genYear" Variant="Variant.Outlined">
+                    @for (int y = DateTime.Today.Year - 1; y <= DateTime.Today.Year + 1; y++)
+                    {
+                        <MudSelectItem Value="y">@y</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="6">
+                <MudSelect T="int" Label="Ay" @bind-Value="_genMonth" Variant="Variant.Outlined">
+                    @for (int m = 1; m <= 12; m++)
+                    {
+                        <MudSelectItem Value="m">@TurkishMonth(m)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+        </MudGrid>
+        <MudCheckBox T="bool" @bind-Value="_genForce" Class="mt-2">
+            Mevcut tahakkuku sil ve yeniden üret (Force)
+        </MudCheckBox>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => _generateDialogOpen = false">İptal</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   Disabled="@_generating" OnClick="GenerateAccrualAsync">
+            @if (_generating) { <MudProgressCircular Size="Size.Small" Indeterminate="true" /> }
+            else { <text>Üret</text> }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private bool _authorized, _initialized, _descriptionVisible = true;
+    private Guid _companyId, _tenantId;
+    private bool _canView, _canEdit, _canPublish, _canGenerate;
+
+    // Bütçe listesi
+    private IReadOnlyList<BudgetListItem>? _budgets;
+    private Dictionary<string, List<BudgetListItem>> _budgetsByYear = new();
+
+    // Seçili bütçe + detay
+    private BudgetListItem? _selectedBudget;
+    private BudgetDetail? _budgetDetail;
+    private bool _detailLoading;
+
+    // Seçili versiyon + kalem ızgarası
+    private MudTabs? _versionTabs;
+    private BudgetVersionDto? _selectedVersion;
+    private IReadOnlyList<BudgetLineVersionDto>? _versionLines;
+    private Dictionary<Guid, IReadOnlyList<BudgetLineInstallmentDto>> _installments = new();
+    private bool _linesLoading;
+    private static readonly List<int> _months = Enumerable.Range(1, 12).ToList();
+
+    // Yeni Bütçe diyaloğu
+    private bool _createDialogOpen, _creating;
+    private IReadOnlyList<FiscalYearListItem>? _fiscalYears;
+    private Guid _newFiscalYearId;
+    private BudgetType _newType = BudgetType.Aidat;
+    private string _newTitle = "", _newNotes = "";
+
+    // Kalem Ekle diyaloğu
+    private bool _addLineDialogOpen, _addingLine;
+    private IReadOnlyList<BudgetLineListItem>? _availableLines;
+    private BudgetLineListItem? _newLineItem;
+    private decimal _newLineAmount;
+    private PaymentSchedule _newLineSchedule = PaymentSchedule.MonthlyEqual;
+    private DistributionModel _newLineDist = DistributionModel.Equal;
+    private int _newLineDueDay = 15;
+
+    // Yayınla diyaloğu
+    private bool _publishDialogOpen, _publishing;
+    private DateTime? _publishValidFromDT = DateTime.Today;
+
+    // Tahakkuk Üret diyaloğu
+    private bool _generateDialogOpen, _generating;
+    private int _genYear = DateTime.Today.Year;
+    private int _genMonth = DateTime.Today.Month;
+    private bool _genForce;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user?.Identity?.IsAuthenticated != true) { _initialized = true; return; }
+
+        var scope = user.FindFirst("scope")?.Value;
+        if (!string.Equals(scope, "Company", StringComparison.OrdinalIgnoreCase)) { _initialized = true; return; }
+
+        if (user.FindFirst("company_id") is { Value: var cid } && Guid.TryParseExact(cid, "N", out var cGuid))
+            _companyId = cGuid;
+        else { _initialized = true; return; }
+
+        if (user.FindFirst("tenant_id") is { Value: var tid } && Guid.TryParseExact(tid, "N", out var tGuid))
+            _tenantId = tGuid;
+
+        var session = SessionAccessor.Current;
+        var perms = session?.Permissions ?? [];
+        _canView     = perms.Contains("tenant.budget.view");
+        _canEdit     = perms.Contains("tenant.budget.edit");
+        _canPublish  = perms.Contains("tenant.budget.publish");
+        _canGenerate = perms.Contains("tenant.accrual.generate");
+        _authorized  = _canView;
+
+        if (_authorized)
+            await LoadBudgetsAsync();
+
+        _initialized = true;
+    }
+
+    private async Task LoadBudgetsAsync()
+    {
+        var result = await Mediator.Send(new GetBudgetsByCompanyQuery(_companyId));
+        if (result.IsFailure) return;
+
+        _budgets = result.Value;
+        _budgetsByYear = (_budgets ?? [])
+            .GroupBy(b => b.FiscalYearLabel)
+            .OrderByDescending(g => g.Key)
+            .ToDictionary(g => g.Key, g => g.OrderBy(b => b.Title).ToList());
+    }
+
+    private async Task SelectBudgetAsync(BudgetListItem budget)
+    {
+        if (_selectedBudget?.Id == budget.Id) return;
+        _selectedBudget = budget;
+        _budgetDetail = null;
+        _selectedVersion = null;
+        _versionLines = null;
+        _installments.Clear();
+        _detailLoading = true;
+        StateHasChanged();
+
+        var result = await Mediator.Send(new GetBudgetDetailQuery(_companyId, budget.Id));
+        _detailLoading = false;
+        if (result.IsFailure) { StateHasChanged(); return; }
+
+        _budgetDetail = result.Value;
+        if (_budgetDetail?.Versions.Count > 0)
+        {
+            _selectedVersion = _budgetDetail.Versions[^1];
+            await LoadVersionLinesAsync(_selectedVersion.Id);
+        }
+        StateHasChanged();
+    }
+
+    private async Task OnVersionTabChangedAsync(int index)
+    {
+        if (_budgetDetail is null || index < 0 || index >= _budgetDetail.Versions.Count) return;
+        var version = _budgetDetail.Versions[index];
+        if (_selectedVersion?.Id == version.Id) return;
+        _selectedVersion = version;
+        await LoadVersionLinesAsync(version.Id);
+    }
+
+    private async Task LoadVersionLinesAsync(Guid versionId)
+    {
+        _linesLoading = true;
+        _versionLines = null;
+        _installments.Clear();
+        StateHasChanged();
+
+        var linesResult = await Mediator.Send(new GetBudgetVersionLinesQuery(_companyId, versionId));
+        if (linesResult.IsSuccess && linesResult.Value is { } lines)
+        {
+            _versionLines = lines;
+            var tasks = lines.Select(async l =>
+            {
+                var r = await Mediator.Send(new GetBudgetLineInstallmentsQuery(_companyId, l.Id));
+                if (r.IsSuccess && r.Value is { } inst)
+                    _installments[l.Id] = inst;
+            });
+            await Task.WhenAll(tasks);
+        }
+
+        _linesLoading = false;
+        StateHasChanged();
+    }
+
+    private decimal GetInstallmentAmount(Guid lineVersionId, int month)
+    {
+        if (!_installments.TryGetValue(lineVersionId, out var list)) return 0;
+        return list.FirstOrDefault(i => i.Month == month)?.Amount ?? 0;
+    }
+
+    private async Task OpenCreateDialogAsync()
+    {
+        _newTitle = "";
+        _newNotes = "";
+        _newType = BudgetType.Aidat;
+        _newFiscalYearId = Guid.Empty;
+
+        if (_fiscalYears is null)
+        {
+            var r = await Mediator.Send(new GetFiscalYearsQuery(_companyId));
+            if (r.IsSuccess && r.Value is { } list)
+            {
+                _fiscalYears = list;
+                _newFiscalYearId = list.FirstOrDefault(f => f.IsCurrentYear)?.Id
+                                   ?? list.FirstOrDefault()?.Id ?? Guid.Empty;
+            }
+        }
+        else if (_fiscalYears.Count > 0)
+        {
+            _newFiscalYearId = _fiscalYears.FirstOrDefault(f => f.IsCurrentYear)?.Id
+                               ?? _fiscalYears[0].Id;
+        }
+
+        _createDialogOpen = true;
+    }
+
+    private async Task CreateBudgetAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newTitle) || _newFiscalYearId == Guid.Empty) return;
+        _creating = true;
+        var cmd = new CreateBudgetCommand(
+            _tenantId, _companyId, _newFiscalYearId, _newType, _newTitle,
+            string.IsNullOrWhiteSpace(_newNotes) ? null : _newNotes);
+        var result = await Mediator.Send(cmd);
+        _creating = false;
+
+        if (result.IsFailure)
+        {
+            Snackbar.Add(result.FirstError.Message, Severity.Error);
+            return;
+        }
+        Snackbar.Add("Bütçe oluşturuldu.", Severity.Success);
+        _createDialogOpen = false;
+        await LoadBudgetsAsync();
+        StateHasChanged();
+
+        var newBudget = _budgets?.FirstOrDefault(b => b.Id == result.Value);
+        if (newBudget is not null)
+            await SelectBudgetAsync(newBudget);
+    }
+
+    private async Task OpenAddLineDialogAsync()
+    {
+        _newLineItem = null;
+        _newLineAmount = 0;
+        _newLineSchedule = PaymentSchedule.MonthlyEqual;
+        _newLineDist = DistributionModel.Equal;
+        _newLineDueDay = 15;
+
+        if (_availableLines is null)
+        {
+            var r = await Mediator.Send(new GetBudgetLinesByCompanyQuery(_companyId));
+            if (r.IsSuccess && r.Value is { } lines)
+                _availableLines = lines;
+        }
+        _addLineDialogOpen = true;
+    }
+
+    private async Task AddLineAsync()
+    {
+        if (_newLineItem is null || _selectedVersion is null) return;
+        _addingLine = true;
+        var cmd = new AddBudgetLineToVersionCommand(
+            _tenantId, _companyId, _selectedVersion.Id,
+            _newLineItem.Id, _newLineAmount, _newLineSchedule, _newLineDist,
+            null, null, _newLineDueDay);
+        var result = await Mediator.Send(cmd);
+        _addingLine = false;
+
+        if (result.IsFailure)
+        {
+            Snackbar.Add(result.FirstError.Message, Severity.Error);
+            return;
+        }
+        Snackbar.Add("Kalem eklendi.", Severity.Success);
+        _addLineDialogOpen = false;
+        if (_selectedVersion is not null)
+            await LoadVersionLinesAsync(_selectedVersion.Id);
+        await LoadBudgetsAsync();
+    }
+
+    private async Task RemoveLineAsync(Guid lineVersionId)
+    {
+        var result = await Mediator.Send(
+            new RemoveBudgetLineVersionCommand(_tenantId, _companyId, lineVersionId));
+        if (result.IsFailure)
+        {
+            Snackbar.Add(result.FirstError.Message, Severity.Error);
+            return;
+        }
+        Snackbar.Add("Kalem kaldırıldı.", Severity.Info);
+        if (_selectedVersion is not null)
+            await LoadVersionLinesAsync(_selectedVersion.Id);
+        await LoadBudgetsAsync();
+    }
+
+    private void OpenPublishDialog()
+    {
+        _publishValidFromDT = DateTime.Today;
+        _publishDialogOpen = true;
+    }
+
+    private async Task PublishBudgetAsync()
+    {
+        if (_selectedBudget is null || _publishValidFromDT is null) return;
+        _publishing = true;
+        var validFrom = DateOnly.FromDateTime(_publishValidFromDT.Value);
+        var cmd = new PublishBudgetCommand(_companyId, _selectedBudget.Id, validFrom);
+        var result = await Mediator.Send(cmd);
+        _publishing = false;
+
+        if (result.IsFailure)
+        {
+            Snackbar.Add(result.FirstError.Message, Severity.Error);
+            return;
+        }
+        Snackbar.Add("Bütçe yayınlandı.", Severity.Success);
+        _publishDialogOpen = false;
+        await LoadBudgetsAsync();
+        var updated = _budgets?.FirstOrDefault(b => b.Id == _selectedBudget.Id);
+        if (updated is not null)
+            await SelectBudgetAsync(updated);
+    }
+
+    private void OpenGenerateDialog()
+    {
+        _genYear = DateTime.Today.Year;
+        _genMonth = DateTime.Today.Month;
+        _genForce = false;
+        _generateDialogOpen = true;
+    }
+
+    private async Task GenerateAccrualAsync()
+    {
+        if (_selectedBudget is null) return;
+        _generating = true;
+        var cmd = new GenerateBudgetAccrualCommand(
+            _tenantId, _companyId, _selectedBudget.Id,
+            _genYear, _genMonth, _genForce);
+        var result = await Mediator.Send(cmd);
+        _generating = false;
+
+        if (result.IsFailure)
+        {
+            Snackbar.Add(result.FirstError.Message, Severity.Error);
+            return;
+        }
+        if (result.Value is { } r)
+            Snackbar.Add($"Tahakkuk üretildi: {r.DetailCount} BB, {FormatAmount(r.TotalAmount)}", Severity.Success);
+        _generateDialogOpen = false;
+    }
+
+    private static string StatusLabel(BudgetStatus s) => s switch
+    {
+        BudgetStatus.Draft     => "Taslak",
+        BudgetStatus.Published => "Yayınlandı",
+        BudgetStatus.Cancelled => "İptal",
+        _                      => s.ToString()
+    };
+
+    private static Color StatusColor(BudgetStatus s) => s switch
+    {
+        BudgetStatus.Draft     => Color.Warning,
+        BudgetStatus.Published => Color.Success,
+        BudgetStatus.Cancelled => Color.Error,
+        _                      => Color.Default
+    };
+
+    private static string DistLabel(DistributionModel d) => d switch
+    {
+        DistributionModel.Equal        => "Eşit",
+        DistributionModel.BySquareMeter => "m²",
+        DistributionModel.ByLandShare  => "Arsa",
+        DistributionModel.ByRoomCount  => "Oda",
+        _                              => d.ToString()
+    };
+
+    private static string TurkishMonth(int m) => m switch
+    {
+        1 => "Ocak", 2 => "Şubat", 3 => "Mart",
+        4 => "Nisan", 5 => "Mayıs", 6 => "Haziran",
+        7 => "Temmuz", 8 => "Ağustos", 9 => "Eylül",
+        10 => "Ekim", 11 => "Kasım", 12 => "Aralık",
+        _ => m.ToString()
+    };
+
+    private static string TurkishMonthShort(int m) => m switch
+    {
+        1 => "Oca", 2 => "Şub", 3 => "Mar",
+        4 => "Nis", 5 => "May", 6 => "Haz",
+        7 => "Tem", 8 => "Ağu", 9 => "Eyl",
+        10 => "Eki", 11 => "Kas", 12 => "Ara",
+        _ => m.ToString()
+    };
+
+    private static string FormatAmount(decimal amount)
+        => amount.ToString("N2", System.Globalization.CultureInfo.GetCultureInfo("tr-TR")) + " ₺";
+}

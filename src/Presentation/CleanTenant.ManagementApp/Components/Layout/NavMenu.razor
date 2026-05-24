@@ -205,6 +205,22 @@
             </MudNavLink>
         }
 
+        @* ── Bütçe Yönetimi ─────────────────────────────────────────── *@
+        @if (_canViewBudget && Matches("Bütçe"))
+        {
+            <MudNavLink Href="/company/budget" Icon="@Icons.Material.Filled.AccountBalanceWallet">
+                Bütçe
+            </MudNavLink>
+        }
+
+        @* ── Tahakkuk Yönetimi ───────────────────────────────────────── *@
+        @if (_canViewCollections && Matches("Tahakkuk"))
+        {
+            <MudNavLink Href="/company/accruals" Icon="@Icons.Material.Filled.Assignment">
+                Tahakkuk
+            </MudNavLink>
+        }
+
         @* ── Tahsilat Yönetimi ──────────────────────────────────────── *@
         @if (_canViewCollections && Matches("Tahsilat"))
         {

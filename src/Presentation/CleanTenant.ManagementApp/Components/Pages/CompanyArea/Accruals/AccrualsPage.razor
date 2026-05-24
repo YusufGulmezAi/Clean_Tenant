@@ -1,0 +1,647 @@
+@page "/company/accruals"
+@using CleanTenant.Application.Common.Auth
+@using CleanTenant.Application.Features.Main.Accruals.Queries
+@using CleanTenant.Application.Features.Main.Accruals.GenerateBudgetAccrual
+@using CleanTenant.Application.Features.Main.Accruals.DirectCharge
+@using CleanTenant.Application.Features.Main.Budgeting.Budgets
+@using CleanTenant.Application.Features.Main.Accounting.FiscalYears
+@using CleanTenant.Application.Features.Main.Accounting.AccountCodes
+@using CleanTenant.Application.Features.Main.BuildingSchema.Queries
+@using CleanTenant.Domain.Tenant.Accruals.Enums
+@inject IMediator Mediator
+@inject AuthenticationStateProvider AuthProvider
+@inject ICurrentSessionAccessor SessionAccessor
+@inject ISnackbar Snackbar
+
+<PageTitle>Tahakkuk Yönetimi</PageTitle>
+
+@if (!_initialized)
+{
+    <div class="d-flex justify-center align-center pa-12">
+        <MudProgressCircular Indeterminate Color="Color.Primary" />
+    </div>
+}
+else if (!_authorized)
+{
+    <MudAlert Severity="Severity.Warning">Bu sayfayı görüntüleme yetkiniz yok.</MudAlert>
+}
+else
+{
+    @if (_descriptionVisible)
+    {
+        <MudAlert Severity="Severity.Info" ShowCloseIcon CloseIconClicked="() => _descriptionVisible = false" Class="mb-3">
+            <MudText Typo="Typo.body2">
+                <b>Tahakkuk Yönetimi</b> — Bütçeden dönem bazında toplu tahakkuk üretin veya
+                belirli bir Bağımsız Bölüme doğrudan yük ekleyin.
+                Üretilen tahakkuklar Tahsilat ekranında takip edilir; her tahakkuk için
+                otomatik yevmiye fişi açılır.
+                <b>İdempotency:</b> Aynı bütçe + dönem için ikinci kez üretmek, önceki
+                tahakkuku silip yeniden oluşturmak için Force seçeneğini aktif edin.
+            </MudText>
+        </MudAlert>
+    }
+
+    @* ────── Dönem filtresi + aksiyon butonları ────── *@
+    <div class="d-flex align-center gap-3 mb-4 flex-wrap">
+        <MudSelect T="int" Label="Yıl"
+                   Value="_filterYear"
+                   ValueChanged="OnYearChangedAsync"
+                   Variant="Variant.Outlined" Margin="Margin.Dense" Style="width:100px">
+            @for (int y = DateTime.Today.Year - 1; y <= DateTime.Today.Year + 1; y++)
+            {
+                <MudSelectItem Value="y">@y</MudSelectItem>
+            }
+        </MudSelect>
+
+        <MudSelect T="int?" Label="Ay"
+                   Value="_filterMonth"
+                   ValueChanged="OnMonthChangedAsync"
+                   Variant="Variant.Outlined" Margin="Margin.Dense" Style="width:120px"
+                   Clearable="true">
+            @for (int m = 1; m <= 12; m++)
+            {
+                var month = m;
+                <MudSelectItem Value="@((int?)month)">@TurkishMonth(month)</MudSelectItem>
+            }
+        </MudSelect>
+
+        <MudSpacer />
+
+        @if (_canGenerate)
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.PlayArrow"
+                       OnClick="OpenGenerateDialogAsync">
+                Bütçeden Üret
+            </MudButton>
+            <MudButton Variant="Variant.Outlined" Color="Color.Secondary"
+                       StartIcon="@Icons.Material.Filled.Add"
+                       OnClick="OpenDirectChargeDialogAsync">
+                Direkt Yük
+            </MudButton>
+        }
+    </div>
+
+    @* ────── İstatistik kartları ────── *@
+    @if (_accruals is not null)
+    {
+        var budgetTotal   = _accruals.Where(a => a.Source == AccrualSource.Budget).Sum(a => a.TotalAmount);
+        var directTotal   = _accruals.Where(a => a.Source == AccrualSource.DirectCharge).Sum(a => a.TotalAmount);
+        var invoiceTotal  = _accruals.Where(a => a.Source == AccrualSource.Invoice).Sum(a => a.TotalAmount);
+        var grandTotal    = _accruals.Sum(a => a.TotalAmount);
+        var unitCount     = _accruals.Sum(a => a.DetailCount);
+
+        <MudGrid Class="mb-3">
+            <MudItem xs="6" sm="3">
+                <MudPaper Elevation="1" Class="pa-3 text-center">
+                    <MudText Typo="Typo.h6" Color="Color.Primary">@FormatAmount(grandTotal)</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Toplam Tahakkuk</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" sm="3">
+                <MudPaper Elevation="1" Class="pa-3 text-center">
+                    <MudText Typo="Typo.h6" Color="Color.Success">@FormatAmount(budgetTotal)</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Bütçe Kaynaklı</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" sm="3">
+                <MudPaper Elevation="1" Class="pa-3 text-center">
+                    <MudText Typo="Typo.h6" Color="Color.Warning">@FormatAmount(directTotal + invoiceTotal)</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Direkt / Fatura</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" sm="3">
+                <MudPaper Elevation="1" Class="pa-3 text-center">
+                    <MudText Typo="Typo.h6">@unitCount</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Toplam BB Kaydı</MudText>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+    }
+
+    @* ────── Tahakkuk listesi ────── *@
+    <MudPaper Elevation="1">
+        @if (_loading)
+        {
+            <div class="d-flex justify-center pa-8">
+                <MudProgressCircular Indeterminate Color="Color.Primary" />
+            </div>
+        }
+        else if (_accruals is null || _accruals.Count == 0)
+        {
+            <div class="pa-8 d-flex flex-column align-center gap-2">
+                <MudIcon Icon="@Icons.Material.Filled.Assignment" Size="Size.Large" Color="Color.Secondary" />
+                <MudText Typo="Typo.body1" Color="Color.Secondary">
+                    Bu dönem için tahakkuk kaydı yok.
+                </MudText>
+                @if (_canGenerate)
+                {
+                    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.PlayArrow"
+                               OnClick="OpenGenerateDialogAsync">
+                        Bütçeden Tahakkuk Üret
+                    </MudButton>
+                }
+            </div>
+        }
+        else
+        {
+            <MudSimpleTable Dense="true" Striped="true" Style="font-size:0.85rem">
+                <thead>
+                    <tr>
+                        <th>Kaynak</th>
+                        <th>Dönem</th>
+                        <th style="min-width:200px">Açıklama</th>
+                        <th style="text-align:right">Tutar</th>
+                        <th style="text-align:center">BB</th>
+                        <th>Yevmiye</th>
+                        <th>Üretilme</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var a in _accruals)
+                    {
+                        <tr>
+                            <td>
+                                <MudChip T="string" Size="Size.Small" Color="@SourceColor(a.Source)"
+                                         Variant="Variant.Filled" Style="height:20px">
+                                    @SourceLabel(a.Source)
+                                </MudChip>
+                            </td>
+                            <td>
+                                <MudText Typo="Typo.body2">
+                                    @TurkishMonthShort(a.Month) @a.Year
+                                </MudText>
+                            </td>
+                            <td>
+                                <MudText Typo="Typo.body2">@a.Description</MudText>
+                            </td>
+                            <td style="text-align:right; font-weight:600">
+                                @FormatAmount(a.TotalAmount)
+                            </td>
+                            <td style="text-align:center">
+                                <MudChip T="string" Size="Size.Small" Color="Color.Default"
+                                         Variant="Variant.Text" Style="height:18px">
+                                    @a.DetailCount
+                                </MudChip>
+                            </td>
+                            <td>
+                                @if (a.JournalEntryId.HasValue)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Success"
+                                             Variant="Variant.Text" Style="height:18px">
+                                        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small" />
+                                    </MudChip>
+                                }
+                                else
+                                {
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">—</MudText>
+                                }
+                            </td>
+                            <td>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    @a.GeneratedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")
+                                </MudText>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        }
+    </MudPaper>
+}
+
+@* ══════════════════════ Diyalog: Bütçeden Tahakkuk Üret ══════════════════════ *@
+<MudDialog @bind-IsVisible="_generateDialogOpen" MaxWidth="MaxWidth.Small" FullWidth="true">
+    <TitleContent>
+        <MudText Typo="Typo.h6">Bütçeden Tahakkuk Üret</MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (_publishedBudgets is null)
+        {
+            <MudProgressLinear Indeterminate />
+        }
+        else if (_publishedBudgets.Count == 0)
+        {
+            <MudAlert Severity="Severity.Warning">
+                Yayınlanmış bütçe bulunamadı. Önce <b>Bütçe</b> ekranından bir bütçe
+                oluşturun ve yayınlayın.
+            </MudAlert>
+        }
+        else
+        {
+            <MudSelect T="BudgetListItem?" Label="Bütçe" @bind-Value="_genBudget" Required="true"
+                       Variant="Variant.Outlined"
+                       ToStringFunc="@(b => b is null ? "" : $"{b.FiscalYearLabel} – {b.Title}")">
+                @foreach (var b in _publishedBudgets)
+                {
+                    <MudSelectItem Value="@((BudgetListItem?)b)">
+                        @b.FiscalYearLabel – @b.Title
+                    </MudSelectItem>
+                }
+            </MudSelect>
+
+            <MudGrid Class="mt-3">
+                <MudItem xs="6">
+                    <MudSelect T="int" Label="Yıl" @bind-Value="_genYear" Variant="Variant.Outlined">
+                        @for (int y = DateTime.Today.Year - 1; y <= DateTime.Today.Year + 1; y++)
+                        {
+                            <MudSelectItem Value="y">@y</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="6">
+                    <MudSelect T="int" Label="Ay" @bind-Value="_genMonth" Variant="Variant.Outlined">
+                        @for (int m = 1; m <= 12; m++)
+                        {
+                            <MudSelectItem Value="m">@TurkishMonth(m)</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+            </MudGrid>
+
+            <MudCheckBox T="bool" @bind-Value="_genForce" Class="mt-2">
+                Mevcut tahakkuku sil ve yeniden üret (Force)
+            </MudCheckBox>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => _generateDialogOpen = false">İptal</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   Disabled="@(_generating || _genBudget is null)"
+                   OnClick="GenerateAccrualAsync">
+            @if (_generating) { <MudProgressCircular Size="Size.Small" Indeterminate="true" /> }
+            else { <text>Üret</text> }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@* ══════════════════════ Diyalog: Direkt Yük ══════════════════════ *@
+<MudDialog @bind-IsVisible="_directDialogOpen" MaxWidth="MaxWidth.Small" FullWidth="true">
+    <TitleContent>
+        <MudText Typo="Typo.h6">Bağımsız Bölüme Direkt Yük</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-2">
+            Bütçeye bağlı olmayan tek BB'ye ait gider (otopark, depo kirası, vb.).
+        </MudText>
+
+        @if (_schemaLoading)
+        {
+            <MudProgressLinear Indeterminate />
+        }
+        else
+        {
+            @* BB seçimi *@
+            <MudSelect T="FlatUnit?" Label="Bağımsız Bölüm" @bind-Value="_dcUnit" Required="true"
+                       Variant="Variant.Outlined"
+                       ToStringFunc="@(u => u is null ? "" : u.Breadcrumb)">
+                @foreach (var u in _flatUnits)
+                {
+                    <MudSelectItem Value="@((FlatUnit?)u)">@u.Breadcrumb</MudSelectItem>
+                }
+            </MudSelect>
+
+            @* Dönem seçimi *@
+            <MudSelect T="PeriodSummary?" Label="Dönem" @bind-Value="_dcPeriod" Required="true"
+                       Variant="Variant.Outlined" Class="mt-3"
+                       ToStringFunc="@(p => p is null ? "" : $"{TurkishMonth(p.Month)} {p.Year}")">
+                @foreach (var p in _dcPeriods)
+                {
+                    <MudSelectItem Value="@((PeriodSummary?)p)">
+                        @TurkishMonth(p.Month) @p.Year
+                    </MudSelectItem>
+                }
+            </MudSelect>
+
+            <MudNumericField T="decimal" Label="Tutar (₺)" @bind-Value="_dcAmount"
+                             Min="0.01m" Required="true" Variant="Variant.Outlined" Class="mt-3" />
+
+            <MudTextField Label="Açıklama" @bind-Value="_dcDescription" Required="true"
+                          Variant="Variant.Outlined" Class="mt-3"
+                          Placeholder="Örn: Otopark kirası – Mayıs 2026" />
+
+            <MudDatePicker Label="Vade Tarihi" @bind-Date="_dcDueDateDT" Required="true"
+                           Variant="Variant.Outlined" Class="mt-3" DateFormat="dd.MM.yyyy" />
+
+            @* Hesap kodları (lazy) *@
+            @if (_accountCodesLoading)
+            {
+                <MudProgressLinear Indeterminate Class="mt-3" />
+            }
+            else if (_accountCodes is not null)
+            {
+                <MudAutocomplete T="AccountCodeListItem" Label="Alacak Hesabı (120.xx)"
+                                 @bind-Value="_dcReceivableCode"
+                                 SearchFunc="SearchReceivableAsync"
+                                 ToStringFunc="@(c => c is null ? "" : $"{c.Code} – {c.Name}")"
+                                 Variant="Variant.Outlined" Class="mt-3"
+                                 Placeholder="120 yaz ve seç..." Required="true" />
+
+                <MudAutocomplete T="AccountCodeListItem" Label="Gelir Hesabı (600.xx)"
+                                 @bind-Value="_dcIncomeCode"
+                                 SearchFunc="SearchIncomeAsync"
+                                 ToStringFunc="@(c => c is null ? "" : $"{c.Code} – {c.Name}")"
+                                 Variant="Variant.Outlined" Class="mt-3"
+                                 Placeholder="600 yaz ve seç..." Required="true" />
+            }
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => _directDialogOpen = false">İptal</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Secondary"
+                   Disabled="@(_directCharging || !IsDirectChargeValid())"
+                   OnClick="SubmitDirectChargeAsync">
+            @if (_directCharging) { <MudProgressCircular Size="Size.Small" Indeterminate="true" /> }
+            else { <text>Yükle</text> }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    // ──── Yetki / Auth ────
+    private bool _authorized, _initialized, _descriptionVisible = true;
+    private Guid _companyId, _tenantId;
+    private bool _canGenerate;
+
+    // ──── Liste filtresi ────
+    private int _filterYear = DateTime.Today.Year;
+    private int? _filterMonth = DateTime.Today.Month;
+    private bool _loading;
+    private IReadOnlyList<AccrualListItem>? _accruals;
+
+    // ──── Bütçeden Tahakkuk Üret diyaloğu ────
+    private bool _generateDialogOpen, _generating;
+    private List<BudgetListItem> _publishedBudgets = [];
+    private BudgetListItem? _genBudget;
+    private int _genYear = DateTime.Today.Year;
+    private int _genMonth = DateTime.Today.Month;
+    private bool _genForce;
+
+    // ──── Direkt Yük diyaloğu ────
+    private bool _directDialogOpen, _directCharging;
+    private bool _schemaLoading, _accountCodesLoading;
+
+    // BB listesi (flat)
+    private List<FlatUnit> _flatUnits = [];
+    private FlatUnit? _dcUnit;
+
+    // Dönemler
+    private List<PeriodSummary> _dcPeriods = [];
+    private PeriodSummary? _dcPeriod;
+
+    // Form alanları
+    private decimal _dcAmount;
+    private string _dcDescription = "";
+    private DateTime? _dcDueDateDT = DateTime.Today.AddDays(15);
+    private IReadOnlyList<AccountCodeListItem>? _accountCodes;
+    private AccountCodeListItem? _dcReceivableCode;
+    private AccountCodeListItem? _dcIncomeCode;
+
+    // ──── Yardımcı ────
+    private sealed record FlatUnit(Guid Id, string Breadcrumb);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user?.Identity?.IsAuthenticated != true) { _initialized = true; return; }
+
+        var scope = user.FindFirst("scope")?.Value;
+        if (!string.Equals(scope, "Company", StringComparison.OrdinalIgnoreCase)) { _initialized = true; return; }
+
+        if (user.FindFirst("company_id") is { Value: var cid } && Guid.TryParseExact(cid, "N", out var cGuid))
+            _companyId = cGuid;
+        else { _initialized = true; return; }
+
+        if (user.FindFirst("tenant_id") is { Value: var tid } && Guid.TryParseExact(tid, "N", out var tGuid))
+            _tenantId = tGuid;
+
+        var session = SessionAccessor.Current;
+        var perms = session?.Permissions ?? [];
+        _canGenerate = perms.Contains("tenant.accrual.generate");
+        _authorized  = perms.Contains("tenant.collection.view");
+
+        if (_authorized)
+            await LoadAccrualsAsync();
+
+        _initialized = true;
+    }
+
+    private async Task LoadAccrualsAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        var result = await Mediator.Send(
+            new GetAccrualsByPeriodQuery(_companyId, _filterYear, _filterMonth));
+
+        _loading = false;
+        _accruals = result.IsSuccess ? result.Value : [];
+        StateHasChanged();
+    }
+
+    private async Task OnYearChangedAsync(int value) { _filterYear = value; await LoadAccrualsAsync(); }
+    private async Task OnMonthChangedAsync(int? value) { _filterMonth = value; await LoadAccrualsAsync(); }
+
+    // ──── Bütçeden Üret ────
+    private async Task OpenGenerateDialogAsync()
+    {
+        _genBudget = null;
+        _genYear = _filterYear;
+        _genMonth = _filterMonth ?? DateTime.Today.Month;
+        _genForce = false;
+
+        if (_publishedBudgets.Count == 0)
+        {
+            var r = await Mediator.Send(new GetBudgetsByCompanyQuery(_companyId));
+            if (r.IsSuccess && r.Value is { } list)
+                _publishedBudgets = list.Where(b => b.Status == CleanTenant.Domain.Tenant.Budgeting.Enums.BudgetStatus.Published).ToList();
+        }
+
+        _generateDialogOpen = true;
+    }
+
+    private async Task GenerateAccrualAsync()
+    {
+        if (_genBudget is null) return;
+        _generating = true;
+        var cmd = new GenerateBudgetAccrualCommand(
+            _tenantId, _companyId, _genBudget.Id,
+            _genYear, _genMonth, _genForce);
+        var result = await Mediator.Send(cmd);
+        _generating = false;
+
+        if (result.IsFailure)
+        {
+            Snackbar.Add(result.FirstError.Message, Severity.Error);
+            return;
+        }
+        if (result.Value is { } r)
+            Snackbar.Add($"Tahakkuk üretildi: {r.DetailCount} BB, {FormatAmount(r.TotalAmount)}", Severity.Success);
+        _generateDialogOpen = false;
+        await LoadAccrualsAsync();
+    }
+
+    // ──── Direkt Yük ────
+    private async Task OpenDirectChargeDialogAsync()
+    {
+        _dcUnit = null;
+        _dcPeriod = null;
+        _dcAmount = 0;
+        _dcDescription = "";
+        _dcDueDateDT = DateTime.Today.AddDays(15);
+        _dcReceivableCode = null;
+        _dcIncomeCode = null;
+        _directDialogOpen = true;
+
+        _schemaLoading = true;
+        _accountCodesLoading = true;
+        StateHasChanged();
+
+        var (schemaTask, fyTask, acTask) = (
+            Mediator.Send(new GetBuildingSchemaQuery(_companyId)),
+            Mediator.Send(new GetCurrentFiscalYearQuery(_companyId)),
+            Mediator.Send(new GetAccountCodesQuery(_companyId, OnlyActive: true, OnlyDetail: true)));
+
+        await Task.WhenAll(schemaTask, fyTask, acTask);
+
+        // BB listesi
+        var schema = schemaTask.Result;
+        _flatUnits.Clear();
+        if (schema.IsSuccess && schema.Value is { } s)
+        {
+            foreach (var land in s.Lands)
+            foreach (var parcel in land.Parcels)
+            foreach (var building in parcel.Buildings)
+            foreach (var block in building.Blocks)
+            foreach (var unit in block.Units)
+            {
+                var breadcrumb = $"{building.Name} / {block.Name} / {unit.Number}";
+                _flatUnits.Add(new FlatUnit(unit.Id, breadcrumb));
+            }
+        }
+        _schemaLoading = false;
+
+        // Dönemler
+        _dcPeriods.Clear();
+        var fy = fyTask.Result;
+        if (fy.IsSuccess && fy.Value is { } fyDetail)
+        {
+            _dcPeriods = fyDetail.Periods
+                .OrderByDescending(p => p.Year).ThenByDescending(p => p.Month)
+                .ToList();
+            _dcPeriod = _dcPeriods.FirstOrDefault(p =>
+                p.Year == DateTime.Today.Year && p.Month == DateTime.Today.Month)
+                ?? _dcPeriods.FirstOrDefault();
+        }
+
+        // Hesap kodları
+        var ac = acTask.Result;
+        _accountCodes = ac.IsSuccess ? ac.Value : null;
+        _accountCodesLoading = false;
+
+        StateHasChanged();
+    }
+
+    private async Task SubmitDirectChargeAsync()
+    {
+        if (!IsDirectChargeValid()) return;
+        _directCharging = true;
+
+        var dueDate = DateOnly.FromDateTime(_dcDueDateDT!.Value);
+        var cmd = new CreateDirectUnitChargeCommand(
+            _tenantId, _companyId,
+            _dcPeriod!.Id,
+            _dcUnit!.Id,
+            _dcPeriod.Year, _dcPeriod.Month,
+            _dcAmount,
+            _dcReceivableCode!.Id,
+            _dcIncomeCode!.Id,
+            dueDate,
+            _dcDescription);
+
+        var result = await Mediator.Send(cmd);
+        _directCharging = false;
+
+        if (result.IsFailure)
+        {
+            Snackbar.Add(result.FirstError.Message, Severity.Error);
+            return;
+        }
+        Snackbar.Add("Direkt yük tahakkuku oluşturuldu.", Severity.Success);
+        _directDialogOpen = false;
+        await LoadAccrualsAsync();
+    }
+
+    private bool IsDirectChargeValid()
+        => _dcUnit is not null
+        && _dcPeriod is not null
+        && _dcAmount > 0
+        && !string.IsNullOrWhiteSpace(_dcDescription)
+        && _dcDueDateDT is not null
+        && _dcReceivableCode is not null
+        && _dcIncomeCode is not null;
+
+    private Task<IEnumerable<AccountCodeListItem>> SearchReceivableAsync(string? value, CancellationToken ct)
+    {
+        if (_accountCodes is null)
+            return Task.FromResult<IEnumerable<AccountCodeListItem>>([]);
+        var list = _accountCodes.Where(c => c.Code.StartsWith("120") || c.Code.StartsWith("121"));
+        if (!string.IsNullOrWhiteSpace(value))
+            list = list.Where(c =>
+                c.Code.Contains(value, StringComparison.OrdinalIgnoreCase) ||
+                c.Name.Contains(value, StringComparison.OrdinalIgnoreCase));
+        return Task.FromResult(list);
+    }
+
+    private Task<IEnumerable<AccountCodeListItem>> SearchIncomeAsync(string? value, CancellationToken ct)
+    {
+        if (_accountCodes is null)
+            return Task.FromResult<IEnumerable<AccountCodeListItem>>([]);
+        var list = _accountCodes.Where(c => c.Code.StartsWith("600") || c.Code.StartsWith("601") || c.Code.StartsWith("602"));
+        if (!string.IsNullOrWhiteSpace(value))
+            list = list.Where(c =>
+                c.Code.Contains(value, StringComparison.OrdinalIgnoreCase) ||
+                c.Name.Contains(value, StringComparison.OrdinalIgnoreCase));
+        return Task.FromResult(list);
+    }
+
+    private static string SourceLabel(AccrualSource s) => s switch
+    {
+        AccrualSource.Budget       => "Bütçe",
+        AccrualSource.Invoice      => "Fatura",
+        AccrualSource.DirectCharge => "Direkt",
+        AccrualSource.LateFee      => "Gecikme",
+        _                          => s.ToString()
+    };
+
+    private static Color SourceColor(AccrualSource s) => s switch
+    {
+        AccrualSource.Budget       => Color.Primary,
+        AccrualSource.Invoice      => Color.Info,
+        AccrualSource.DirectCharge => Color.Secondary,
+        AccrualSource.LateFee      => Color.Error,
+        _                          => Color.Default
+    };
+
+    private static string TurkishMonth(int m) => m switch
+    {
+        1 => "Ocak", 2 => "Şubat", 3 => "Mart",
+        4 => "Nisan", 5 => "Mayıs", 6 => "Haziran",
+        7 => "Temmuz", 8 => "Ağustos", 9 => "Eylül",
+        10 => "Ekim", 11 => "Kasım", 12 => "Aralık",
+        _ => m.ToString()
+    };
+
+    private static string TurkishMonthShort(int m) => m switch
+    {
+        1 => "Oca", 2 => "Şub", 3 => "Mar",
+        4 => "Nis", 5 => "May", 6 => "Haz",
+        7 => "Tem", 8 => "Ağu", 9 => "Eyl",
+        10 => "Eki", 11 => "Kas", 12 => "Ara",
+        _ => m.ToString()
+    };
+
+    private static string FormatAmount(decimal a)
+        => a.ToString("N2", System.Globalization.CultureInfo.GetCultureInfo("tr-TR")) + " ₺";
+}
