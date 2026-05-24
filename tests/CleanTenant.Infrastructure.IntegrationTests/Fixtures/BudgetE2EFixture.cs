@@ -4,7 +4,9 @@ using CleanTenant.Application.Features.Main.Accruals.Distribution;
 using CleanTenant.Application.Features.Main.Accruals.GenerateBudgetAccrual;
 using CleanTenant.Application.Features.Main.Accruals.Posting;
 using CleanTenant.Application.Features.Main.LateFees.Calculation;
+using CleanTenant.Application.Features.Main.Parties.CurrentAccount;
 using CleanTenant.Application.Features.Main.Parties.Responsibility;
+using CleanTenant.Infrastructure.Caching.Readers;
 using CleanTenant.Infrastructure.Persistence;
 using CleanTenant.Infrastructure.Persistence.Audit;
 using CleanTenant.Infrastructure.Persistence.Catalog;
@@ -106,6 +108,7 @@ public sealed class BudgetE2EFixture : IAsyncLifetime
         services.AddSingleton<ILateFeeCalculator, LateFeeCalculator>();
         services.AddSingleton<ILateFeePolicyResolver, LateFeePolicyResolver>();
         services.AddScoped<IResponsibilityResolver, ResponsibilityResolver>();
+        services.AddScoped<ICurrentAccountReader, CurrentAccountReader>();
 
         Services = services.BuildServiceProvider();
 

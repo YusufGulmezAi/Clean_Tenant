@@ -89,6 +89,10 @@ public static class DependencyInjection
         // Muhasebe rapor reader'ı — Dapper tabanlı, cache'siz
         services.AddScoped<IAccountingReader, AccountingReader>();
 
+        // BB-merkezli cari hesap reader'ı (Cari Kart) — Dapper, cache'siz
+        services.AddScoped<Application.Features.Main.Parties.CurrentAccount.ICurrentAccountReader,
+            Readers.CurrentAccountReader>();
+
         // CRUD handler'larının kullanacağı invalidator
         services.AddScoped<ICacheInvalidator, CacheInvalidator>();
 

@@ -7,6 +7,7 @@ using CleanTenant.Application.Features.Main.Budgeting.Templates;
 using CleanTenant.Application.Features.Main.Collections.RecordCollection;
 using CleanTenant.Application.Features.Main.LateFees.GenerateLateFeeCharges;
 using CleanTenant.Application.Features.Main.LateFees.SetLateFeePolicy;
+using CleanTenant.Application.Features.Main.Parties.CurrentAccount;
 using CleanTenant.Application.Features.Main.Parties.Responsibility;
 using CleanTenant.Application.Features.Main.Parties.Tenures;
 using CleanTenant.Domain.Tenant.Parties;
@@ -591,6 +592,19 @@ public sealed class BudgetChainE2ETests : IClassFixture<BudgetE2EFixture>
         var reatt = Ok(await SendAsync(new ReattributeAccrualResponsibilityCommand(s.TenantId, s.CompanyId, unit0)));
         reatt.Skipped.Should().Be(1, "ödenmiş dönem GUARD ile atlanır");
         reatt.Recomputed.Should().Be(0);
+
+        // ── 4. Cari ledger + KPI (Dapper okuma, S4) ──────────────────────────────
+        var ledger = Ok(await SendAsync(new GetUnitLedgerQuery(s.CompanyId, unit0)));
+        ledger.Should().HaveCount(2, "1 tahakkuk (borç) + 1 tahsilat (alacak)");
+        ledger.Sum(r => r.Debit).Should().Be(1_000m);
+        ledger.Sum(r => r.Credit).Should().Be(1_000m);
+        ledger[^1].RunningBalance.Should().Be(0m, "ödeme sonrası bakiye sıfır");
+
+        var kpi = Ok(await SendAsync(new GetUnitCurrentAccountKpiQuery(s.CompanyId, unit0)));
+        kpi.TotalAccrued.Should().Be(1_000m);
+        kpi.TotalCollected.Should().Be(1_000m);
+        kpi.NetBalance.Should().Be(0m);
+        kpi.OverdueAmount.Should().Be(0m);
     }
 
     /// <summary>Non-generic Result'ı başarı doğrular.</summary>
