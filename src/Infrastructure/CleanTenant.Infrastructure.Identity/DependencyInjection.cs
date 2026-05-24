@@ -49,6 +49,9 @@ public static class DependencyInjection
         services.AddScoped<ICurrentSessionAccessor>(sp => sp.GetRequiredService<HttpUserContext>());
         services.AddScoped<ITenantContext, HttpTenantContext>();
 
+        // Arka plan job'ları için sentetik tenant oturumu çalıştırıcı (Hangfire).
+        services.AddScoped<Application.Common.Jobs.ISystemJobExecutor, Jobs.SystemJobExecutor>();
+
         // SessionLoaderBehavior — Application'ın AuthorizationBehavior'undan ÖNCE
         // çalışmalı. AddApplicationServices() önce çağrıldığı için Insert(0) ile
         // services collection'ın başına ekliyoruz; MediatR IPipelineBehavior'ları
