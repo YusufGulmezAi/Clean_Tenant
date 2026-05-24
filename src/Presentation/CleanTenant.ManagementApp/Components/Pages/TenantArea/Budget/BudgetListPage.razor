@@ -1,0 +1,198 @@
+@* v0.2.15 — Yeni bütçe yönetim UI'si (FAZ 5+ Budget aggregate).
+   Legacy /tenant/budget (BudgetEntry) yerine geçer; o sayfa ileride kaldırılacak. *@
+@page "/tenant/budgets"
+@page "/tenant/budgets/{CompanyId:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject AuthenticationStateProvider AuthProvider
+@inject ICurrentSessionAccessor SessionAccessor
+@inject IMainCatalogReader CompanyReader
+@inject MediatR.IMediator Mediator
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject IStringLocalizer Loc
+@using CleanTenant.Application.Common.Auth
+@using CleanTenant.Application.Features.Main.Budgeting.Budgets
+@using CleanTenant.Application.Features.Main.Readers
+@using CleanTenant.Domain.Tenant.Budgeting.Enums
+@using CleanTenant.ManagementApp.Components.Shared
+
+<PageTitle>@Loc["Budget.List.PageTitle"]</PageTitle>
+
+@if (_unauthorized)
+{
+    <MudAlert Severity="Severity.Warning" Class="my-3">@Loc["Budget.Unauthorized"]</MudAlert>
+}
+else if (!_initialized)
+{
+    <MudProgressLinear Indeterminate="true" Class="my-4" />
+}
+else if (CompanyId is null)
+{
+    <MudText Typo="Typo.h5" Class="mb-4">@Loc["Budget.List.SelectSite"]</MudText>
+    <MudPaper Class="pa-4" Elevation="1">
+        @if (_companies.Count == 0)
+        {
+            <MudAlert Severity="Severity.Info">@Loc["Budget.List.NoSite"]</MudAlert>
+        }
+        else
+        {
+            <MudList T="CompanyListItem" Clickable="true">
+                @foreach (var c in _companies)
+                {
+                    <MudListItem T="CompanyListItem" Icon="@Icons.Material.Filled.Apartment"
+                                 OnClick="@(() => Nav.NavigateTo($"/tenant/budgets/{c.Id}"))">
+                        @c.Name
+                    </MudListItem>
+                }
+            </MudList>
+        }
+    </MudPaper>
+}
+else
+{
+    <div class="d-flex align-center justify-space-between mb-3">
+        <MudText Typo="Typo.h5">@Loc["Budget.List.PageTitle"] — @_companyName</MudText>
+        <MudStack Row="true" Spacing="2">
+            <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.SwapHoriz"
+                       OnClick="@(() => Nav.NavigateTo("/tenant/budgets"))">@Loc["Budget.List.ChangeSite"]</MudButton>
+            @if (_canEdit)
+            {
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.LibraryAdd"
+                           OnClick="@(() => Nav.NavigateTo($"/tenant/budgets/{CompanyId}/templates"))">@Loc["Budget.List.FromTemplate"]</MudButton>
+                <MudButton Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Add"
+                           OnClick="OpenCreateAsync">@Loc["Budget.List.New"]</MudButton>
+            }
+        </MudStack>
+    </div>
+
+    <FormDescriptionPanel FormKey="budget-list" Title="@Loc["Budget.List.PageTitle"]">
+        @Loc["Budget.List.Help"]
+    </FormDescriptionPanel>
+
+    <MudPaper Elevation="1">
+        <MudTable Items="@_budgets" Hover="true" Dense="false" Loading="@_loading" Class="pa-2">
+            <HeaderContent>
+                <MudTh>@Loc["Budget.Col.Title"]</MudTh>
+                <MudTh>@Loc["Budget.Col.FiscalYear"]</MudTh>
+                <MudTh>@Loc["Budget.Col.Status"]</MudTh>
+                <MudTh Style="text-align:center">@Loc["Budget.Col.Versions"]</MudTh>
+                <MudTh Style="text-align:right">@Loc["Common.Actions"]</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="@Loc["Budget.Col.Title"]">@context.Title</MudTd>
+                <MudTd DataLabel="@Loc["Budget.Col.FiscalYear"]">@context.FiscalYearLabel</MudTd>
+                <MudTd DataLabel="@Loc["Budget.Col.Status"]">
+                    <MudChip T="string" Size="Size.Small"
+                             Color="@(context.Status == BudgetStatus.Published ? Color.Success : Color.Default)">
+                        @context.Status
+                    </MudChip>
+                </MudTd>
+                <MudTd DataLabel="@Loc["Budget.Col.Versions"]" Style="text-align:center">@context.VersionCount</MudTd>
+                <MudTd Style="text-align:right">
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                                   OnClick="@(() => Nav.NavigateTo($"/tenant/budgets/{CompanyId}/edit/{context.Id}"))" />
+                    @if (_canEdit && context.Status == BudgetStatus.Draft)
+                    {
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                                       OnClick="@(() => DeleteAsync(context))" />
+                    }
+                </MudTd>
+            </RowTemplate>
+            <NoRecordsContent><MudText Class="pa-3">@Loc["Budget.List.Empty"]</MudText></NoRecordsContent>
+        </MudTable>
+    </MudPaper>
+}
+
+@code {
+    /// <summary>Seçili site (URL'den). Null ise site seçim ekranı gösterilir.</summary>
+    [Parameter] public Guid? CompanyId { get; set; }
+
+    private bool _unauthorized;
+    private bool _initialized;
+    private bool _loading;
+    private bool _canEdit;
+    private Guid _tenantId;
+    private string _companyName = string.Empty;
+    private IReadOnlyList<CompanyListItem> _companies = [];
+    private IReadOnlyList<BudgetListItem> _budgets = [];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _initialized = false;
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        if (authState.User?.Identity?.IsAuthenticated != true) { _unauthorized = true; _initialized = true; return; }
+
+        var session = SessionAccessor.Current;
+        var isSystem = string.Equals(authState.User.FindFirst("scope")?.Value, "System", StringComparison.OrdinalIgnoreCase);
+        if (!isSystem)
+        {
+            if (session is null || !session.Permissions.Contains("tenant.budget.view")) { _unauthorized = true; _initialized = true; return; }
+            _canEdit = session.Permissions.Contains("tenant.budget.edit");
+        }
+        else
+        {
+            _canEdit = true;
+        }
+        _tenantId = session?.TenantId ?? Guid.Empty;
+
+        if (CompanyId is null)
+        {
+            _companies = isSystem || _tenantId == Guid.Empty
+                ? await CompanyReader.GetAllGlobalAsync()
+                : await CompanyReader.GetByTenantAsync(_tenantId);
+        }
+        else
+        {
+            var company = await CompanyReader.GetByIdAsync(CompanyId.Value);
+            _companyName = company?.Name ?? "";
+            if (_tenantId == Guid.Empty && company is not null) _tenantId = company.TenantId;
+            await LoadBudgetsAsync();
+        }
+
+        _initialized = true;
+    }
+
+    private async Task LoadBudgetsAsync()
+    {
+        _loading = true;
+        var result = await Mediator.Send(new GetBudgetsByCompanyQuery(CompanyId!.Value));
+        _budgets = result.IsSuccess && result.Value is not null ? result.Value : [];
+        _loading = false;
+    }
+
+    private async Task OpenCreateAsync()
+    {
+        var parameters = new DialogParameters<BudgetCreateDialog>
+        {
+            { x => x.TenantId, _tenantId },
+            { x => x.CompanyId, CompanyId!.Value },
+        };
+        var dialog = await DialogService.ShowAsync<BudgetCreateDialog>(Loc["Budget.Create.Title"].Value, parameters);
+        var result = await dialog.Result;
+        if (result is { Canceled: false, Data: Guid budgetId })
+        {
+            Nav.NavigateTo($"/tenant/budgets/{CompanyId}/edit/{budgetId}");
+        }
+    }
+
+    private async Task DeleteAsync(BudgetListItem budget)
+    {
+        var confirm = await DialogService.ShowMessageBox(
+            Loc["Budget.Delete.Title"].Value,
+            Loc["Budget.Delete.Confirm", budget.Title].Value,
+            yesText: Loc["Common.Delete"].Value, cancelText: Loc["Common.Cancel"].Value);
+        if (confirm != true) return;
+
+        var result = await Mediator.Send(new DeleteBudgetCommand(_tenantId, CompanyId!.Value, budget.Id));
+        if (result.IsSuccess)
+        {
+            Snackbar.Add(Loc["Budget.Delete.Success"].Value, Severity.Success);
+            await LoadBudgetsAsync();
+        }
+        else
+        {
+            Snackbar.Add(result.FirstError.Message, Severity.Error);
+        }
+    }
+}

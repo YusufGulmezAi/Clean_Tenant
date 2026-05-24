@@ -116,7 +116,7 @@
         @* v0.2.13.a — Bütçe Tenant scope (permission-gated, izinli kullanıcı görür) *@
         @if (_canViewBudget && Matches(tenantBudgetLabel))
         {
-            <MudNavLink Href="/tenant/budget" Icon="@Icons.Material.Filled.AccountBalanceWallet">
+            <MudNavLink Href="/tenant/budgets" Icon="@Icons.Material.Filled.AccountBalanceWallet">
                 @tenantBudgetLabel
             </MudNavLink>
         }

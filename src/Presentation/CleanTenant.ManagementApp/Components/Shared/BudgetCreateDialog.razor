@@ -1,0 +1,118 @@
+@* Yeni taslak bütçe oluşturma dialog'u. Başarıda bütçe id'sini döndürür. *@
+@inject MediatR.IMediator Mediator
+@inject ISnackbar Snackbar
+@inject IStringLocalizer Loc
+@using CleanTenant.Application.Features.Main.Accounting.FiscalYears
+@using CleanTenant.Application.Features.Main.Budgeting.Budgets
+@using CleanTenant.Domain.Tenant.Budgeting.Enums
+@using CleanTenant.SharedKernel.Common.Results
+
+<MudDialog>
+    <TitleContent>
+        <div class="d-flex align-center gap-2">
+            <MudIcon Icon="@Icons.Material.Filled.Addchart" Color="Color.Primary" />
+            <MudText Typo="Typo.h6">@Loc["Budget.Create.Title"]</MudText>
+        </div>
+    </TitleContent>
+    <DialogContent>
+        <div style="min-width: 520px;">
+            <FormDescriptionPanel FormKey="budget-create" Title="@Loc["Budget.Create.Title"]">
+                @Loc["Budget.Create.Help"]
+            </FormDescriptionPanel>
+
+            @if (_fiscalYears.Count == 0)
+            {
+                <MudAlert Severity="Severity.Warning">@Loc["Budget.Create.NoFiscalYear"]</MudAlert>
+            }
+            else
+            {
+                <MudGrid Spacing="2">
+                    <MudItem xs="12" sm="6">
+                        <MudSelect T="BudgetType" @bind-Value="_type" Label="@Loc["Budget.Field.Type"]"
+                                   Variant="Variant.Outlined" Margin="Margin.Dense">
+                            @foreach (var t in Enum.GetValues<BudgetType>())
+                            {
+                                <MudSelectItem Value="@t">@t</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudSelect T="Guid?" @bind-Value="_fiscalYearId" Label="@Loc["Budget.Field.FiscalYear"]"
+                                   Variant="Variant.Outlined" Margin="Margin.Dense">
+                            @foreach (var fy in _fiscalYears)
+                            {
+                                <MudSelectItem Value="@((Guid?)fy.Id)">@fy.Label</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="_title" Label="@Loc["Budget.Field.Title"]"
+                                      Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="120" Immediate="true" />
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="_notes" Label="@Loc["Budget.Field.Notes"]"
+                                      Variant="Variant.Outlined" Margin="Margin.Dense" Lines="2" MaxLength="2000" />
+                    </MudItem>
+                </MudGrid>
+            }
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="Cancel">@Loc["Common.Cancel"]</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SaveAsync"
+                   Disabled="@(_busy || _fiscalYears.Count == 0)">@Loc["Common.Save"]</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    /// <summary>Bütçenin oluşturulacağı tenant.</summary>
+    [Parameter] public Guid TenantId { get; set; }
+
+    /// <summary>Bütçenin oluşturulacağı şirket.</summary>
+    [Parameter] public Guid CompanyId { get; set; }
+
+    private IReadOnlyList<FiscalYearListItem> _fiscalYears = [];
+    private BudgetType _type = BudgetType.Aidat;
+    private Guid? _fiscalYearId;
+    private string _title = string.Empty;
+    private string? _notes;
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var result = await Mediator.Send(new GetFiscalYearsQuery(CompanyId));
+        if (result.IsSuccess && result.Value is not null)
+        {
+            _fiscalYears = result.Value;
+            _fiscalYearId = _fiscalYears.FirstOrDefault(f => f.IsCurrentYear)?.Id ?? _fiscalYears.FirstOrDefault()?.Id;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_fiscalYearId is null || string.IsNullOrWhiteSpace(_title))
+        {
+            Snackbar.Add(Loc["Budget.Create.Required"].Value, Severity.Warning);
+            return;
+        }
+
+        _busy = true;
+        var result = await Mediator.Send(new CreateBudgetCommand(
+            TenantId, CompanyId, _fiscalYearId.Value, _type, _title.Trim(), _notes));
+        _busy = false;
+
+        if (result.IsSuccess && result.Value != Guid.Empty)
+        {
+            Snackbar.Add(Loc["Budget.Create.Success"].Value, Severity.Success);
+            MudDialog.Close(DialogResult.Ok(result.Value));
+        }
+        else
+        {
+            Snackbar.Add(result.FirstError.Message, Severity.Error);
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}
