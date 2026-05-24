@@ -2,6 +2,7 @@ using System.Globalization;
 using CleanTenant.Application.Features.Main.Accruals.GenerateBudgetAccrual;
 using CleanTenant.Application.Features.Main.Accruals.Queries;
 using CleanTenant.Application.Features.Main.Budgeting.Budgets;
+using CleanTenant.Application.Features.Main.Budgeting.BudgetLineVersions;
 using CleanTenant.Application.Features.Main.Budgeting.Templates;
 using CleanTenant.Application.Features.Main.Collections.RecordCollection;
 using CleanTenant.Application.Features.Main.LateFees.GenerateLateFeeCharges;
@@ -429,6 +430,90 @@ public sealed class BudgetChainE2ETests : IClassFixture<BudgetE2EFixture>
         await db.SaveChangesAsync();
         return (tenantId, company.Id, fy.Id);
     }
+
+    [Fact]
+    public async Task Senaryo7_taslak_butce_duzenleme_komutlari()
+    {
+        var (tenantId, companyId, budgetId, lvA, lvB) = await SeedDraftBudgetAsync();
+
+        // Kalem A güncelle (tutar + vade günü)
+        Done(await SendAsync(new UpdateBudgetLineVersionCommand(
+            tenantId, companyId, lvA, 5_000m, PaymentSchedule.MonthlyEqual, DistributionModel.Equal, null, null, 20)));
+        // Kalem B kaldır
+        Done(await SendAsync(new RemoveBudgetLineVersionCommand(tenantId, companyId, lvB)));
+        // Başlık güncelle
+        Done(await SendAsync(new UpdateBudgetCommand(tenantId, companyId, budgetId, "2026 Aidat (Güncel)")));
+        // Kalem A'ya taksit ızgarası set et
+        Done(await SendAsync(new SetBudgetLineInstallmentsCommand(tenantId, companyId, lvA,
+            [new InstallmentInput(2026, 3, 2_000m), new InstallmentInput(2026, 4, 3_000m)])));
+
+        using (var scope = _fixture.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<MainDbContext>();
+            var la = await db.BudgetLineVersions.FirstAsync(x => x.Id == lvA);
+            la.PlannedAmount.Should().Be(5_000m);
+            la.DueDayOfMonth.Should().Be(20);
+            (await db.BudgetLineVersions.AnyAsync(x => x.Id == lvB && !x.IsDeleted)).Should().BeFalse("kalem B kaldırıldı");
+            (await db.Budgets.FirstAsync(b => b.Id == budgetId)).Title.Should().Be("2026 Aidat (Güncel)");
+            var insts = await db.BudgetLineInstallments
+                .Where(i => i.BudgetLineVersionId == lvA && !i.IsDeleted).OrderBy(i => i.Month).ToListAsync();
+            insts.Should().HaveCount(2);
+            insts.Sum(i => i.Amount).Should().Be(5_000m);
+        }
+
+        // Taslak bütçeyi sil
+        Done(await SendAsync(new DeleteBudgetCommand(tenantId, companyId, budgetId)));
+        using (var scope = _fixture.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<MainDbContext>();
+            (await db.Budgets.AnyAsync(b => b.Id == budgetId && !b.IsDeleted)).Should().BeFalse("taslak bütçe silindi");
+        }
+    }
+
+    /// <summary>Düzenleme testleri için Draft bütçe + V1 + 2 kalem versiyonu kurar.</summary>
+    private async Task<(Guid TenantId, Guid CompanyId, Guid BudgetId, Guid LineVersionA, Guid LineVersionB)> SeedDraftBudgetAsync()
+    {
+        var tenantId = Guid.NewGuid();
+        _fixture.SetTenant(tenantId);
+
+        using var scope = _fixture.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<MainDbContext>();
+
+        var company = new Company { TenantId = tenantId, Name = $"Site-{Guid.NewGuid():N}", Status = CompanyStatus.Active };
+        var fy = new FiscalYear
+        {
+            TenantId = tenantId, CompanyId = company.Id, Label = "2026",
+            StartDate = new DateOnly(2026, 1, 1), EndDate = new DateOnly(2026, 12, 31), Status = PeriodStatus.Open,
+        };
+        var category = new ExpenseCategory { TenantId = tenantId, CompanyId = company.Id, Code = "GEN", Name = "Genel", DisplayOrder = 0 };
+        var lineA = new BudgetLine { TenantId = tenantId, CompanyId = company.Id, ExpenseCategoryId = category.Id, Code = "AID-01", Name = "Aidat", IsActive = true, DisplayOrder = 0 };
+        var lineB = new BudgetLine { TenantId = tenantId, CompanyId = company.Id, ExpenseCategoryId = category.Id, Code = "TMZ-01", Name = "Temizlik", IsActive = true, DisplayOrder = 1 };
+        var budget = new Budget
+        {
+            TenantId = tenantId, CompanyId = company.Id, FiscalYearId = fy.Id, Type = BudgetType.Aidat,
+            Title = "2026 Aidat", Status = BudgetStatus.Draft,
+            PeriodStartYear = 2026, PeriodStartMonth = 1, PeriodEndYear = 2026, PeriodEndMonth = 12,
+        };
+        var v1 = new BudgetVersion { TenantId = tenantId, BudgetId = budget.Id, VersionNumber = 1, PublishedAt = null };
+        budget.Versions.Add(v1);
+        var lvA = new BudgetLineVersion { TenantId = tenantId, BudgetVersionId = v1.Id, BudgetLineId = lineA.Id, PlannedAmount = 36_000m, PaymentSchedule = PaymentSchedule.MonthlyEqual, DistributionModel = DistributionModel.Equal, DueDayOfMonth = 15 };
+        var lvB = new BudgetLineVersion { TenantId = tenantId, BudgetVersionId = v1.Id, BudgetLineId = lineB.Id, PlannedAmount = 12_000m, PaymentSchedule = PaymentSchedule.MonthlyEqual, DistributionModel = DistributionModel.Equal, DueDayOfMonth = 15 };
+
+        db.Companies.Add(company);
+        db.FiscalYears.Add(fy);
+        db.ExpenseCategories.Add(category);
+        db.BudgetLines.AddRange(lineA, lineB);
+        db.Budgets.Add(budget);
+        db.BudgetLineVersions.AddRange(lvA, lvB);
+        await db.SaveChangesAsync();
+
+        return (tenantId, company.Id, budget.Id, lvA.Id, lvB.Id);
+    }
+
+    /// <summary>Non-generic Result'ı başarı doğrular.</summary>
+    private static void Done(Result result)
+        => result.IsFailure.Should().BeFalse(
+            result.IsFailure ? $"{result.FirstError.Code}: {result.FirstError.Message}" : "ok");
 
     /// <summary>Result'ı başarı doğrulayıp non-null değerini döner.</summary>
     private static T Ok<T>(Result<T> result)
