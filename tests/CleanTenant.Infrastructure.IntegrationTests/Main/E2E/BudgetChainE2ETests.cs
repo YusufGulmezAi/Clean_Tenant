@@ -2,8 +2,11 @@ using System.Globalization;
 using CleanTenant.Application.Features.Main.Accruals.GenerateBudgetAccrual;
 using CleanTenant.Application.Features.Main.Accruals.Queries;
 using CleanTenant.Application.Features.Main.Collections.RecordCollection;
+using CleanTenant.Application.Features.Main.LateFees.GenerateLateFeeCharges;
+using CleanTenant.Application.Features.Main.LateFees.SetLateFeePolicy;
 using CleanTenant.Domain.Tenant.Accounting;
 using CleanTenant.Domain.Tenant.Accounting.Enums;
+using CleanTenant.Domain.Tenant.Accruals.Enums;
 using CleanTenant.Domain.Tenant.Budgeting;
 using CleanTenant.Domain.Tenant.Budgeting.Enums;
 using CleanTenant.Domain.Tenant.BuildingSchema;
@@ -189,6 +192,86 @@ public sealed class BudgetChainE2ETests : IClassFixture<BudgetE2EFixture>
             var db = scope.ServiceProvider.GetRequiredService<MainDbContext>();
             (await db.Accruals.FirstAsync(a => a.Id == march.AccrualId)).BudgetVersionId.Should().Be(v1Id);
             (await db.Accruals.FirstAsync(a => a.Id == august.AccrualId)).BudgetVersionId.Should().Be(v2Id);
+        }
+    }
+
+    [Fact]
+    public async Task Senaryo4_gecikme_faizi_ve_TBK_m101_once_gecikme_kapatir()
+    {
+        var s = await SeedScenarioAsync(unitCount: 3, plannedAnnual: 36_000m, DistributionModel.Equal);
+
+        // Gecikme geliri hesabı (yaprak, 3-3-3)
+        Guid lateFeeIncomeId;
+        using (var scope = _fixture.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<MainDbContext>();
+            var income = new AccountCode
+            {
+                TenantId = s.TenantId, CompanyId = s.CompanyId,
+                Code = "642.001.001", Name = "Gecikme Faizi Geliri",
+                Level = AccountLevel.Detail, IsDetail = true, IsActive = true,
+            };
+            db.AccountCodes.Add(income);
+            await db.SaveChangesAsync();
+            lateFeeIncomeId = income.Id;
+        }
+
+        // Mart tahakkuğu (3 BB × 1000, vade 2026-04-15)
+        _fixture.Clock.UtcNow = new DateTimeOffset(2026, 3, 10, 0, 0, 0, TimeSpan.Zero);
+        Ok(await SendAsync(new GenerateBudgetAccrualCommand(s.TenantId, s.CompanyId, s.BudgetId, 2026, 3)));
+
+        // Şirket-geneli gecikme politikası: aylık %3, grace 0
+        Ok(await SendAsync(new SetLateFeePolicyCommand(
+            s.TenantId, s.CompanyId, BudgetId: null,
+            MonthlyRatePercent: 3m, IsCompound: false, GraceDays: 0, IncomeAccountCodeId: lateFeeIncomeId)));
+
+        // 2026-05-15 (vadeden 30 gün sonra) gecikme faizi üret: 1000 × %3 × 30/30 = 30/BB
+        _fixture.Clock.UtcNow = new DateTimeOffset(2026, 5, 15, 0, 0, 0, TimeSpan.Zero);
+        var lateFee = Ok(await SendAsync(new GenerateLateFeeChargesCommand(
+            s.TenantId, s.CompanyId, new DateOnly(2026, 5, 15))));
+
+        lateFee.ChargedUnitCount.Should().Be(3);
+        lateFee.TotalLateFeeAmount.Should().Be(90m); // 3 × 30
+
+        using (var scope = _fixture.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<MainDbContext>();
+            var lateAccruals = await db.Accruals
+                .Where(a => a.CompanyId == s.CompanyId && a.Source == AccrualSource.LateFee)
+                .Include(a => a.Details)
+                .ToListAsync();
+            lateAccruals.Should().ContainSingle();
+            lateAccruals[0].Details.Should().HaveCount(3);
+            lateAccruals[0].Details.Should().OnlyContain(d => d.Amount == 30m);
+        }
+
+        // TBK m.101: BB#1'e 30 ödeme → önce gecikme kapanır (anapara dokunulmaz)
+        var col = Ok(await SendAsync(new RecordCollectionCommand(
+            s.TenantId, s.CompanyId, s.UnitIds[0], s.PeriodId,
+            new DateOnly(2026, 5, 16), 30m, PaymentMethod.Cash, s.CashAccountCodeId)));
+        col.AllocationCount.Should().Be(1);
+
+        using (var scope = _fixture.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<MainDbContext>();
+
+            // BB#1'in gecikme detayı tamamen kapandı, anaparası açık kaldı
+            var unit1Details = await (
+                from d in db.AccrualDetails
+                join a in db.Accruals on d.AccrualId equals a.Id
+                where d.UnitId == s.UnitIds[0] && a.CompanyId == s.CompanyId
+                select new { d.Id, d.Amount, a.Source }).ToListAsync();
+
+            var lateDetail = unit1Details.Single(x => x.Source == AccrualSource.LateFee);
+            var principalDetail = unit1Details.Single(x => x.Source == AccrualSource.Budget);
+
+            var lateAllocated = await db.CollectionAllocations
+                .Where(al => al.AccrualDetailId == lateDetail.Id).SumAsync(al => al.AllocatedAmount);
+            var principalAllocated = await db.CollectionAllocations
+                .Where(al => al.AccrualDetailId == principalDetail.Id).SumAsync(al => al.AllocatedAmount);
+
+            lateAllocated.Should().Be(30m, "TBK m.101: önce gecikme faizi kapatılır");
+            principalAllocated.Should().Be(0m, "anaparaya henüz dokunulmaz");
         }
     }
 
