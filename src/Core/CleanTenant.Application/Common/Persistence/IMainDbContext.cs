@@ -5,6 +5,7 @@ using CleanTenant.Domain.Tenant.BuildingSchema;
 using CleanTenant.Domain.Tenant.Collections;
 using CleanTenant.Domain.Tenant.Companies;
 using CleanTenant.Domain.Tenant.LateFees;
+using CleanTenant.Domain.Tenant.Parties;
 using Microsoft.EntityFrameworkCore;
 
 namespace CleanTenant.Application.Common.Persistence;
@@ -124,6 +125,19 @@ public interface IMainDbContext
     // ── Gecikme Faizi Modülü (FAZ 7B+) ───────────────────────────────────────
     /// <summary>Gecikme faizi politikaları (şirket varsayılanı + bütçe override).</summary>
     DbSet<LateFeePolicy> LateFeePolicies { get; }
+
+    // ── Cari (Party) Modülü (F0+) ────────────────────────────────────────────
+    /// <summary>Cari kişiler (malik/kiracı/iletişim).</summary>
+    DbSet<Party> Parties { get; }
+
+    /// <summary>Malik tenure kayıtları (pay% + müteselsil).</summary>
+    DbSet<UnitOwnership> UnitOwnerships { get; }
+
+    /// <summary>Kiracı tenure kayıtları.</summary>
+    DbSet<UnitTenancy> UnitTenancies { get; }
+
+    /// <summary>İletişim kişisi tenure kayıtları.</summary>
+    DbSet<UnitContact> UnitContacts { get; }
 
     /// <summary>Bekleyen değişiklikleri persist eder.</summary>
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);

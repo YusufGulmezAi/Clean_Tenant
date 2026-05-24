@@ -6,6 +6,7 @@ using CleanTenant.Domain.Tenant.BuildingSchema;
 using CleanTenant.Domain.Tenant.Collections;
 using CleanTenant.Domain.Tenant.Companies;
 using CleanTenant.Domain.Tenant.LateFees;
+using CleanTenant.Domain.Tenant.Parties;
 using CleanTenant.SharedKernel.Context;
 using CleanTenant.SharedKernel.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -133,6 +134,19 @@ public sealed class MainDbContext : DbContext, IMainDbContext
     // ── Gecikme Faizi Modülü (FAZ 7B+) ───────────────────────────────────────
     /// <summary>Gecikme faizi politikaları (şirket varsayılanı + bütçe override).</summary>
     public DbSet<LateFeePolicy> LateFeePolicies => Set<LateFeePolicy>();
+
+    // ── Cari (Party) Modülü (F0+) ────────────────────────────────────────────
+    /// <summary>Cari kişiler (malik/kiracı/iletişim).</summary>
+    public DbSet<Party> Parties => Set<Party>();
+
+    /// <summary>Malik tenure kayıtları.</summary>
+    public DbSet<UnitOwnership> UnitOwnerships => Set<UnitOwnership>();
+
+    /// <summary>Kiracı tenure kayıtları.</summary>
+    public DbSet<UnitTenancy> UnitTenancies => Set<UnitTenancy>();
+
+    /// <summary>İletişim kişisi tenure kayıtları.</summary>
+    public DbSet<UnitContact> UnitContacts => Set<UnitContact>();
 
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder modelBuilder)

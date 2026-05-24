@@ -155,5 +155,12 @@ public static class PermissionCatalog
         new("tenant.collection.record",              "Tahsilat kaydetme",             "Budget",     ScopeLevel.Tenant),
         new("tenant.latefee.configure",              "Gecikme parametre yönetimi",    "Budget",     ScopeLevel.Tenant),
         new("tenant.budget.template.publish",        "Bütçe şablonu paylaşma",        "Budget",     ScopeLevel.Tenant),
+
+        // ---------- Cari (Party) / Tenure (F0) ----------
+        new("tenant.party.view",                     "Cari kart / kişi görüntüleme",  "Party",      ScopeLevel.Tenant),
+        new("tenant.party.edit",                     "Cari kişi düzenleme",           "Party",      ScopeLevel.Tenant),
+        new("tenant.tenure.manage",                  "BB-kişi tenure (malik/kiracı/hisse) yönetimi", "Party", ScopeLevel.Tenant),
+        new("tenant.party.pii.view",                 "PII (TCKN/VKN/telefon) maskesiz görme", "Party", ScopeLevel.Tenant),
+        new("tenant.currentaccount.view",            "BB cari hareket defteri görüntüleme", "Party", ScopeLevel.Tenant),
     ];
 }
