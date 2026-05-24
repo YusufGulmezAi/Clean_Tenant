@@ -1,0 +1,92 @@
+@* Bütçe yenileme (klon) dialog'u — kaynağı yeni mali yıla/başlığa kopyalar. *@
+@inject MediatR.IMediator Mediator
+@inject ISnackbar Snackbar
+@inject IStringLocalizer Loc
+@using CleanTenant.Application.Features.Main.Accounting.FiscalYears
+@using CleanTenant.Application.Features.Main.Budgeting.Budgets
+
+<MudDialog>
+    <TitleContent>
+        <div class="d-flex align-center gap-2">
+            <MudIcon Icon="@Icons.Material.Filled.ContentCopy" Color="Color.Primary" />
+            <MudText Typo="Typo.h6">@Loc["Budget.Clone.Title"]</MudText>
+        </div>
+    </TitleContent>
+    <DialogContent>
+        <div style="min-width: 480px;">
+            <FormDescriptionPanel FormKey="budget-clone">@Loc["Budget.Clone.Help"]</FormDescriptionPanel>
+            @if (_fiscalYears.Count == 0)
+            {
+                <MudAlert Severity="Severity.Warning">@Loc["Budget.Create.NoFiscalYear"]</MudAlert>
+            }
+            else
+            {
+                <MudGrid Spacing="2">
+                    <MudItem xs="12" sm="6">
+                        <MudSelect T="Guid?" @bind-Value="_fiscalYearId" Label="@Loc["Budget.Field.FiscalYear"]"
+                                   Variant="Variant.Outlined" Margin="Margin.Dense">
+                            @foreach (var fy in _fiscalYears)
+                            {
+                                <MudSelectItem Value="@((Guid?)fy.Id)">@fy.Label</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudTextField @bind-Value="_title" Label="@Loc["Budget.Field.Title"]"
+                                      Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="120" Immediate="true" />
+                    </MudItem>
+                </MudGrid>
+            }
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="Cancel">@Loc["Common.Cancel"]</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="CloneAsync"
+                   Disabled="@(_busy || _fiscalYears.Count == 0)">@Loc["Budget.Clone.Confirm"]</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public Guid TenantId { get; set; }
+    [Parameter] public Guid CompanyId { get; set; }
+    [Parameter] public Guid SourceBudgetId { get; set; }
+    [Parameter] public string SourceTitle { get; set; } = string.Empty;
+
+    private IReadOnlyList<FiscalYearListItem> _fiscalYears = [];
+    private Guid? _fiscalYearId;
+    private string _title = string.Empty;
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var result = await Mediator.Send(new GetFiscalYearsQuery(CompanyId));
+        if (result.IsSuccess && result.Value is not null)
+        {
+            _fiscalYears = result.Value;
+            _fiscalYearId = _fiscalYears.FirstOrDefault(f => f.IsCurrentYear)?.Id ?? _fiscalYears.FirstOrDefault()?.Id;
+        }
+        _title = $"{SourceTitle} (Kopya)";
+    }
+
+    private async Task CloneAsync()
+    {
+        if (_fiscalYearId is null || string.IsNullOrWhiteSpace(_title)) return;
+        _busy = true;
+        var result = await Mediator.Send(new CloneBudgetCommand(
+            TenantId, CompanyId, SourceBudgetId, _fiscalYearId.Value, _title.Trim()));
+        _busy = false;
+        if (result.IsSuccess && result.Value != Guid.Empty)
+        {
+            Snackbar.Add(Loc["Budget.Clone.Success"].Value, Severity.Success);
+            MudDialog.Close(DialogResult.Ok(result.Value));
+        }
+        else
+        {
+            Snackbar.Add(result.FirstError.Message, Severity.Error);
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

@@ -92,10 +92,16 @@ else
                 <MudTd Style="text-align:right">
                     <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
                                    OnClick="@(() => Nav.NavigateTo($"/tenant/budgets/{CompanyId}/edit/{context.Id}"))" />
-                    @if (_canEdit && context.Status == BudgetStatus.Draft)
+                    @if (_canEdit)
                     {
-                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
-                                       OnClick="@(() => DeleteAsync(context))" />
+                        <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+                            <MudMenuItem Icon="@Icons.Material.Filled.ContentCopy" OnClick="@(() => OpenCloneAsync(context))">@Loc["Budget.Clone.Title"]</MudMenuItem>
+                            <MudMenuItem Icon="@Icons.Material.Filled.Bookmark" OnClick="@(() => OpenSaveTemplateAsync(context))">@Loc["Budget.SaveTemplate.Title"]</MudMenuItem>
+                            @if (context.Status == BudgetStatus.Draft)
+                            {
+                                <MudMenuItem Icon="@Icons.Material.Filled.Delete" IconColor="Color.Error" OnClick="@(() => DeleteAsync(context))">@Loc["Common.Delete"]</MudMenuItem>
+                            }
+                        </MudMenu>
                     }
                 </MudTd>
             </RowTemplate>
@@ -174,6 +180,36 @@ else
         {
             Nav.NavigateTo($"/tenant/budgets/{CompanyId}/edit/{budgetId}");
         }
+    }
+
+    private async Task OpenCloneAsync(BudgetListItem budget)
+    {
+        var parameters = new DialogParameters<CloneBudgetDialog>
+        {
+            { x => x.TenantId, _tenantId },
+            { x => x.CompanyId, CompanyId!.Value },
+            { x => x.SourceBudgetId, budget.Id },
+            { x => x.SourceTitle, budget.Title },
+        };
+        var dialog = await DialogService.ShowAsync<CloneBudgetDialog>(Loc["Budget.Clone.Title"].Value, parameters);
+        var result = await dialog.Result;
+        if (result is { Canceled: false, Data: Guid newBudgetId })
+        {
+            Nav.NavigateTo($"/tenant/budgets/{CompanyId}/edit/{newBudgetId}");
+        }
+    }
+
+    private async Task OpenSaveTemplateAsync(BudgetListItem budget)
+    {
+        var parameters = new DialogParameters<SaveAsTemplateDialog>
+        {
+            { x => x.TenantId, _tenantId },
+            { x => x.CompanyId, CompanyId!.Value },
+            { x => x.SourceBudgetId, budget.Id },
+            { x => x.SourceTitle, budget.Title },
+        };
+        var dialog = await DialogService.ShowAsync<SaveAsTemplateDialog>(Loc["Budget.SaveTemplate.Title"].Value, parameters);
+        await dialog.Result;
     }
 
     private async Task DeleteAsync(BudgetListItem budget)

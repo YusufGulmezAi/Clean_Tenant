@@ -1,0 +1,144 @@
+@* Bütçe şablon galerisi — tenant'lar-arası paylaşılan + sistem şablonları;
+   türe göre filtre + "Bundan Oluştur". *@
+@page "/tenant/budgets/{CompanyId:guid}/templates"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject AuthenticationStateProvider AuthProvider
+@inject ICurrentSessionAccessor SessionAccessor
+@inject MediatR.IMediator Mediator
+@inject NavigationManager Nav
+@inject IDialogService DialogService
+@inject IStringLocalizer Loc
+@using CleanTenant.Application.Common.Auth
+@using CleanTenant.Application.Features.Main.Budgeting.Templates
+@using CleanTenant.Domain.Tenant.Budgeting.Enums
+@using CleanTenant.ManagementApp.Components.Shared
+
+<PageTitle>@Loc["Budget.Gallery.PageTitle"]</PageTitle>
+
+@if (_unauthorized)
+{
+    <MudAlert Severity="Severity.Warning" Class="my-3">@Loc["Budget.Unauthorized"]</MudAlert>
+}
+else if (!_initialized)
+{
+    <MudProgressLinear Indeterminate="true" Class="my-4" />
+}
+else
+{
+    <div class="d-flex align-center justify-space-between mb-3">
+        <div class="d-flex align-center gap-2">
+            <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" OnClick="@(() => Nav.NavigateTo($"/tenant/budgets/{CompanyId}"))" />
+            <MudText Typo="Typo.h5">@Loc["Budget.Gallery.PageTitle"]</MudText>
+        </div>
+        <MudSelect T="BudgetType?" Value="_typeFilter" ValueChanged="OnTypeChanged" Label="@Loc["Budget.Field.Type"]"
+                   Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" Style="max-width:220px;">
+            <MudSelectItem T="BudgetType?" Value="@((BudgetType?)null)">@Loc["Budget.Gallery.AllTypes"]</MudSelectItem>
+            @foreach (var t in Enum.GetValues<BudgetType>())
+            {
+                <MudSelectItem T="BudgetType?" Value="@((BudgetType?)t)">@t</MudSelectItem>
+            }
+        </MudSelect>
+    </div>
+
+    <FormDescriptionPanel FormKey="budget-gallery" Title="@Loc["Budget.Gallery.PageTitle"]">
+        @Loc["Budget.Gallery.Help"]
+    </FormDescriptionPanel>
+
+    <MudPaper Elevation="1">
+        <MudTable Items="@_templates" Hover="true" Loading="@_loading" Class="pa-2">
+            <HeaderContent>
+                <MudTh>@Loc["Budget.Gallery.Col.Name"]</MudTh>
+                <MudTh>@Loc["Budget.Field.Type"]</MudTh>
+                <MudTh Style="text-align:center">@Loc["Budget.Gallery.Col.Lines"]</MudTh>
+                <MudTh>@Loc["Budget.Gallery.Col.Source"]</MudTh>
+                <MudTh Style="text-align:right">@Loc["Common.Actions"]</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="@Loc["Budget.Gallery.Col.Name"]">
+                    <MudText Typo="Typo.body1">@context.Name</MudText>
+                    @if (!string.IsNullOrWhiteSpace(context.Description))
+                    {
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.Description</MudText>
+                    }
+                </MudTd>
+                <MudTd DataLabel="@Loc["Budget.Field.Type"]">@context.Type</MudTd>
+                <MudTd Style="text-align:center">@context.LineCount</MudTd>
+                <MudTd DataLabel="@Loc["Budget.Gallery.Col.Source"]">
+                    <MudChip T="string" Size="Size.Small"
+                             Color="@(context.OwnerTenantId is null ? Color.Info : (context.OwnerTenantId == _tenantId ? Color.Default : Color.Tertiary))">
+                        @(context.OwnerTenantId is null ? Loc["Budget.Gallery.System"].Value
+                            : context.OwnerTenantId == _tenantId ? Loc["Budget.Gallery.Own"].Value
+                            : Loc["Budget.Gallery.Shared"].Value)
+                    </MudChip>
+                </MudTd>
+                <MudTd Style="text-align:right">
+                    @if (_canEdit)
+                    {
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.Add"
+                                   OnClick="@(() => CreateFromAsync(context))">@Loc["Budget.Gallery.Use"]</MudButton>
+                    }
+                </MudTd>
+            </RowTemplate>
+            <NoRecordsContent><MudText Class="pa-3">@Loc["Budget.Gallery.Empty"]</MudText></NoRecordsContent>
+        </MudTable>
+    </MudPaper>
+}
+
+@code {
+    [Parameter] public Guid CompanyId { get; set; }
+
+    private bool _unauthorized, _initialized, _loading, _canEdit;
+    private Guid _tenantId;
+    private BudgetType? _typeFilter;
+    private IReadOnlyList<BudgetTemplateListItem> _templates = [];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        if (authState.User?.Identity?.IsAuthenticated != true) { _unauthorized = true; _initialized = true; return; }
+        var session = SessionAccessor.Current;
+        var isSystem = string.Equals(authState.User.FindFirst("scope")?.Value, "System", StringComparison.OrdinalIgnoreCase);
+        if (!isSystem)
+        {
+            if (session is null || !session.Permissions.Contains("tenant.budget.view")) { _unauthorized = true; _initialized = true; return; }
+            _canEdit = session.Permissions.Contains("tenant.budget.edit");
+        }
+        else { _canEdit = true; }
+        _tenantId = session?.TenantId ?? Guid.Empty;
+
+        await LoadAsync();
+        _initialized = true;
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        var result = await Mediator.Send(new GetSharedBudgetTemplatesQuery(_typeFilter));
+        _templates = result.IsSuccess && result.Value is not null ? result.Value : [];
+        _loading = false;
+    }
+
+    private async Task OnTypeChanged(BudgetType? type)
+    {
+        _typeFilter = type;
+        await LoadAsync();
+    }
+
+    private async Task CreateFromAsync(BudgetTemplateListItem template)
+    {
+        var parameters = new DialogParameters<CreateFromTemplateDialog>
+        {
+            { x => x.TenantId, _tenantId },
+            { x => x.CompanyId, CompanyId },
+            { x => x.TemplateId, template.Id },
+            { x => x.TemplateName, template.Name },
+        };
+        var dialog = await DialogService.ShowAsync<CreateFromTemplateDialog>(Loc["Budget.FromTemplate.Title"].Value, parameters);
+        var result = await dialog.Result;
+        if (result is { Canceled: false, Data: Guid budgetId })
+        {
+            Nav.NavigateTo($"/tenant/budgets/{CompanyId}/edit/{budgetId}");
+        }
+    }
+}

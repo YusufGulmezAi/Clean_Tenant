@@ -1,0 +1,78 @@
+@* Bütçeyi tenant'lar-arası paylaşılabilir şablon olarak kaydetme dialog'u (yapı-only). *@
+@inject MediatR.IMediator Mediator
+@inject ISnackbar Snackbar
+@inject IStringLocalizer Loc
+@using CleanTenant.Application.Features.Main.Budgeting.Templates
+@using CleanTenant.Domain.Budgeting
+
+<MudDialog>
+    <TitleContent>
+        <div class="d-flex align-center gap-2">
+            <MudIcon Icon="@Icons.Material.Filled.Bookmark" Color="Color.Primary" />
+            <MudText Typo="Typo.h6">@Loc["Budget.SaveTemplate.Title"]</MudText>
+        </div>
+    </TitleContent>
+    <DialogContent>
+        <div style="min-width: 480px;">
+            <FormDescriptionPanel FormKey="budget-save-template">@Loc["Budget.SaveTemplate.Help"]</FormDescriptionPanel>
+            <MudGrid Spacing="2">
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_name" Label="@Loc["Budget.SaveTemplate.Name"]"
+                                  Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="200" Immediate="true" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_description" Label="@Loc["Budget.Field.Notes"]"
+                                  Variant="Variant.Outlined" Margin="Margin.Dense" Lines="2" MaxLength="2000" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudSelect T="TemplateVisibility" @bind-Value="_visibility" Label="@Loc["Budget.SaveTemplate.Visibility"]"
+                               Variant="Variant.Outlined" Margin="Margin.Dense">
+                        <MudSelectItem Value="@TemplateVisibility.Private">@Loc["Budget.SaveTemplate.Private"]</MudSelectItem>
+                        <MudSelectItem Value="@TemplateVisibility.Public">@Loc["Budget.SaveTemplate.Public"]</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+            </MudGrid>
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="Cancel">@Loc["Common.Cancel"]</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SaveAsync"
+                   Disabled="@(_busy || string.IsNullOrWhiteSpace(_name))">@Loc["Common.Save"]</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public Guid TenantId { get; set; }
+    [Parameter] public Guid CompanyId { get; set; }
+    [Parameter] public Guid SourceBudgetId { get; set; }
+    [Parameter] public string SourceTitle { get; set; } = string.Empty;
+
+    private string _name = string.Empty;
+    private string? _description;
+    private TemplateVisibility _visibility = TemplateVisibility.Private;
+    private bool _busy;
+
+    protected override void OnInitialized() => _name = SourceTitle;
+
+    private async Task SaveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_name)) return;
+        _busy = true;
+        var result = await Mediator.Send(new SaveBudgetAsTemplateCommand(
+            TenantId, CompanyId, SourceBudgetId, _name.Trim(), _description, _visibility));
+        _busy = false;
+        if (result.IsSuccess && result.Value != Guid.Empty)
+        {
+            Snackbar.Add(Loc["Budget.SaveTemplate.Success"].Value, Severity.Success);
+            MudDialog.Close(DialogResult.Ok(result.Value));
+        }
+        else
+        {
+            Snackbar.Add(result.FirstError.Message, Severity.Error);
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}
