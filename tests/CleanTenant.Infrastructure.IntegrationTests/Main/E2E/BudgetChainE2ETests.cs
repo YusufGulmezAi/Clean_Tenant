@@ -144,6 +144,54 @@ public sealed class BudgetChainE2ETests : IClassFixture<BudgetE2EFixture>
         entry.Lines.Where(l => l.Debit > 0).Sum(l => l.Debit).Should().Be(1_000m);
     }
 
+    [Fact]
+    public async Task Senaryo3_yil_ortasi_revizyon_donem_dogru_versiyonu_kullanir()
+    {
+        // V1: yıllık 36000 → 3000/ay. Temmuz'da revizyon V2: yıllık 60000 → 5000/ay.
+        var s = await SeedScenarioAsync(unitCount: 3, plannedAnnual: 36_000m, DistributionModel.Equal);
+
+        Guid v1Id, v2Id;
+        using (var scope = _fixture.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<MainDbContext>();
+            var v1 = await db.BudgetVersions.FirstAsync(v => v.BudgetId == s.BudgetId);
+            v1.ValidTo = new DateOnly(2026, 6, 30); // V1 Haziran sonunda kapanır
+            v1Id = v1.Id;
+            var lineId = (await db.BudgetLines.FirstAsync(l => l.CompanyId == s.CompanyId)).Id;
+
+            var v2 = new BudgetVersion
+            {
+                TenantId = s.TenantId, BudgetId = s.BudgetId, VersionNumber = 2,
+                ValidFrom = new DateOnly(2026, 7, 1), ValidTo = null,
+                PublishedAt = new DateTimeOffset(2026, 6, 25, 0, 0, 0, TimeSpan.Zero),
+                PreviousVersionId = v1.Id,
+            };
+            db.BudgetVersions.Add(v2);
+            db.BudgetLineVersions.Add(new BudgetLineVersion
+            {
+                TenantId = s.TenantId, BudgetVersionId = v2.Id, BudgetLineId = lineId,
+                PlannedAmount = 60_000m, PaymentSchedule = PaymentSchedule.MonthlyEqual,
+                DistributionModel = DistributionModel.Equal, DueDayOfMonth = 15,
+            });
+            await db.SaveChangesAsync();
+            v2Id = v2.Id;
+        }
+
+        _fixture.Clock.UtcNow = new DateTimeOffset(2026, 3, 10, 0, 0, 0, TimeSpan.Zero);
+        var march = Ok(await SendAsync(new GenerateBudgetAccrualCommand(s.TenantId, s.CompanyId, s.BudgetId, 2026, 3)));
+        march.TotalAmount.Should().Be(3_000m, "Mart V1 penceresinde (36000/12)");
+
+        var august = Ok(await SendAsync(new GenerateBudgetAccrualCommand(s.TenantId, s.CompanyId, s.BudgetId, 2026, 8)));
+        august.TotalAmount.Should().Be(5_000m, "Ağustos V2 penceresinde (60000/12)");
+
+        using (var scope = _fixture.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<MainDbContext>();
+            (await db.Accruals.FirstAsync(a => a.Id == march.AccrualId)).BudgetVersionId.Should().Be(v1Id);
+            (await db.Accruals.FirstAsync(a => a.Id == august.AccrualId)).BudgetVersionId.Should().Be(v2Id);
+        }
+    }
+
     /// <summary>Result'ı başarı doğrulayıp non-null değerini döner.</summary>
     private static T Ok<T>(Result<T> result)
     {
@@ -222,14 +270,20 @@ public sealed class BudgetChainE2ETests : IClassFixture<BudgetE2EFixture>
             Status = PeriodStatus.Open, IsCurrentYear = true,
         };
         db.FiscalYears.Add(fy);
-        var period = new AccountingPeriod
+        AccountingPeriod marchPeriod = null!;
+        for (var m = 1; m <= 12; m++)
         {
-            TenantId = tenantId, CompanyId = company.Id, FiscalYearId = fy.Id,
-            Year = 2026, Month = 3,
-            StartDate = new DateOnly(2026, 3, 1), EndDate = new DateOnly(2026, 3, 31),
-            Status = PeriodStatus.Open,
-        };
-        db.AccountingPeriods.Add(period);
+            var first = new DateOnly(2026, m, 1);
+            var p = new AccountingPeriod
+            {
+                TenantId = tenantId, CompanyId = company.Id, FiscalYearId = fy.Id,
+                Year = 2026, Month = m,
+                StartDate = first, EndDate = first.AddMonths(1).AddDays(-1),
+                Status = PeriodStatus.Open,
+            };
+            db.AccountingPeriods.Add(p);
+            if (m == 3) marchPeriod = p;
+        }
 
         // Kasa hesabı (tahsilat yevmiyesi borç tarafı) — 3-3-3 yaprak
         var cash = new AccountCode
@@ -277,6 +331,6 @@ public sealed class BudgetChainE2ETests : IClassFixture<BudgetE2EFixture>
 
         await db.SaveChangesAsync();
 
-        return new Scenario(tenantId, company.Id, budget.Id, period.Id, fy.Id, cash.Id, unitIds);
+        return new Scenario(tenantId, company.Id, budget.Id, marchPeriod.Id, fy.Id, cash.Id, unitIds);
     }
 }
