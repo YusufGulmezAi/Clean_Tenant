@@ -2,6 +2,7 @@ using System.Globalization;
 using CleanTenant.Application.Features.Main.Accruals.GenerateBudgetAccrual;
 using CleanTenant.Application.Features.Main.Accruals.Queries;
 using CleanTenant.Application.Features.Main.Budgeting.Budgets;
+using CleanTenant.Application.Features.Main.Budgeting.Templates;
 using CleanTenant.Application.Features.Main.Collections.RecordCollection;
 using CleanTenant.Application.Features.Main.LateFees.GenerateLateFeeCharges;
 using CleanTenant.Application.Features.Main.LateFees.SetLateFeePolicy;
@@ -368,6 +369,65 @@ public sealed class BudgetChainE2ETests : IClassFixture<BudgetE2EFixture>
             cloneInstallments.Select(i => (i.Year, i.Month)).Should().Equal((2027, 3), (2027, 4));
             cloneInstallments.Sum(i => i.Amount).Should().Be(10_000m);
         }
+    }
+
+    [Fact]
+    public async Task Senaryo6_tenantlar_arasi_sablon_paylasimi_ve_instantiate()
+    {
+        // Tenant A: bütçe kur + Public şablon olarak yayınla
+        var sA = await SeedScenarioAsync(unitCount: 3, plannedAnnual: 36_000m, DistributionModel.Equal);
+        var templateId = Ok(await SendAsync(new SaveBudgetAsTemplateCommand(
+            sA.TenantId, sA.CompanyId, sA.BudgetId, "Aidat Şablonu", "Standart aidat yapısı",
+            TemplateVisibility.Public)));
+
+        // Tenant B: ayrı tenant + şirket + mali yıl
+        var (tenantB, companyB, fyB) = await SeedTenantBAsync();
+
+        // Tenant B, Public şablonu görür
+        _fixture.SetTenant(tenantB);
+        var list = Ok(await SendAsync(new GetSharedBudgetTemplatesQuery(BudgetType.Aidat)));
+        list.Should().Contain(t => t.Id == templateId && t.Visibility == TemplateVisibility.Public);
+
+        // Tenant B: şablondan ilk bütçesini oluştur
+        var newBudgetId = Ok(await SendAsync(new CreateBudgetFromTemplateCommand(
+            tenantB, companyB, templateId, fyB, "2026 Aidat")));
+
+        using var scope = _fixture.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<MainDbContext>();
+        var budget = await db.Budgets.Include(b => b.Versions).FirstAsync(b => b.Id == newBudgetId);
+        budget.Status.Should().Be(BudgetStatus.Draft);
+        budget.CompanyId.Should().Be(companyB);
+        budget.Type.Should().Be(BudgetType.Aidat);
+
+        var v1 = budget.Versions.Single();
+        var lvs = await db.BudgetLineVersions.Where(lv => lv.BudgetVersionId == v1.Id).ToListAsync();
+        lvs.Should().ContainSingle();
+        lvs[0].PlannedAmount.Should().Be(0m, "yapı-only şablon → tutarı site girer");
+
+        // Kategori + kalem hedef şirkette kod'a göre oluşturuldu
+        (await db.ExpenseCategories.AnyAsync(c => c.CompanyId == companyB && c.Code == "GEN")).Should().BeTrue();
+        (await db.BudgetLines.AnyAsync(l => l.CompanyId == companyB && l.Code == "AID-01")).Should().BeTrue();
+    }
+
+    /// <summary>Tenant B için minimal şirket + mali yıl kurar.</summary>
+    private async Task<(Guid TenantId, Guid CompanyId, Guid FiscalYearId)> SeedTenantBAsync()
+    {
+        var tenantId = Guid.NewGuid();
+        _fixture.SetTenant(tenantId);
+
+        using var scope = _fixture.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<MainDbContext>();
+        var company = new Company { TenantId = tenantId, Name = $"SiteB-{Guid.NewGuid():N}", Status = CompanyStatus.Active };
+        db.Companies.Add(company);
+        var fy = new FiscalYear
+        {
+            TenantId = tenantId, CompanyId = company.Id, Label = "2026",
+            StartDate = new DateOnly(2026, 1, 1), EndDate = new DateOnly(2026, 12, 31),
+            Status = PeriodStatus.Open,
+        };
+        db.FiscalYears.Add(fy);
+        await db.SaveChangesAsync();
+        return (tenantId, company.Id, fy.Id);
     }
 
     /// <summary>Result'ı başarı doğrulayıp non-null değerini döner.</summary>
