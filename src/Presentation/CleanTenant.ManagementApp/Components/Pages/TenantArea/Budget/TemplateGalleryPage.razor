@@ -72,6 +72,9 @@ else
                     </MudChip>
                 </MudTd>
                 <MudTd Style="text-align:right">
+                    <MudButton Size="Size.Small" Variant="Variant.Text"
+                               StartIcon="@Icons.Material.Filled.Preview"
+                               OnClick="@(() => PreviewAsync(context))">@Loc["Budget.Preview.Action"]</MudButton>
                     @if (_canEdit)
                     {
                         <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary"
@@ -123,6 +126,22 @@ else
     {
         _typeFilter = type;
         await LoadAsync();
+    }
+
+    private async Task PreviewAsync(BudgetTemplateListItem template)
+    {
+        var parameters = new DialogParameters<TemplatePreviewDialog>
+        {
+            { x => x.TemplateId, template.Id },
+            { x => x.CanCreate, _canEdit },
+        };
+        var dialog = await DialogService.ShowAsync<TemplatePreviewDialog>(template.Name, parameters);
+        var result = await dialog.Result;
+        // Önizlemeden "Bundan Oluştur" seçildiyse instantiate akışını başlat
+        if (result is { Canceled: false, Data: true } && _canEdit)
+        {
+            await CreateFromAsync(template);
+        }
     }
 
     private async Task CreateFromAsync(BudgetTemplateListItem template)
