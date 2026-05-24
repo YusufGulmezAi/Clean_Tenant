@@ -1,0 +1,334 @@
+@* Bütçe düzenleme — master-detail: solda kalem listesi, sağda seçili kalem formu.
+   Yalnız Draft bütçenin (taslak versiyon) kalemleri düzenlenir; yayınlı bütçe salt-okunur. *@
+@page "/tenant/budgets/{CompanyId:guid}/edit/{BudgetId:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject AuthenticationStateProvider AuthProvider
+@inject ICurrentSessionAccessor SessionAccessor
+@inject MediatR.IMediator Mediator
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject IStringLocalizer Loc
+@using CleanTenant.Application.Common.Auth
+@using CleanTenant.Application.Features.Main.Budgeting.Budgets
+@using CleanTenant.Application.Features.Main.Budgeting.BudgetLineVersions
+@using CleanTenant.Application.Features.Main.Budgeting.BudgetLines
+@using CleanTenant.Application.Features.Main.Budgeting.ParticipationGroups
+@using CleanTenant.Domain.Tenant.Budgeting.Enums
+@using CleanTenant.ManagementApp.Components.Shared
+
+<PageTitle>@(_budget?.Title ?? Loc["Budget.Edit.PageTitle"].Value)</PageTitle>
+
+@if (_unauthorized)
+{
+    <MudAlert Severity="Severity.Warning" Class="my-3">@Loc["Budget.Unauthorized"]</MudAlert>
+}
+else if (!_initialized)
+{
+    <MudProgressLinear Indeterminate="true" Class="my-4" />
+}
+else if (_budget is null)
+{
+    <MudAlert Severity="Severity.Error" Class="my-3">@Loc["Budget.Edit.NotFound"]</MudAlert>
+}
+else
+{
+    <div class="d-flex align-center justify-space-between mb-3">
+        <div class="d-flex align-center gap-2">
+            <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" OnClick="@(() => Nav.NavigateTo($"/tenant/budgets/{CompanyId}"))" />
+            <MudText Typo="Typo.h5">@_budget.Title</MudText>
+            <MudChip T="string" Size="Size.Small" Color="@(_budget.Status == BudgetStatus.Published ? Color.Success : Color.Default)">@_budget.Status</MudChip>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">@_budget.FiscalYearLabel</MudText>
+        </div>
+        @if (_isDraft && _canEdit && _lines.Count > 0)
+        {
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Publish"
+                       OnClick="OpenPublishAsync">@Loc["Budget.Publish.Confirm"]</MudButton>
+        }
+    </div>
+
+    <FormDescriptionPanel FormKey="budget-edit" Title="@Loc["Budget.Edit.PageTitle"]">
+        @Loc["Budget.Edit.Help"]
+    </FormDescriptionPanel>
+
+    @if (!_isDraft)
+    {
+        <MudAlert Severity="Severity.Info" Class="mb-3">@Loc["Budget.Edit.PublishedReadOnly"]</MudAlert>
+    }
+
+    <MudGrid Spacing="2">
+        @* Master: kalem listesi *@
+        <MudItem xs="12" md="4">
+            <MudPaper Elevation="1" Class="pa-2" Style="min-height:360px;">
+                <div class="d-flex align-center justify-space-between mb-2">
+                    <MudText Typo="Typo.subtitle1">@Loc["Budget.Edit.Lines"] (@_lines.Count)</MudText>
+                    @if (_isDraft && _canEdit)
+                    {
+                        <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.Add" OnClick="StartAdd">@Loc["Budget.Edit.AddLine"]</MudButton>
+                    }
+                </div>
+                <MudList T="BudgetLineVersionDto" Clickable="true" Dense="true">
+                    @foreach (var line in _lines)
+                    {
+                        <MudListItem T="BudgetLineVersionDto"
+                                     OnClick="@(() => Select(line))"
+                                     Icon="@Icons.Material.Filled.Receipt">
+                            <div class="d-flex justify-space-between" style="width:100%;">
+                                <span>@line.LineName</span>
+                                <span class="mud-text-secondary">@line.PlannedAmount.ToString("N2")</span>
+                            </div>
+                        </MudListItem>
+                    }
+                </MudList>
+                @if (_lines.Count == 0)
+                {
+                    <MudText Typo="Typo.body2" Class="pa-2 mud-text-secondary">@Loc["Budget.Edit.NoLines"]</MudText>
+                }
+            </MudPaper>
+        </MudItem>
+
+        @* Detail: seçili kalem / ekleme formu *@
+        <MudItem xs="12" md="8">
+            <MudPaper Elevation="1" Class="pa-4" Style="min-height:360px;">
+                @if (_addMode)
+                {
+                    <MudText Typo="Typo.subtitle1" Class="mb-3">@Loc["Budget.Edit.AddLine"]</MudText>
+                    @if (_masterLines.Count == 0)
+                    {
+                        <MudAlert Severity="Severity.Info">@Loc["Budget.Edit.NoMasterLine"]</MudAlert>
+                    }
+                    else
+                    {
+                        <MudGrid Spacing="2">
+                            <MudItem xs="12">
+                                <MudSelect T="Guid?" @bind-Value="_addLineId" Label="@Loc["Budget.Edit.SelectLine"]"
+                                           Variant="Variant.Outlined" Margin="Margin.Dense">
+                                    @foreach (var ml in _masterLines.Where(m => _lines.All(l => l.BudgetLineId != m.Id)))
+                                    {
+                                        <MudSelectItem Value="@((Guid?)ml.Id)">@ml.CategoryName / @ml.Name (@ml.Code)</MudSelectItem>
+                                    }
+                                </MudSelect>
+                            </MudItem>
+                            @RenderLineFields(isAdd: true)
+                            <MudItem xs="12" Class="d-flex justify-end gap-2">
+                                <MudButton Variant="Variant.Text" OnClick="@(() => _addMode = false)">@Loc["Common.Cancel"]</MudButton>
+                                <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="AddAsync" Disabled="@(_busy || _addLineId is null)">@Loc["Budget.Edit.AddLine"]</MudButton>
+                            </MudItem>
+                        </MudGrid>
+                    }
+                }
+                else if (_selected is not null)
+                {
+                    <div class="d-flex align-center justify-space-between mb-3">
+                        <MudText Typo="Typo.subtitle1">@_selected.CategoryName / @_selected.LineName</MudText>
+                        @if (_isDraft && _canEdit)
+                        {
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small" OnClick="RemoveAsync" />
+                        }
+                    </div>
+                    <MudGrid Spacing="2">
+                        @RenderLineFields(isAdd: false)
+                        @if (_isDraft && _canEdit)
+                        {
+                            <MudItem xs="12" Class="d-flex justify-end">
+                                <MudButton Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Save"
+                                           OnClick="SaveAsync" Disabled="@_busy">@Loc["Common.Save"]</MudButton>
+                            </MudItem>
+                        }
+                    </MudGrid>
+                }
+                else
+                {
+                    <MudText Typo="Typo.body1" Class="mud-text-secondary">@Loc["Budget.Edit.SelectHint"]</MudText>
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    [Parameter] public Guid CompanyId { get; set; }
+    [Parameter] public Guid BudgetId { get; set; }
+
+    private bool _unauthorized, _initialized, _isDraft, _canEdit, _busy, _addMode;
+    private Guid _tenantId;
+    private Guid _editVersionId;
+    private BudgetDetail? _budget;
+    private IReadOnlyList<BudgetLineVersionDto> _lines = [];
+    private IReadOnlyList<BudgetLineListItem> _masterLines = [];
+    private IReadOnlyList<ParticipationGroupListItem> _groups = [];
+    private BudgetLineVersionDto? _selected;
+
+    // Düzenlenebilir alanlar (seçili veya ekleme formu)
+    private Guid? _addLineId;
+    private decimal _fAmount;
+    private PaymentSchedule _fSchedule = PaymentSchedule.MonthlyEqual;
+    private DistributionModel _fDistribution = DistributionModel.Equal;
+    private Guid? _fGroupId;
+    private int _fDueDay = 15;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _initialized = false;
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        if (authState.User?.Identity?.IsAuthenticated != true) { _unauthorized = true; _initialized = true; return; }
+        var session = SessionAccessor.Current;
+        var isSystem = string.Equals(authState.User.FindFirst("scope")?.Value, "System", StringComparison.OrdinalIgnoreCase);
+        if (!isSystem)
+        {
+            if (session is null || !session.Permissions.Contains("tenant.budget.view")) { _unauthorized = true; _initialized = true; return; }
+            _canEdit = session.Permissions.Contains("tenant.budget.edit");
+        }
+        else { _canEdit = true; }
+        _tenantId = session?.TenantId ?? Guid.Empty;
+
+        await LoadAsync();
+        _initialized = true;
+    }
+
+    private async Task LoadAsync()
+    {
+        var detail = await Mediator.Send(new GetBudgetDetailQuery(CompanyId, BudgetId));
+        if (detail.IsFailure || detail.Value is null) { _budget = null; return; }
+        _budget = detail.Value;
+        _isDraft = _budget.Status == BudgetStatus.Draft;
+
+        // Düzenlenecek versiyon: taslak (PublishedAt==null) varsa o, yoksa aktif
+        var draft = _budget.Versions.FirstOrDefault(v => v.PublishedAt is null);
+        _editVersionId = draft?.Id ?? _budget.CurrentVersionId ?? _budget.Versions.FirstOrDefault()?.Id ?? Guid.Empty;
+
+        if (_editVersionId != Guid.Empty)
+        {
+            var lines = await Mediator.Send(new GetBudgetVersionLinesQuery(CompanyId, _editVersionId));
+            _lines = lines.IsSuccess && lines.Value is not null ? lines.Value : [];
+        }
+
+        var masters = await Mediator.Send(new GetBudgetLinesByCompanyQuery(CompanyId));
+        _masterLines = masters.IsSuccess && masters.Value is not null ? masters.Value : [];
+        var groups = await Mediator.Send(new GetParticipationGroupsByCompanyQuery(CompanyId));
+        _groups = groups.IsSuccess && groups.Value is not null ? groups.Value : [];
+
+        // Seçimi koru/temizle
+        _selected = _selected is null ? null : _lines.FirstOrDefault(l => l.Id == _selected.Id);
+        _addMode = false;
+    }
+
+    private void Select(BudgetLineVersionDto line)
+    {
+        _addMode = false;
+        _selected = line;
+        _fAmount = line.PlannedAmount;
+        _fSchedule = line.PaymentSchedule;
+        _fDistribution = line.DistributionModel;
+        _fGroupId = line.ParticipationGroupId;
+        _fDueDay = line.DueDayOfMonth;
+    }
+
+    private void StartAdd()
+    {
+        _addMode = true;
+        _selected = null;
+        _addLineId = null;
+        _fAmount = 0m;
+        _fSchedule = PaymentSchedule.MonthlyEqual;
+        _fDistribution = DistributionModel.Equal;
+        _fGroupId = null;
+        _fDueDay = 15;
+    }
+
+    private RenderFragment RenderLineFields(bool isAdd) => __builder =>
+    {
+        <MudItem xs="12" sm="6">
+            <MudNumericField T="decimal" @bind-Value="_fAmount" Label="@Loc["Budget.Field.PlannedAmount"]"
+                             Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" Format="N2"
+                             ReadOnly="@(!_isDraft || !_canEdit)" />
+        </MudItem>
+        <MudItem xs="12" sm="6">
+            <MudNumericField T="int" @bind-Value="_fDueDay" Label="@Loc["Budget.Field.DueDay"]"
+                             Variant="Variant.Outlined" Margin="Margin.Dense" Min="1" Max="31"
+                             ReadOnly="@(!_isDraft || !_canEdit)" />
+        </MudItem>
+        <MudItem xs="12" sm="6">
+            <MudSelect T="PaymentSchedule" @bind-Value="_fSchedule" Label="@Loc["Budget.Field.PaymentSchedule"]"
+                       Variant="Variant.Outlined" Margin="Margin.Dense" ReadOnly="@(!_isDraft || !_canEdit)">
+                @foreach (var s in Enum.GetValues<PaymentSchedule>())
+                {
+                    <MudSelectItem Value="@s">@s</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="6">
+            <MudSelect T="DistributionModel" @bind-Value="_fDistribution" Label="@Loc["Budget.Field.Distribution"]"
+                       Variant="Variant.Outlined" Margin="Margin.Dense" ReadOnly="@(!_isDraft || !_canEdit)">
+                @foreach (var d in Enum.GetValues<DistributionModel>())
+                {
+                    <MudSelectItem Value="@d">@d</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12">
+            <MudSelect T="Guid?" @bind-Value="_fGroupId" Label="@Loc["Budget.Field.ParticipationGroup"]"
+                       Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" ReadOnly="@(!_isDraft || !_canEdit)">
+                <MudSelectItem T="Guid?" Value="@((Guid?)null)">@Loc["Budget.Field.AllUnits"]</MudSelectItem>
+                @foreach (var g in _groups)
+                {
+                    <MudSelectItem T="Guid?" Value="@((Guid?)g.Id)">@g.Name</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+    };
+
+    private async Task SaveAsync()
+    {
+        if (_selected is null) return;
+        _busy = true;
+        var result = await Mediator.Send(new UpdateBudgetLineVersionCommand(
+            _tenantId, CompanyId, _selected.Id, _fAmount, _fSchedule, _fDistribution, _fGroupId, null, _fDueDay));
+        _busy = false;
+        await AfterMutation(result.IsSuccess, result.IsSuccess ? Loc["Budget.Edit.Saved"].Value : result.FirstError.Message, result.IsSuccess);
+    }
+
+    private async Task AddAsync()
+    {
+        if (_addLineId is null) return;
+        _busy = true;
+        var result = await Mediator.Send(new AddBudgetLineToVersionCommand(
+            _tenantId, CompanyId, _editVersionId, _addLineId.Value, _fAmount, _fSchedule, _fDistribution, _fGroupId, null, _fDueDay));
+        _busy = false;
+        await AfterMutation(result.IsSuccess, result.IsSuccess ? Loc["Budget.Edit.Added"].Value : result.FirstError.Message, result.IsSuccess);
+    }
+
+    private async Task RemoveAsync()
+    {
+        if (_selected is null) return;
+        var confirm = await DialogService.ShowMessageBox(
+            Loc["Budget.Edit.RemoveTitle"].Value, Loc["Budget.Edit.RemoveConfirm", _selected.LineName].Value,
+            yesText: Loc["Common.Delete"].Value, cancelText: Loc["Common.Cancel"].Value);
+        if (confirm != true) return;
+        _busy = true;
+        var result = await Mediator.Send(new RemoveBudgetLineVersionCommand(_tenantId, CompanyId, _selected.Id));
+        _busy = false;
+        _selected = null;
+        await AfterMutation(result.IsSuccess, result.IsSuccess ? Loc["Budget.Edit.Removed"].Value : result.FirstError.Message, result.IsSuccess);
+    }
+
+    private async Task OpenPublishAsync()
+    {
+        var first = new DateOnly(_budget!.Versions.Count > 0 ? DateTime.Today.Year : DateTime.Today.Year, 1, 1);
+        var parameters = new DialogParameters<PublishBudgetDialog>
+        {
+            { x => x.CompanyId, CompanyId },
+            { x => x.BudgetId, BudgetId },
+            { x => x.DefaultValidFrom, first },
+        };
+        var dialog = await DialogService.ShowAsync<PublishBudgetDialog>(Loc["Budget.Publish.Title"].Value, parameters);
+        var result = await dialog.Result;
+        if (result is { Canceled: false }) await LoadAsync();
+    }
+
+    private async Task AfterMutation(bool success, string message, bool reload)
+    {
+        Snackbar.Add(message, success ? Severity.Success : Severity.Error);
+        if (reload) await LoadAsync();
+    }
+}

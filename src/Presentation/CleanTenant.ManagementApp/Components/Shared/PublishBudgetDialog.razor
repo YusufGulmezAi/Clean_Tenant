@@ -1,0 +1,62 @@
+@* Taslak bütçeyi yayınlama dialog'u — geçerlilik başlangıç tarihi seçilir. *@
+@inject MediatR.IMediator Mediator
+@inject ISnackbar Snackbar
+@inject IStringLocalizer Loc
+@using CleanTenant.Application.Features.Main.Budgeting.Budgets
+
+<MudDialog>
+    <TitleContent>
+        <div class="d-flex align-center gap-2">
+            <MudIcon Icon="@Icons.Material.Filled.Publish" Color="Color.Primary" />
+            <MudText Typo="Typo.h6">@Loc["Budget.Publish.Title"]</MudText>
+        </div>
+    </TitleContent>
+    <DialogContent>
+        <div style="min-width: 420px;">
+            <FormDescriptionPanel FormKey="budget-publish">@Loc["Budget.Publish.Help"]</FormDescriptionPanel>
+            <MudDatePicker @bind-Date="_validFrom" Label="@Loc["Budget.Publish.ValidFrom"]"
+                           Variant="Variant.Outlined" Margin="Margin.Dense" />
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="Cancel">@Loc["Common.Cancel"]</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="PublishAsync"
+                   Disabled="@(_busy || _validFrom is null)">@Loc["Budget.Publish.Confirm"]</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public Guid CompanyId { get; set; }
+    [Parameter] public Guid BudgetId { get; set; }
+    /// <summary>Yayın için varsayılan başlangıç (genelde dönem başı).</summary>
+    [Parameter] public DateOnly? DefaultValidFrom { get; set; }
+
+    private DateTime? _validFrom;
+    private bool _busy;
+
+    protected override void OnInitialized()
+        => _validFrom = (DefaultValidFrom ?? DateOnly.FromDateTime(DateTime.Today)).ToDateTime(TimeOnly.MinValue);
+
+    private async Task PublishAsync()
+    {
+        if (_validFrom is null) return;
+        _busy = true;
+        var result = await Mediator.Send(new PublishBudgetCommand(
+            CompanyId, BudgetId, DateOnly.FromDateTime(_validFrom.Value)));
+        _busy = false;
+
+        if (result.IsSuccess)
+        {
+            Snackbar.Add(Loc["Budget.Publish.Success"].Value, Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        else
+        {
+            Snackbar.Add(result.FirstError.Message, Severity.Error);
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}
