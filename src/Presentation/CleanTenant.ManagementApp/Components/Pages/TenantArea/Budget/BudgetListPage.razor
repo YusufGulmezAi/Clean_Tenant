@@ -56,6 +56,8 @@ else
         <MudStack Row="true" Spacing="2">
             <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.SwapHoriz"
                        OnClick="@(() => Nav.NavigateTo("/tenant/budgets"))">@Loc["Budget.List.ChangeSite"]</MudButton>
+            <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Assessment"
+                       OnClick="@(() => Nav.NavigateTo($"/tenant/budgets/{CompanyId}/vs-actual"))">@Loc["Budget.List.VsActual"]</MudButton>
             @if (_canEdit)
             {
                 <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.LibraryAdd"

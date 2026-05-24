@@ -1,4 +1,4 @@
-@page "/tenant/budget/{CompanyId:guid}/vs-actual"
+@page "/tenant/budgets/{CompanyId:guid}/vs-actual"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @inject AuthenticationStateProvider AuthProvider
 @inject ICurrentSessionAccessor SessionAccessor
@@ -38,7 +38,7 @@ else
     <div class="d-flex align-center justify-space-between mb-3">
         <MudText Typo="Typo.h5">Bütçe / Gerçekleşen — @_companyName</MudText>
         <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.ArrowBack"
-                   OnClick="@(() => Nav.NavigateTo($"/tenant/budget/{CompanyId}"))">
+                   OnClick="@(() => Nav.NavigateTo($"/tenant/budgets/{CompanyId}"))">
             Bütçeye Dön
         </MudButton>
     </div>

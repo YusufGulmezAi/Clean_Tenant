@@ -143,6 +143,7 @@ public static class LocalizationCatalog
         new("Budget.List.SelectSite",   "Bütçe — Site Seçimi",      "Budget — Select Site"),
         new("Budget.List.NoSite",       "Erişebileceğiniz site yok.", "No accessible site."),
         new("Budget.List.ChangeSite",   "Site Değiştir",            "Change Site"),
+        new("Budget.List.VsActual",     "Bütçe-Gerçekleşen",        "Budget vs Actual"),
         new("Budget.List.FromTemplate", "Şablondan Oluştur",        "Create from Template"),
         new("Budget.List.New",          "Yeni Bütçe",               "New Budget"),
         new("Budget.List.Help",         "Bu sayfada seçili sitenin yıllık bütçelerini görür, oluşturur, düzenler ve yayınlarsınız. Taslak bütçeler düzenlenebilir/silinebilir; yayınlı bütçeler yalnız revize edilir.", "Manage the selected site's annual budgets here. Drafts can be edited/deleted; published budgets can only be revised."),
