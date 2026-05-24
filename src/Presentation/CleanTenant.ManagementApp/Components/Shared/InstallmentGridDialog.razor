@@ -1,0 +1,203 @@
+@* Taksit ızgarası editörü — taksitli (Installment) kalemin aylık tutarlarını düzenler.
+   Yalnız Draft versiyonda + Equal dağıtımda elle düzenleme anlamlıdır. *@
+@inject MediatR.IMediator Mediator
+@inject ISnackbar Snackbar
+@inject IStringLocalizer Loc
+@using System.Globalization
+@using CleanTenant.Application.Features.Main.Budgeting.BudgetLineVersions
+
+<MudDialog>
+    <TitleContent>
+        <div class="d-flex align-center gap-2">
+            <MudIcon Icon="@Icons.Material.Filled.CalendarMonth" Color="Color.Primary" />
+            <MudText Typo="Typo.h6">@Loc["Budget.Installments.Title"]</MudText>
+        </div>
+    </TitleContent>
+    <DialogContent>
+        <div style="min-width: 560px;">
+            <FormDescriptionPanel FormKey="budget-installments">@Loc["Budget.Installments.Help"]</FormDescriptionPanel>
+
+            <div class="d-flex align-center justify-space-between mb-2">
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">@LineName</MudText>
+                <div class="d-flex align-center gap-2">
+                    <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.AutoFixHigh"
+                               OnClick="DistributeEqually" Disabled="@(_readOnly || _rows.Count == 0)">
+                        @Loc["Budget.Installments.SplitEqually"]
+                    </MudButton>
+                    <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.Add"
+                               OnClick="AddRow" Disabled="@_readOnly">@Loc["Budget.Installments.AddRow"]</MudButton>
+                </div>
+            </div>
+
+            @if (_loading)
+            {
+                <MudProgressLinear Indeterminate="true" Class="my-3" />
+            }
+            else
+            {
+                @if (_rows.Count == 0)
+                {
+                    <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2">@Loc["Budget.Installments.Empty"]</MudAlert>
+                }
+                else
+                {
+                    <MudGrid Spacing="1" Class="mb-1">
+                        <MudItem xs="2"><MudText Typo="Typo.caption" Class="mud-text-secondary">@Loc["Budget.Installments.Year"]</MudText></MudItem>
+                        <MudItem xs="3"><MudText Typo="Typo.caption" Class="mud-text-secondary">@Loc["Budget.Installments.Month"]</MudText></MudItem>
+                        <MudItem xs="3"><MudText Typo="Typo.caption" Class="mud-text-secondary">@Loc["Budget.Field.PlannedAmount"]</MudText></MudItem>
+                        <MudItem xs="3"><MudText Typo="Typo.caption" Class="mud-text-secondary">@Loc["Budget.Installments.Label"]</MudText></MudItem>
+                        <MudItem xs="1"></MudItem>
+                    </MudGrid>
+                    @foreach (var row in _rows)
+                    {
+                        <MudGrid Spacing="1" Class="align-center mb-1">
+                            <MudItem xs="2">
+                                <MudNumericField T="int" @bind-Value="row.Year" Variant="Variant.Outlined"
+                                                 Margin="Margin.Dense" Min="2000" Max="2100" HideSpinButtons="true"
+                                                 ReadOnly="@_readOnly" />
+                            </MudItem>
+                            <MudItem xs="3">
+                                <MudSelect T="int" @bind-Value="row.Month" Variant="Variant.Outlined"
+                                           Margin="Margin.Dense" ReadOnly="@_readOnly" Dense="true">
+                                    @for (var m = 1; m <= 12; m++)
+                                    {
+                                        var mv = m;
+                                        <MudSelectItem T="int" Value="@mv">@MonthName(mv)</MudSelectItem>
+                                    }
+                                </MudSelect>
+                            </MudItem>
+                            <MudItem xs="3">
+                                <MudNumericField T="decimal" @bind-Value="row.Amount" Variant="Variant.Outlined"
+                                                 Margin="Margin.Dense" Min="0" Format="N2" ReadOnly="@_readOnly" />
+                            </MudItem>
+                            <MudItem xs="3">
+                                <MudTextField T="string" @bind-Value="row.Label" Variant="Variant.Outlined"
+                                              Margin="Margin.Dense" ReadOnly="@_readOnly" />
+                            </MudItem>
+                            <MudItem xs="1" Class="d-flex justify-center">
+                                <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Color="Color.Error"
+                                               OnClick="@(() => RemoveRow(row))" Disabled="@_readOnly" />
+                            </MudItem>
+                        </MudGrid>
+                    }
+                }
+
+                <MudDivider Class="my-2" />
+                <div class="d-flex align-center justify-space-between">
+                    <MudText Typo="Typo.body2">
+                        @Loc["Budget.Installments.Total"]: <b>@_total.ToString("N2")</b>
+                        <span class="mud-text-secondary"> / @Loc["Budget.Field.PlannedAmount"]: @PlannedAmount.ToString("N2")</span>
+                    </MudText>
+                    @if (Math.Abs(_total - PlannedAmount) >= 0.01m)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Warning" Icon="@Icons.Material.Filled.Warning">
+                            @Loc["Budget.Installments.Mismatch", (_total - PlannedAmount).ToString("N2")]
+                        </MudChip>
+                    }
+                </div>
+            }
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="Cancel">@Loc["Common.Cancel"]</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Save"
+                   OnClick="SaveAsync" Disabled="@(_busy || _readOnly)">@Loc["Common.Save"]</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public Guid TenantId { get; set; }
+    [Parameter] public Guid CompanyId { get; set; }
+    [Parameter] public Guid BudgetLineVersionId { get; set; }
+    [Parameter] public string LineName { get; set; } = "";
+    [Parameter] public decimal PlannedAmount { get; set; }
+    [Parameter] public int DefaultYear { get; set; }
+    /// <summary>Yayınlı/yetkisiz → salt-okunur.</summary>
+    [Parameter] public bool ReadOnly { get; set; }
+
+    private readonly List<Row> _rows = [];
+    private bool _loading = true, _busy, _readOnly;
+    private decimal _total => _rows.Sum(r => r.Amount);
+
+    private sealed class Row
+    {
+        public int Year { get; set; }
+        public int Month { get; set; }
+        public decimal Amount { get; set; }
+        public string? Label { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _readOnly = ReadOnly;
+        if (DefaultYear < 2000) DefaultYear = DateTime.Today.Year;
+        var result = await Mediator.Send(new GetBudgetLineInstallmentsQuery(CompanyId, BudgetLineVersionId));
+        if (result.IsSuccess && result.Value is not null)
+        {
+            foreach (var i in result.Value)
+                _rows.Add(new Row { Year = i.Year, Month = i.Month, Amount = i.Amount, Label = i.Label });
+        }
+        _loading = false;
+    }
+
+    private static string MonthName(int month)
+    {
+        var name = CultureInfo.CurrentUICulture.DateTimeFormat.GetMonthName(month);
+        return CultureInfo.CurrentUICulture.TextInfo.ToTitleCase(name);
+    }
+
+    private void AddRow()
+    {
+        // Sonraki boş ayı tahmin et
+        var last = _rows.OrderBy(r => r.Year).ThenBy(r => r.Month).LastOrDefault();
+        int year = last?.Year ?? DefaultYear;
+        int month = last is null ? 1 : last.Month + 1;
+        if (month > 12) { month = 1; year++; }
+        _rows.Add(new Row { Year = year, Month = month, Amount = 0m });
+    }
+
+    private void RemoveRow(Row row) => _rows.Remove(row);
+
+    private void DistributeEqually()
+    {
+        if (_rows.Count == 0) return;
+        var each = Math.Round(PlannedAmount / _rows.Count, 2, MidpointRounding.AwayFromZero);
+        decimal running = 0m;
+        var ordered = _rows.OrderBy(r => r.Year).ThenBy(r => r.Month).ToList();
+        for (int i = 0; i < ordered.Count; i++)
+        {
+            if (i == ordered.Count - 1)
+                ordered[i].Amount = PlannedAmount - running; // kuruş artığı son satıra
+            else
+            {
+                ordered[i].Amount = each;
+                running += each;
+            }
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        var installments = _rows
+            .Select(r => new InstallmentInput(r.Year, r.Month, r.Amount, r.Label))
+            .ToList();
+        var result = await Mediator.Send(new SetBudgetLineInstallmentsCommand(
+            TenantId, CompanyId, BudgetLineVersionId, installments));
+        _busy = false;
+
+        if (result.IsSuccess)
+        {
+            Snackbar.Add(Loc["Budget.Installments.Saved"].Value, Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        else
+        {
+            Snackbar.Add(result.FirstError.Message, Severity.Error);
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

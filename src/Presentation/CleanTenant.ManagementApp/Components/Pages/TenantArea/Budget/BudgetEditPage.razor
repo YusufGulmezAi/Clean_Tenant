@@ -128,6 +128,14 @@ else
                     </div>
                     <MudGrid Spacing="2">
                         @RenderLineFields(isAdd: false)
+                        @if (_fSchedule == PaymentSchedule.Installment)
+                        {
+                            <MudItem xs="12" Class="d-flex align-center gap-2">
+                                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.CalendarMonth"
+                                           OnClick="OpenInstallmentsAsync">@Loc["Budget.Installments.Edit"]</MudButton>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">@Loc["Budget.Installments.Hint"]</MudText>
+                            </MudItem>
+                        }
                         @if (_isDraft && _canEdit)
                         {
                             <MudItem xs="12" Class="d-flex justify-end">
@@ -322,6 +330,26 @@ else
             { x => x.DefaultValidFrom, first },
         };
         var dialog = await DialogService.ShowAsync<PublishBudgetDialog>(Loc["Budget.Publish.Title"].Value, parameters);
+        var result = await dialog.Result;
+        if (result is { Canceled: false }) await LoadAsync();
+    }
+
+    private async Task OpenInstallmentsAsync()
+    {
+        if (_selected is null) return;
+        var digits = new string((_budget?.FiscalYearLabel ?? "").Where(char.IsDigit).Take(4).ToArray());
+        var year = int.TryParse(digits, out var y) ? y : DateTime.Today.Year;
+        var parameters = new DialogParameters<InstallmentGridDialog>
+        {
+            { x => x.TenantId, _tenantId },
+            { x => x.CompanyId, CompanyId },
+            { x => x.BudgetLineVersionId, _selected.Id },
+            { x => x.LineName, $"{_selected.CategoryName} / {_selected.LineName}" },
+            { x => x.PlannedAmount, _fAmount },
+            { x => x.DefaultYear, year },
+            { x => x.ReadOnly, !_isDraft || !_canEdit },
+        };
+        var dialog = await DialogService.ShowAsync<InstallmentGridDialog>(Loc["Budget.Installments.Title"].Value, parameters);
         var result = await dialog.Result;
         if (result is { Canceled: false }) await LoadAsync();
     }
