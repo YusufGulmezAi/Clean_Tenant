@@ -133,6 +133,7 @@ public static class LocalizationCatalog
         new("Common.Edit",          "Düzenle",      "Edit"),
         new("Common.View",          "Görüntüle",    "View"),
         new("Common.New",           "Yeni",         "New"),
+        new("FormHelp.Dismiss",     "Anladım, gizle", "Got it, hide"),
         new("Common.Search",        "Ara",          "Search"),
         new("Common.Filter",        "Filtrele",     "Filter"),
         new("Common.Loading",       "Yükleniyor…",  "Loading…"),

@@ -1,0 +1,62 @@
+@* Form Açıklama Bloğu — her formun üstünde alan/mantık/ilişki açıklaması gösterir.
+   Kullanıcı "Anladım, gizle" derse o form için (FormKey) localStorage'a kaydedilir
+   ve sonraki ziyaretlerde gizlenir. Memory kuralı: feedback_form_aciklama_blogu. *@
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+@inject IStringLocalizer Loc
+
+@if (_visible)
+{
+    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-4" Dense="false">
+        <div class="d-flex justify-space-between align-start" style="gap:1rem;">
+            <div>
+                @if (!string.IsNullOrWhiteSpace(Title))
+                {
+                    <MudText Typo="Typo.subtitle2" Class="mb-1">@Title</MudText>
+                }
+                <MudText Typo="Typo.body2">@ChildContent</MudText>
+            </div>
+            <MudButton Size="Size.Small"
+                       Variant="Variant.Text"
+                       Color="Color.Info"
+                       StartIcon="@Icons.Material.Filled.Check"
+                       OnClick="DismissAsync">
+                @Loc["FormHelp.Dismiss"]
+            </MudButton>
+        </div>
+    </MudAlert>
+}
+
+@code {
+    /// <summary>Bu açıklama bloğunu benzersiz tanımlayan anahtar (localStorage için). Örn. "budget-edit".</summary>
+    [Parameter, EditorRequired] public string FormKey { get; set; } = default!;
+
+    /// <summary>Opsiyonel başlık.</summary>
+    [Parameter] public string? Title { get; set; }
+
+    /// <summary>Açıklama içeriği (alan bilgisi + mantık + ilişkili formlar).</summary>
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private bool _visible;
+    private bool _checked;
+
+    private string StorageKey => $"formhelp.{FormKey}";
+
+    // localStorage (JS interop) yalnız render sonrası erişilebilir (Blazor Server prerender).
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _checked) return;
+        _checked = true;
+        var dismissed = await LocalStorage.GetItemAsync<bool>(StorageKey);
+        if (!dismissed)
+        {
+            _visible = true;
+            StateHasChanged();
+        }
+    }
+
+    private async Task DismissAsync()
+    {
+        await LocalStorage.SetItemAsync(StorageKey, true);
+        _visible = false;
+    }
+}
