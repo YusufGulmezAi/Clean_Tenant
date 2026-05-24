@@ -10,8 +10,8 @@ namespace CleanTenant.Application.Features.System.Users;
 /// <summary>
 /// <see cref="ListUsersQuery"/> handler. Scope'a göre UserRoleAssignment üzerinden
 /// kullanıcıları filtreler; rol adlarını denormalize eder.
-/// Tenant scope + TenantId verildiğinde hem tenant-scope hem company-scope atamalarını
-/// birleştirir (kapsamlı tenant kullanıcı görünümü).
+/// Tenant scope + TenantId verildiğinde <b>yalnız tenant-scope</b> atamaları döner;
+/// company-scope kullanıcıları yalnız ilgili Company bağlamında listelenir.
 /// </summary>
 public sealed class ListUsersQueryHandler : IRequestHandler<ListUsersQuery, Result<IReadOnlyList<UserListItem>>>
 {
@@ -25,7 +25,7 @@ public sealed class ListUsersQueryHandler : IRequestHandler<ListUsersQuery, Resu
         ListUsersQuery query,
         CancellationToken cancellationToken)
     {
-        // Tenant kapsamlı görünüm: tenant + company scope atamalarını birleştir
+        // Tenant kapsamlı görünüm: yalnız tenant-scope atamaları (company-scope hariç).
         var isTenantView = query.Scope == ScopeLevel.Tenant && query.TenantId.HasValue;
 
         IQueryable<UserRoleAssignment> assignmentFilter;
@@ -34,7 +34,7 @@ public sealed class ListUsersQueryHandler : IRequestHandler<ListUsersQuery, Resu
             assignmentFilter = _db.UserRoleAssignments
                 .AsNoTracking()
                 .Where(a => a.TenantId == query.TenantId
-                         && (a.ScopeLevel == ScopeLevel.Tenant || a.ScopeLevel == ScopeLevel.Company));
+                         && a.ScopeLevel == ScopeLevel.Tenant);
         }
         else
         {
@@ -80,14 +80,14 @@ public sealed class ListUsersQueryHandler : IRequestHandler<ListUsersQuery, Resu
 
         var filteredIds = users.Select(u => u.Id).ToList();
 
-        // Rol adlarını çek (tenant görünümünde sadece aktif atamalar, her iki scope dahil)
+        // Rol adlarını çek (tenant görünümünde yalnız aktif tenant-scope atamaları)
         var roleData = isTenantView
             ? await (
                 from a in _db.UserRoleAssignments.AsNoTracking()
                 join r in _db.Roles.AsNoTracking() on a.RoleId equals r.Id
                 where a.IsActive
                    && a.TenantId == query.TenantId
-                   && (a.ScopeLevel == ScopeLevel.Tenant || a.ScopeLevel == ScopeLevel.Company)
+                   && a.ScopeLevel == ScopeLevel.Tenant
                    && filteredIds.Contains(a.UserId)
                    && !r.IsDeleted
                 select new { a.UserId, RoleName = r.Name! }

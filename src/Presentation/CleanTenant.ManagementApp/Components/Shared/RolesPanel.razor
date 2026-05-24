@@ -13,8 +13,10 @@
     sekmesi (v0.2.13.b).
 
     Rol listesi (DataTable) + "Yeni Rol" / "Düzenle" için geniş RoleDialog modalı.
-    Tenant scope'ta üstte scope filtre dropdown'ı (Yönetim/Site/Birim) gösterilir;
-    System scope'ta scope sabit Sistem (1).
+    Üstte scope filtre dropdown'ı: System scope'ta Sistem/Yönetim/Site/Birim,
+    Tenant scope'ta Yönetim/Site/Birim seçenekleriyle gösterilir. System operatörü
+    böylece alt-scope global built-in rolleri (TenantAdmin, CompanyAdmin, Unit
+    rolleri) de bu ekrandan görüntüleyip yönetebilir.
 
     Bu panel yalnız System ve Tenant scope'larda gösterilir; Company scope'ta rol
     tanımlama yoktur (AccessManagementPage sekmeyi gizler).
@@ -28,20 +30,22 @@ else
 {
     <div class="d-flex justify-space-between align-center mb-3">
         <div style="min-width: 200px;">
-            @if (EffectiveScope == ScopeLevel.Tenant)
-            {
-                @* Tenant scope: rol kapsam filtresi (Sistem seçeneği yok). *@
-                <MudSelect T="int"
-                           @bind-Value="_scopeLevel"
-                           @bind-Value:after="LoadRolesAsync"
-                           Label="@Loc["Roles.List.ScopeFilter"]"
-                           Variant="Variant.Outlined"
-                           Size="Size.Small">
-                    <MudSelectItem Value="2">@Loc["Scope.Tenant"]</MudSelectItem>
-                    <MudSelectItem Value="3">@Loc["Scope.Company"]</MudSelectItem>
-                    <MudSelectItem Value="4">@Loc["Scope.Unit"]</MudSelectItem>
-                </MudSelect>
-            }
+            @* Rol kapsam filtresi — System scope'ta Sistem seçeneği de açıktır,
+               böylece operatör alt-scope global rolleri (TenantAdmin vb.) görebilir. *@
+            <MudSelect T="int"
+                       @bind-Value="_scopeLevel"
+                       @bind-Value:after="LoadRolesAsync"
+                       Label="@Loc["Roles.List.ScopeFilter"]"
+                       Variant="Variant.Outlined"
+                       Size="Size.Small">
+                @if (EffectiveScope == ScopeLevel.System)
+                {
+                    <MudSelectItem Value="1">@Loc["Scope.System"]</MudSelectItem>
+                }
+                <MudSelectItem Value="2">@Loc["Scope.Tenant"]</MudSelectItem>
+                <MudSelectItem Value="3">@Loc["Scope.Company"]</MudSelectItem>
+                <MudSelectItem Value="4">@Loc["Scope.Unit"]</MudSelectItem>
+            </MudSelect>
         </div>
         <MudButton StartIcon="@Icons.Material.Filled.Add"
                    Color="Color.Primary"
@@ -123,7 +127,8 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        // System scope sabit Sistem (1); Tenant scope dropdown ile Yönetim (2) başlar.
+        // Dropdown varsayılanı: System scope Sistem (1), Tenant scope Yönetim (2)
+        // ile başlar; her iki scope'ta da kullanıcı kapsamı değiştirebilir.
         _scopeLevel = EffectiveScope == ScopeLevel.System ? 1 : 2;
 
         await LoadRolesAsync();

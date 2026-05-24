@@ -1,5 +1,4 @@
 using CleanTenant.Domain.Identity.Authorization;
-using CleanTenant.Domain.Identity.Tenants;
 using CleanTenant.Domain.Identity.Users;
 using CleanTenant.Infrastructure.Persistence.Catalog;
 using CleanTenant.SharedKernel.Context;
@@ -16,8 +15,12 @@ namespace CleanTenant.Infrastructure.Persistence.Seeding;
 /// <list type="bullet">
 ///   <item>Geliştirici System admin kullanıcı (Yusuf Gülmez)</item>
 ///   <item>Yusuf'a Developer rol ataması (System scope)</item>
-///   <item>Bir demo tenant (Shared mode)</item>
 /// </list>
+/// <para>
+/// Demo tenant <b>bilinçli olarak</b> seed edilmez — tenant'lar UI üzerinden
+/// (System operatörü) oluşturulur. Soft-delete edilmiş bir demo tenant ile
+/// unique index (ix_tenants_name) çakışmasını önlemek için kaldırıldı.
+/// </para>
 /// </para>
 /// <para>
 /// <b>Şifre kaynağı:</b> <c>SEED_ADMIN_PASSWORD</c> environment değişkeni
@@ -30,7 +33,6 @@ public sealed class DevSeedData
     private const string AdminEmail = "yusuf.gulmez.ai@gmail.com";
     private const string AdminFirstName = "YUSUF";
     private const string AdminLastName = "GÜLMEZ";
-    private const string DemoTenantName = "Acme Sites Ltd.";
 
     private readonly CatalogDbContext _db;
     private readonly UserManager<User> _userManager;
@@ -55,7 +57,6 @@ public sealed class DevSeedData
                 "SEED_ADMIN_PASSWORD environment değişkeni eksik. .env.development içine ekleyin.");
 
         await EnsureAdminUserAsync(password);
-        await EnsureDemoTenantAsync(cancellationToken);
     }
 
     private async Task EnsureAdminUserAsync(string password)
@@ -126,35 +127,5 @@ public sealed class DevSeedData
 
         await _db.SaveChangesAsync();
         _logger.LogInformation("Dev admin'e Developer (System) rolü atandı.");
-    }
-
-    private const string DemoTenantLegalId = "1000000001";
-
-    private async Task EnsureDemoTenantAsync(CancellationToken cancellationToken)
-    {
-        var exists = await _db.Tenants
-            .AsNoTracking()
-            .AnyAsync(t => t.LegalIdentityNumber == DemoTenantLegalId, cancellationToken);
-
-        if (exists)
-        {
-            _logger.LogInformation("Demo tenant zaten mevcut: {Name}", DemoTenantName);
-            return;
-        }
-
-        _db.Tenants.Add(new Tenant
-        {
-            Name = DemoTenantName,
-            LegalName = "Acme Site Yönetim Limited Şirketi",
-            LegalIdentityType = LegalIdentityType.Vkn,
-            LegalIdentityNumber = "1000000001",
-            Address = "Demo adres — Acme Sitesi, İstanbul",
-            Status = TenantStatus.Active,
-            BillingTier = BillingTier.Standard,
-            HasDedicatedDatabase = false,
-        });
-
-        await _db.SaveChangesAsync(cancellationToken);
-        _logger.LogInformation("Demo tenant oluşturuldu: {Name}", DemoTenantName);
     }
 }

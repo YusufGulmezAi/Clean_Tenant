@@ -1,3 +1,4 @@
+using System.Globalization;
 using CleanTenant.Application.Features.Catalog.Readers;
 using CleanTenant.Domain.Identity.Tenants;
 using FluentValidation;
@@ -51,6 +52,14 @@ public sealed partial class TenantForm : ComponentBase
     private IReadOnlyList<DistrictListItem> _districts = [];
     private IReadOnlyList<NeighborhoodListItem> _neighborhoods = [];
 
+    // Autocomplete seçili öğeleri — Model'deki *Id alanlarıyla senkron tutulur.
+    private ProvinceListItem? _selectedProvince;
+    private DistrictListItem? _selectedDistrict;
+    private NeighborhoodListItem? _selectedNeighborhood;
+
+    /// <summary>Türkçe büyük/küçük harf duyarsız arama için karşılaştırıcı (İ/ı doğru eşleşir).</summary>
+    private static readonly CompareInfo TrCompare = CultureInfo.GetCultureInfo("tr-TR").CompareInfo;
+
     /// <summary>SubmitButtonText parameter null/boş ise lokalize default'a düşer.</summary>
     private string ResolvedSubmitButtonText => string.IsNullOrWhiteSpace(SubmitButtonText)
         ? Loc["Common.Save"].Value
@@ -59,10 +68,57 @@ public sealed partial class TenantForm : ComponentBase
     /// <summary>MudForm.Validation parametresine bağlanan tipli delegate.</summary>
     public Func<object?, string, Task<IEnumerable<string>>> ValidateValue { get; }
 
-    /// <summary>Ctor — delegate'i bir kez bağlar (her render'da yeniden ayırmaya gerek yok).</summary>
+    /// <summary>
+    /// Sözleşme tarihi giriş converter'ı (MudDatePicker.Converter).
+    /// Hem "." hem "/" (ve "-") ayraçlarını kabul eder, "gg.aa.yyyy" gösterir;
+    /// geçersiz girişte İngilizce default yerine Türkçe hata döndürür.
+    /// </summary>
+    private readonly MudBlazor.Converter<DateTime?, string> _dateConverter;
+
+    /// <summary>Tarih parse formatları — tek/çift haneli gün-ay kabul edilir.</summary>
+    private static readonly string[] DateInputFormats = ["dd.MM.yyyy", "d.M.yyyy"];
+
+    /// <summary>Ctor — delegate ve tarih converter'ını bir kez bağlar.</summary>
     public TenantForm()
     {
         ValidateValue = ValidateValueAsync;
+        _dateConverter = BuildDateConverter();
+    }
+
+    /// <summary>
+    /// Tarih converter'ını kurar. <c>GetFunc</c> içinde <see cref="Loc"/> yalnız
+    /// çağrı anında (kullanıcı yazarken) okunur — ctor'da DI henüz tamamlanmamış
+    /// olsa da sorun olmaz.
+    /// </summary>
+    private MudBlazor.Converter<DateTime?, string> BuildDateConverter()
+    {
+        var culture = CultureInfo.GetCultureInfo("tr-TR");
+        var converter = new MudBlazor.Converter<DateTime?, string> { Culture = culture };
+
+        converter.SetFunc = date => date?.ToString("dd.MM.yyyy", culture);
+        converter.GetFunc = text =>
+        {
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                converter.GetError = false;
+                return null;
+            }
+
+            // Kullanıcı "." veya "/" (ya da "-") ile girebilir; hepsini "." yap.
+            var normalized = text.Trim().Replace('/', '.').Replace('-', '.');
+            if (DateTime.TryParseExact(normalized, DateInputFormats, culture,
+                    DateTimeStyles.None, out var parsed))
+            {
+                converter.GetError = false;
+                return parsed;
+            }
+
+            converter.GetError = true;
+            converter.GetErrorMessage = (Loc["TenantForm.Date.Invalid"].Value, Array.Empty<object>());
+            return null;
+        };
+
+        return converter;
     }
 
     /// <inheritdoc />
@@ -73,10 +129,16 @@ public sealed partial class TenantForm : ComponentBase
         if (Model.ProvinceId is { } provinceId)
         {
             _districts = await LookUpReader.GetDistrictsByProvinceAsync(provinceId);
+            _selectedProvince = _provinces.FirstOrDefault(p => p.Id == provinceId);
         }
         if (Model.DistrictId is { } districtId)
         {
             _neighborhoods = await LookUpReader.GetNeighborhoodsByDistrictAsync(districtId);
+            _selectedDistrict = _districts.FirstOrDefault(d => d.Id == districtId);
+        }
+        if (Model.NeighborhoodId is { } neighborhoodId)
+        {
+            _selectedNeighborhood = _neighborhoods.FirstOrDefault(n => n.Id == neighborhoodId);
         }
     }
 
@@ -105,23 +167,56 @@ public sealed partial class TenantForm : ComponentBase
         }
     }
 
-    private async Task OnProvinceChangedAsync()
+    // ── Adres autocomplete: arama fonksiyonları (in-memory, Türkçe duyarsız) ──
+
+    private Task<IEnumerable<ProvinceListItem>> SearchProvinces(string? value, CancellationToken ct)
+        => Task.FromResult(Filter(_provinces, value, p => p.Name));
+
+    private Task<IEnumerable<DistrictListItem>> SearchDistricts(string? value, CancellationToken ct)
+        => Task.FromResult(Filter(_districts, value, d => d.Name));
+
+    private Task<IEnumerable<NeighborhoodListItem>> SearchNeighborhoods(string? value, CancellationToken ct)
+        => Task.FromResult(Filter(_neighborhoods, value, n => n.Name));
+
+    private static IEnumerable<T> Filter<T>(IEnumerable<T> source, string? term, Func<T, string> selector)
+        => string.IsNullOrWhiteSpace(term)
+            ? source
+            : source.Where(x => TrCompare.IndexOf(selector(x), term, CompareOptions.IgnoreCase) >= 0);
+
+    // ── Adres autocomplete: cascade seçim handler'ları ──
+
+    private async Task OnProvinceSelectedAsync(ProvinceListItem? province)
     {
-        // İl değiştiğinde alt seçimleri temizle ve ilçe listesini yeniden yükle.
+        _selectedProvince = province;
+        Model.ProvinceId = province?.Id;
+
+        // İl değişti → alt seçimleri temizle ve ilçe listesini yeniden yükle.
+        _selectedDistrict = null;
+        _selectedNeighborhood = null;
         Model.DistrictId = null;
         Model.NeighborhoodId = null;
         _neighborhoods = [];
-        _districts = Model.ProvinceId is { } pid
-            ? await LookUpReader.GetDistrictsByProvinceAsync(pid)
+        _districts = province is not null
+            ? await LookUpReader.GetDistrictsByProvinceAsync(province.Id)
             : [];
     }
 
-    private async Task OnDistrictChangedAsync()
+    private async Task OnDistrictSelectedAsync(DistrictListItem? district)
     {
+        _selectedDistrict = district;
+        Model.DistrictId = district?.Id;
+
+        _selectedNeighborhood = null;
         Model.NeighborhoodId = null;
-        _neighborhoods = Model.DistrictId is { } did
-            ? await LookUpReader.GetNeighborhoodsByDistrictAsync(did)
+        _neighborhoods = district is not null
+            ? await LookUpReader.GetNeighborhoodsByDistrictAsync(district.Id)
             : [];
+    }
+
+    private void OnNeighborhoodSelected(NeighborhoodListItem? neighborhood)
+    {
+        _selectedNeighborhood = neighborhood;
+        Model.NeighborhoodId = neighborhood?.Id;
     }
 
     private bool IdentityReadOnly => Mode == TenantFormMode.Settings;
