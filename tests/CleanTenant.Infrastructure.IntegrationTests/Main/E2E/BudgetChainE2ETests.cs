@@ -100,6 +100,50 @@ public sealed class BudgetChainE2ETests : IClassFixture<BudgetE2EFixture>
         unpaid.OverdueAmount.Should().Be(1_000m); // vade 2026-04-15 < 2026-05-01
     }
 
+    [Fact]
+    public async Task Senaryo2_7BB_LRM_kurus_kaybi_yok()
+    {
+        // 12000/12 = 1000/ay; 7 BB'ye dağıtım 1000/7 = 142.857… → LRM ile kuruş tam.
+        var s = await SeedScenarioAsync(unitCount: 7, plannedAnnual: 12_000m, DistributionModel.BySquareMeter);
+
+        _fixture.Clock.UtcNow = new DateTimeOffset(2026, 3, 10, 0, 0, 0, TimeSpan.Zero);
+        var acc = Ok(await SendAsync(new GenerateBudgetAccrualCommand(
+            s.TenantId, s.CompanyId, s.BudgetId, 2026, 3)));
+
+        acc.TotalAmount.Should().Be(1_000m);
+        acc.DetailCount.Should().Be(7);
+
+        using var scope = _fixture.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<MainDbContext>();
+        var amounts = await db.AccrualDetails
+            .Where(d => d.AccrualId == acc.AccrualId)
+            .Select(d => d.Amount)
+            .ToListAsync();
+
+        amounts.Should().HaveCount(7);
+        amounts.Sum().Should().Be(1_000m, "LRM kuruş kaybı/fazlası bırakmaz (m² ağırlıklı dağıtım)");
+        amounts.Should().OnlyContain(a => a > 0m, "her BB pozitif pay alır");
+        amounts.Should().OnlyContain(a => a == Math.Round(a, 2), "tutarlar kuruş hassasiyetinde");
+
+        // Her pay, m² oranıyla hesaplanan kesin payın en çok bir kuruş yakınında (LRM)
+        var totalM2 = Enumerable.Range(0, 7).Sum(i => 100m + (i * 10m)); // 910
+        var byUnit = await db.AccrualDetails
+            .Where(d => d.AccrualId == acc.AccrualId)
+            .Select(d => new { d.UnitId, d.Amount })
+            .ToListAsync();
+        foreach (var d in byUnit)
+        {
+            var idx = s.UnitIds.ToList().IndexOf(d.UnitId);
+            var exact = (100m + (idx * 10m)) / totalM2 * 1_000m;
+            Math.Abs(d.Amount - exact).Should().BeLessThanOrEqualTo(0.01m);
+        }
+
+        // Yevmiye fişi de toplam ile birebir
+        var entry = await db.JournalEntries.Include(e => e.Lines)
+            .FirstAsync(e => e.ReferenceId == acc.AccrualId);
+        entry.Lines.Where(l => l.Debit > 0).Sum(l => l.Debit).Should().Be(1_000m);
+    }
+
     /// <summary>Result'ı başarı doğrulayıp non-null değerini döner.</summary>
     private static T Ok<T>(Result<T> result)
     {
