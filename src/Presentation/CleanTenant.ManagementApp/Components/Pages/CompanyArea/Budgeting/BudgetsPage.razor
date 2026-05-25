@@ -632,13 +632,13 @@ else
         if (linesResult.IsSuccess && linesResult.Value is { } lines)
         {
             _versionLines = lines;
-            var tasks = lines.Select(async l =>
+            // Sıralı await — scoped DbContext eşzamanlı kullanılamaz ("second operation" hatası).
+            foreach (var l in lines)
             {
                 var r = await Mediator.Send(new GetBudgetLineInstallmentsQuery(_companyId, l.Id));
                 if (r.IsSuccess && r.Value is { } inst)
                     _installments[l.Id] = inst;
-            });
-            await Task.WhenAll(tasks);
+            }
         }
 
         _linesLoading = false;

@@ -541,15 +541,11 @@ else
 
         if (!_authorized) { _initialized = true; return; }
 
-        var schemaTask = Mediator.Send(new GetBuildingSchemaQuery(_companyId));
-        var fyTask     = Mediator.Send(new GetCurrentFiscalYearQuery(_companyId));
-
-        await Task.WhenAll(schemaTask, fyTask);
-
-        var schemaResult = await schemaTask;
+        // Sıralı await — scoped DbContext eşzamanlı kullanılamaz ("second operation" hatası).
+        var schemaResult = await Mediator.Send(new GetBuildingSchemaQuery(_companyId));
         if (schemaResult.IsSuccess) _schema = schemaResult.Value;
 
-        var fyResult = await fyTask;
+        var fyResult = await Mediator.Send(new GetCurrentFiscalYearQuery(_companyId));
         if (fyResult.IsSuccess && fyResult.Value is { } fy)
         {
             _periods = fy.Periods
@@ -583,15 +579,13 @@ else
         var from = _selectedPeriod?.StartDate;
         var to   = _selectedPeriod?.EndDate;
 
-        var t1 = Mediator.Send(new GetUnitDebtStatusQuery(_companyId, _selectedUnit.Id));
-        var t2 = Mediator.Send(new GetUnitAccrualHistoryQuery(_companyId, _selectedUnit.Id, from, to));
-        var t3 = Mediator.Send(new GetUnitCollectionHistoryQuery(_companyId, _selectedUnit.Id, from, to));
-
-        await Task.WhenAll(t1, t2, t3);
-
-        var r1 = await t1; if (r1.IsSuccess) _debtStatus   = r1.Value;
-        var r2 = await t2; if (r2.IsSuccess) _accruals      = r2.Value;
-        var r3 = await t3; if (r3.IsSuccess) _collections   = r3.Value;
+        // Sıralı await — scoped DbContext eşzamanlı kullanılamaz ("second operation" hatası).
+        var r1 = await Mediator.Send(new GetUnitDebtStatusQuery(_companyId, _selectedUnit.Id));
+        if (r1.IsSuccess) _debtStatus = r1.Value;
+        var r2 = await Mediator.Send(new GetUnitAccrualHistoryQuery(_companyId, _selectedUnit.Id, from, to));
+        if (r2.IsSuccess) _accruals = r2.Value;
+        var r3 = await Mediator.Send(new GetUnitCollectionHistoryQuery(_companyId, _selectedUnit.Id, from, to));
+        if (r3.IsSuccess) _collections = r3.Value;
 
         _detailLoading = false;
     }

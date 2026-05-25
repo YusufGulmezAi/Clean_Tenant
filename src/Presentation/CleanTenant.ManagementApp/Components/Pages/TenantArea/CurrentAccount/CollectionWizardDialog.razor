@@ -305,14 +305,11 @@
 
     protected override async Task OnInitializedAsync()
     {
-        var ctxTask = Mediator.Send(new GetCollectionContextQuery(CompanyId));
-        var debtTask = Mediator.Send(new GetUnitOpenDebtQuery(CompanyId, UnitId));
-        await Task.WhenAll(ctxTask, debtTask);
-
-        var ctxResult = await ctxTask;
+        // Sıralı await — scoped DbContext eşzamanlı kullanılamaz ("second operation" hatası).
+        var ctxResult = await Mediator.Send(new GetCollectionContextQuery(CompanyId));
         if (ctxResult.IsSuccess) _ctx = ctxResult.Value;
 
-        var debtResult = await debtTask;
+        var debtResult = await Mediator.Send(new GetUnitOpenDebtQuery(CompanyId, UnitId));
         if (debtResult.IsSuccess) _openDebt = debtResult.Value;
 
         _period = _ctx?.OpenPeriods.FirstOrDefault();

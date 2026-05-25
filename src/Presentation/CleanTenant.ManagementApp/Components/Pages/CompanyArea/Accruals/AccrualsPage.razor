@@ -498,15 +498,12 @@ else
         _accountCodesLoading = true;
         StateHasChanged();
 
-        var (schemaTask, fyTask, acTask) = (
-            Mediator.Send(new GetBuildingSchemaQuery(_companyId)),
-            Mediator.Send(new GetCurrentFiscalYearQuery(_companyId)),
-            Mediator.Send(new GetAccountCodesQuery(_companyId, OnlyActive: true, OnlyDetail: true)));
-
-        await Task.WhenAll(schemaTask, fyTask, acTask);
+        // Sıralı await — scoped DbContext eşzamanlı kullanılamaz ("second operation" hatası).
+        var schema = await Mediator.Send(new GetBuildingSchemaQuery(_companyId));
+        var fy = await Mediator.Send(new GetCurrentFiscalYearQuery(_companyId));
+        var ac = await Mediator.Send(new GetAccountCodesQuery(_companyId, OnlyActive: true, OnlyDetail: true));
 
         // BB listesi
-        var schema = schemaTask.Result;
         _flatUnits.Clear();
         if (schema.IsSuccess && schema.Value is { } s)
         {
@@ -524,7 +521,6 @@ else
 
         // Dönemler
         _dcPeriods.Clear();
-        var fy = fyTask.Result;
         if (fy.IsSuccess && fy.Value is { } fyDetail)
         {
             _dcPeriods = fyDetail.Periods
@@ -536,7 +532,6 @@ else
         }
 
         // Hesap kodları
-        var ac = acTask.Result;
         _accountCodes = ac.IsSuccess ? ac.Value : null;
         _accountCodesLoading = false;
 
