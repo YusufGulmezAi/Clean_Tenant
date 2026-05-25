@@ -76,6 +76,11 @@ public static class DependencyInjection
         services.AddScoped<Features.Main.Accounting.Provisioning.IChartOfAccountsProvisioner,
             Features.Main.Accounting.Provisioning.ChartOfAccountsProvisioner>();
 
+        // Yapı şeması silme: alt-ağaçtaki BB'lerin başka modüllerce kullanılıp
+        // kullanılmadığını denetler. IMainDbContext'e bağlı → scoped.
+        services.AddScoped<Features.Main.BuildingSchema.Common.IUnitUsageChecker,
+            Features.Main.BuildingSchema.Common.UnitUsageChecker>();
+
         return services;
     }
 }
