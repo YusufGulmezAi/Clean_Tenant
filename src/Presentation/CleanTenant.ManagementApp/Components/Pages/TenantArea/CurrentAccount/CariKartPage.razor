@@ -7,6 +7,8 @@
 @inject MediatR.IMediator Mediator
 @inject NavigationManager Nav
 @inject IStringLocalizer Loc
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
 @using CleanTenant.Application.Common.Auth
 @using CleanTenant.Application.Features.Main.Parties
 @using CleanTenant.Application.Features.Main.Parties.CurrentAccount
@@ -62,9 +64,12 @@ else
                     <div class="hc-bb-ref">🏢 @_tenures.BuildingName ▸ @Loc["Cari.Card.Unit"] @_tenures.UnitNumber</div>
                 </div>
                 <div class="quick-actions">
-                    <button class="qa-btn primary" disabled title="@Loc["Cari.Card.WizardSoon"]">
-                        + @Loc["Cari.Card.RecordCollection"]
-                    </button>
+                    @if (_canRecord)
+                    {
+                        <button class="qa-btn primary" @onclick="OpenCollectionWizardAsync">
+                            + @Loc["Cari.Card.RecordCollection"]
+                        </button>
+                    }
                 </div>
             </div>
 
@@ -292,6 +297,8 @@ else
     [Parameter] public Guid UnitId { get; set; }
 
     private bool _unauthorized, _initialized;
+    private bool _canRecord;
+    private Guid _tenantId;
     private string _tab = "genel";
     private UnitTenures? _tenures;
     private CurrentAccountKpi _kpi = new(0, 0, 0, 0);
@@ -361,6 +368,9 @@ else
         {
             _unauthorized = true; _initialized = true; return;
         }
+        _canRecord = isSystem || (session?.Permissions.Contains("tenant.collection.record") ?? false);
+        if (authState.User.FindFirst("tenant_id") is { Value: var tid } && Guid.TryParseExact(tid, "N", out var tGuid))
+            _tenantId = tGuid;
 
         var tenures = await Mediator.Send(new GetUnitTenuresQuery(CompanyId, UnitId));
         if (tenures.IsFailure || tenures.Value is null) { _tenures = null; _initialized = true; return; }
@@ -386,5 +396,38 @@ else
         if (cols.IsSuccess && cols.Value is not null) _collections = cols.Value;
 
         _initialized = true;
+    }
+
+    private async Task OpenCollectionWizardAsync()
+    {
+        if (!_canRecord || _tenures is null) return;
+        var parameters = new DialogParameters<CollectionWizardDialog>
+        {
+            { x => x.TenantId, _tenantId },
+            { x => x.CompanyId, CompanyId },
+            { x => x.UnitId, UnitId },
+            { x => x.UnitNumber, _tenures.UnitNumber },
+        };
+        var options = new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseButton = true };
+        var dialog = await DialogService.ShowAsync<CollectionWizardDialog>(Loc["Cari.Wizard.Title"].Value, parameters, options);
+        var result = await dialog.Result;
+        if (result is not null && !result.Canceled && result.Data is true)
+        {
+            Snackbar.Add(Loc["Cari.Wizard.Success"].Value, Severity.Success);
+            await RefreshFinancialsAsync();
+        }
+    }
+
+    private async Task RefreshFinancialsAsync()
+    {
+        var kpi = await Mediator.Send(new GetUnitCurrentAccountKpiQuery(CompanyId, UnitId));
+        if (kpi.IsSuccess && kpi.Value is not null) _kpi = kpi.Value;
+        var ledger = await Mediator.Send(new GetUnitLedgerQuery(CompanyId, UnitId));
+        if (ledger.IsSuccess && ledger.Value is not null) _ledger = ledger.Value;
+        var debt = await Mediator.Send(new GetUnitDebtStatusQuery(CompanyId, UnitId));
+        if (debt.IsSuccess) _debt = debt.Value;
+        var cols = await Mediator.Send(new GetUnitCollectionHistoryQuery(CompanyId, UnitId));
+        if (cols.IsSuccess && cols.Value is not null) _collections = cols.Value;
+        StateHasChanged();
     }
 }

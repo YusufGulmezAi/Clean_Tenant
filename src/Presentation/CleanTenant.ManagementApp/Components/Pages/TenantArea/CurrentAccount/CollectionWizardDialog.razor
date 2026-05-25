@@ -1,0 +1,410 @@
+@* Tahsilat sihirbazı (S5c) — 4 adım: Kanal → Tutar/Form → FIFO Mahsup önizleme →
+   Onay (tutar tekrar-yazma kapısı). RecordCollectionCommand'a bağlanır.
+   Kanallar: Nakit / POS / Çek (Havale yok — Banka Hesap Hareketleri'nden yapılır). *@
+@inject MediatR.IMediator Mediator
+@inject IStringLocalizer Loc
+@using CleanTenant.Application.Features.Main.Collections.Queries
+@using CleanTenant.Application.Features.Main.Collections.RecordCollection
+@using CleanTenant.Domain.Tenant.Collections.Enums
+@using CleanTenant.Domain.Tenant.Accruals.Enums
+
+<MudDialog>
+    <TitleContent>
+        <div class="d-flex align-center gap-2">
+            <MudIcon Icon="@Icons.Material.Filled.Payments" Color="Color.Primary" />
+            <MudText Typo="Typo.h6">@Loc["Cari.Wizard.Title"] — @Loc["Cari.Card.Unit"] @UnitNumber</MudText>
+        </div>
+    </TitleContent>
+    <DialogContent>
+        <div style="min-width: 640px; max-width: 760px;">
+            @if (_loading)
+            {
+                <MudProgressLinear Indeterminate="true" Class="my-4" />
+            }
+            else if (_ctx is null)
+            {
+                <MudAlert Severity="Severity.Error">@Loc["Cari.Wizard.LoadError"]</MudAlert>
+            }
+            else if (_ctx.OpenPeriods.Count == 0)
+            {
+                <MudAlert Severity="Severity.Warning">@Loc["Cari.Wizard.NoOpenPeriod"]</MudAlert>
+            }
+            else if (_openDebt is null || _openDebt.TotalOpen <= 0m)
+            {
+                <MudAlert Severity="Severity.Info">@Loc["Cari.Wizard.NoDebt"]</MudAlert>
+            }
+            else
+            {
+                @* ── Adım göstergesi ─────────────────────────────── *@
+                <div class="wiz-steps mb-4">
+                    @for (var i = 1; i <= 4; i++)
+                    {
+                        var n = i;
+                        <div class="wiz-step @(_step == n ? "active" : "") @(_step > n ? "done" : "")">
+                            <span class="wiz-dot">@(_step > n ? "✓" : n.ToString())</span>
+                            <span class="wiz-label">@StepLabel(n)</span>
+                        </div>
+                    }
+                </div>
+
+                <div class="wiz-debt-banner mb-3">
+                    @Loc["Cari.Wizard.OpenDebt"]: <b>@Fmt(_openDebt.TotalOpen)</b>
+                </div>
+
+                @* ── Adım 1: Kanal ───────────────────────────────── *@
+                @if (_step == 1)
+                {
+                    <div class="wiz-channels">
+                        <button class="wiz-channel @(_channelKind == CashAccountKind.Cash ? "sel" : "")"
+                                @onclick="@(() => SelectChannel(CashAccountKind.Cash, PaymentMethod.Cash))">
+                            <MudIcon Icon="@Icons.Material.Filled.Money" />
+                            <span>@Loc["Cari.Wizard.Channel.Cash"]</span>
+                        </button>
+                        <button class="wiz-channel @(_channelKind == CashAccountKind.Bank ? "sel" : "")"
+                                @onclick="@(() => SelectChannel(CashAccountKind.Bank, PaymentMethod.CreditCard))">
+                            <MudIcon Icon="@Icons.Material.Filled.CreditCard" />
+                            <span>@Loc["Cari.Wizard.Channel.Pos"]</span>
+                        </button>
+                        <button class="wiz-channel @(_channelKind == CashAccountKind.Check ? "sel" : "")"
+                                @onclick="@(() => SelectChannel(CashAccountKind.Check, PaymentMethod.Check))">
+                            <MudIcon Icon="@Icons.Material.Filled.ReceiptLong" />
+                            <span>@Loc["Cari.Wizard.Channel.Check"]</span>
+                        </button>
+                    </div>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2">@Loc["Cari.Wizard.Channel.Hint"]</MudText>
+
+                    @if (_channelKind is not null)
+                    {
+                        <div class="mt-4">
+                            @if (FilteredAccounts.Count == 0)
+                            {
+                                <MudAlert Severity="Severity.Warning" Dense="true">@Loc["Cari.Wizard.NoAccountForChannel"]</MudAlert>
+                            }
+                            else
+                            {
+                                <MudSelect T="CashAccountItem" @bind-Value="_cashAccount" Label="@Loc["Cari.Wizard.Account"]"
+                                           Variant="Variant.Outlined" Dense="true"
+                                           ToStringFunc="@(a => a is null ? "" : $"{a.Code} — {a.Name}")">
+                                    @foreach (var a in FilteredAccounts)
+                                    {
+                                        <MudSelectItem T="CashAccountItem" Value="a">@a.Code — @a.Name</MudSelectItem>
+                                    }
+                                </MudSelect>
+                            }
+                        </div>
+                    }
+                }
+
+                @* ── Adım 2: Tutar & Form ────────────────────────── *@
+                else if (_step == 2)
+                {
+                    <MudGrid Spacing="2">
+                        <MudItem xs="12" sm="6">
+                            <MudNumericField T="decimal" @bind-Value="_amount" Label="@Loc["Cari.Wizard.Amount"]"
+                                             Variant="Variant.Outlined" Min="0m" Max="_openDebt.TotalOpen" Format="N2"
+                                             Immediate="true" />
+                            <MudButton Size="Size.Small" Variant="Variant.Text" Class="mt-1"
+                                       OnClick="@(() => _amount = _openDebt!.TotalOpen)">
+                                @Loc["Cari.Wizard.PayAll"] (@Fmt(_openDebt.TotalOpen))
+                            </MudButton>
+                            @if (_amount > _openDebt.TotalOpen)
+                            {
+                                <MudText Typo="Typo.caption" Color="Color.Error">@Loc["Cari.Wizard.AmountExceeds"]</MudText>
+                            }
+                        </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudDatePicker @bind-Date="_paymentDate" Label="@Loc["Cari.Wizard.PaymentDate"]"
+                                           Variant="Variant.Outlined" DateFormat="dd.MM.yyyy" />
+                        </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudSelect T="OpenPeriodItem" @bind-Value="_period" Label="@Loc["Cari.Wizard.Period"]"
+                                       Variant="Variant.Outlined" Dense="true"
+                                       ToStringFunc="@(p => p is null ? "" : $"{TurkishMonth(p.Month)} {p.Year}")">
+                                @foreach (var p in _ctx.OpenPeriods)
+                                {
+                                    <MudSelectItem T="OpenPeriodItem" Value="p">@TurkishMonth(p.Month) @p.Year</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudTextField @bind-Value="_reference" Label="@Loc["Cari.Wizard.Reference"]"
+                                          Variant="Variant.Outlined" MaxLength="200" />
+                        </MudItem>
+                        <MudItem xs="12">
+                            <MudTextField @bind-Value="_description" Label="@Loc["Cari.Wizard.Description"]"
+                                          Variant="Variant.Outlined" Lines="2" MaxLength="500" />
+                        </MudItem>
+                    </MudGrid>
+                }
+
+                @* ── Adım 3: FIFO Mahsup önizleme ────────────────── *@
+                else if (_step == 3)
+                {
+                    var alloc = ComputeAllocation(_amount);
+                    @if (alloc.Count == 0)
+                    {
+                        <MudAlert Severity="Severity.Info" Dense="true">@Loc["Cari.Wizard.Allocation.None"]</MudAlert>
+                    }
+                    else
+                    {
+                        <MudSimpleTable Dense="true" Hover="true" Bordered="true">
+                            <thead><tr>
+                                <th>@Loc["Cari.Wizard.Allocation.Line"]</th>
+                                <th>@Loc["Cari.Col.Due"]</th>
+                                <th style="text-align:right">@Loc["Cari.Wizard.Allocation.Open"]</th>
+                                <th style="text-align:right">@Loc["Cari.Wizard.Allocation.Applied"]</th>
+                            </tr></thead>
+                            <tbody>
+                            @foreach (var (line, applied) in alloc)
+                            {
+                                <tr>
+                                    <td>@TurkishMonth(line.Month) @line.Year <span class="mud-text-secondary">(@SourceLabel(line.Source))</span></td>
+                                    <td>@line.DueDate.ToString("dd.MM.yyyy")</td>
+                                    <td style="text-align:right">@Fmt(line.OpenAmount)</td>
+                                    <td style="text-align:right"><b>@Fmt(applied)</b></td>
+                                </tr>
+                            }
+                            </tbody>
+                        </MudSimpleTable>
+                        <div class="d-flex justify-space-between mt-2">
+                            <MudText Typo="Typo.body2">@Loc["Cari.Wizard.Allocation.Applied"]: <b>@Fmt(alloc.Sum(x => x.applied))</b></MudText>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">@alloc.Count @Loc["Cari.Wizard.Summary.Allocations"]</MudText>
+                        </div>
+                    }
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary mt-3 d-block">@Loc["Cari.Wizard.Allocation.Note"]</MudText>
+                }
+
+                @* ── Adım 4: Onay (tutar tekrar-yazma kapısı) ────── *@
+                else if (_step == 4)
+                {
+                    <MudPaper Elevation="0" Class="pa-3 mb-3" Style="background:var(--mud-palette-background-grey);border-radius:8px;">
+                        @Row(Loc["Cari.Wizard.Summary.Channel"].Value, MethodLabel(_method))
+                        @Row(Loc["Cari.Wizard.Summary.Account"].Value, _cashAccount is null ? "—" : $"{_cashAccount.Code} — {_cashAccount.Name}")
+                        @Row(Loc["Cari.Wizard.Summary.Amount"].Value, Fmt(_amount))
+                        @Row(Loc["Cari.Wizard.Summary.Period"].Value, _period is null ? "—" : $"{TurkishMonth(_period.Month)} {_period.Year}")
+                        @Row(Loc["Cari.Wizard.Summary.Allocations"].Value, ComputeAllocation(_amount).Count.ToString())
+                    </MudPaper>
+
+                    <MudNumericField T="decimal?" @bind-Value="_confirmAmount" Label="@Loc["Cari.Wizard.Confirm.Retype"]"
+                                     Variant="Variant.Outlined" Format="N2" Immediate="true" />
+                    @if (_confirmAmount.HasValue && !ConfirmMatches)
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Error">@Loc["Cari.Wizard.Confirm.Mismatch"]</MudText>
+                    }
+
+                    @if (!string.IsNullOrEmpty(_error))
+                    {
+                        <MudAlert Severity="Severity.Error" Dense="true" Class="mt-3">@_error</MudAlert>
+                    }
+                }
+            }
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="Cancel">@Loc["Cari.Wizard.Cancel"]</MudButton>
+        @if (CanShowNav)
+        {
+            @if (_step > 1)
+            {
+                <MudButton Variant="Variant.Outlined" OnClick="Back" Disabled="_submitting">@Loc["Cari.Wizard.Back"]</MudButton>
+            }
+            @if (_step < 4)
+            {
+                <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Next" Disabled="!CanGoNext">@Loc["Cari.Wizard.Next"]</MudButton>
+            }
+            else
+            {
+                <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SubmitAsync"
+                           Disabled="@(!ConfirmMatches || _submitting)" StartIcon="@Icons.Material.Filled.Check">
+                    @if (_submitting)
+                    {
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                    }
+                    @Loc["Cari.Wizard.Submit"]
+                </MudButton>
+            }
+        }
+    </DialogActions>
+</MudDialog>
+
+<style>
+    .wiz-steps { display:flex; gap:8px; }
+    .wiz-step { flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; opacity:.45; }
+    .wiz-step.active, .wiz-step.done { opacity:1; }
+    .wiz-dot { width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+               font-size:13px; font-weight:600; background:var(--mud-palette-background-grey); color:var(--mud-palette-text-secondary); }
+    .wiz-step.active .wiz-dot { background:var(--mud-palette-primary); color:#fff; }
+    .wiz-step.done .wiz-dot { background:var(--mud-palette-success); color:#fff; }
+    .wiz-label { font-size:11px; text-transform:uppercase; letter-spacing:.05em; }
+    .wiz-debt-banner { font-size:13px; padding:8px 12px; border-radius:6px; background:var(--mud-palette-background-grey); }
+    .wiz-channels { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+    .wiz-channel { display:flex; flex-direction:column; align-items:center; gap:8px; padding:18px 8px; cursor:pointer;
+                   border:1.5px solid var(--mud-palette-divider); border-radius:10px; background:transparent;
+                   font-size:13px; font-weight:500; transition:all .12s; }
+    .wiz-channel:hover { border-color:var(--mud-palette-primary); }
+    .wiz-channel.sel { border-color:var(--mud-palette-primary); background:var(--mud-palette-primary-hover); }
+</style>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public Guid TenantId { get; set; }
+    [Parameter] public Guid CompanyId { get; set; }
+    [Parameter] public Guid UnitId { get; set; }
+    [Parameter] public string UnitNumber { get; set; } = "";
+
+    private bool _loading = true;
+    private bool _submitting;
+    private int _step = 1;
+    private string? _error;
+
+    private CollectionContext? _ctx;
+    private UnitOpenDebt? _openDebt;
+
+    private CashAccountKind? _channelKind;
+    private PaymentMethod _method = PaymentMethod.Cash;
+    private CashAccountItem? _cashAccount;
+    private decimal _amount;
+    private DateTime? _paymentDate = DateTime.Today;
+    private OpenPeriodItem? _period;
+    private string _reference = "";
+    private string _description = "";
+    private decimal? _confirmAmount;
+
+    private IReadOnlyList<CashAccountItem> FilteredAccounts =>
+        _ctx is null || _channelKind is null
+            ? []
+            : _ctx.CashAccounts.Where(a => a.Kind == _channelKind).ToList();
+
+    private bool CanShowNav =>
+        !_loading && _ctx is not null && _ctx.OpenPeriods.Count > 0
+        && _openDebt is not null && _openDebt.TotalOpen > 0m;
+
+    private bool CanGoNext => _step switch
+    {
+        1 => _channelKind is not null && _cashAccount is not null,
+        2 => _amount > 0m && _amount <= (_openDebt?.TotalOpen ?? 0m) && _period is not null && _paymentDate.HasValue,
+        3 => true,
+        _ => false
+    };
+
+    private bool ConfirmMatches =>
+        _confirmAmount.HasValue && Math.Round(_confirmAmount.Value, 2) == Math.Round(_amount, 2);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var ctxTask = Mediator.Send(new GetCollectionContextQuery(CompanyId));
+        var debtTask = Mediator.Send(new GetUnitOpenDebtQuery(CompanyId, UnitId));
+        await Task.WhenAll(ctxTask, debtTask);
+
+        var ctxResult = await ctxTask;
+        if (ctxResult.IsSuccess) _ctx = ctxResult.Value;
+
+        var debtResult = await debtTask;
+        if (debtResult.IsSuccess) _openDebt = debtResult.Value;
+
+        _period = _ctx?.OpenPeriods.FirstOrDefault();
+        _loading = false;
+    }
+
+    private void SelectChannel(CashAccountKind kind, PaymentMethod method)
+    {
+        _channelKind = kind;
+        _method = method;
+        // Tek aday hesap varsa otomatik seç; çoklu ise kullanıcı seçer.
+        var matches = FilteredAccounts;
+        _cashAccount = matches.Count == 1 ? matches[0] : null;
+    }
+
+    private void Next() { if (CanGoNext && _step < 4) _step++; }
+    private void Back() { if (_step > 1) _step--; }
+
+    private List<(OpenDebtLine line, decimal applied)> ComputeAllocation(decimal amount)
+    {
+        var result = new List<(OpenDebtLine, decimal)>();
+        if (_openDebt is null) return result;
+        var remaining = amount;
+        foreach (var l in _openDebt.Lines)
+        {
+            if (remaining <= 0m) break;
+            var apply = Math.Min(remaining, l.OpenAmount);
+            result.Add((l, apply));
+            remaining -= apply;
+        }
+        return result;
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (!ConfirmMatches || _cashAccount is null || _period is null) return;
+        _submitting = true;
+        _error = null;
+        try
+        {
+            var payDate = _paymentDate.HasValue
+                ? DateOnly.FromDateTime(_paymentDate.Value)
+                : DateOnly.FromDateTime(DateTime.Today);
+
+            var result = await Mediator.Send(new RecordCollectionCommand(
+                TenantId, CompanyId, UnitId, _period.Id,
+                payDate, _amount, _method, _cashAccount.Id,
+                string.IsNullOrWhiteSpace(_reference) ? null : _reference,
+                string.IsNullOrWhiteSpace(_description) ? null : _description));
+
+            if (result.IsSuccess)
+                MudDialog.Close(DialogResult.Ok(true));
+            else
+                _error = result.FirstError.Message;
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private string StepLabel(int n) => n switch
+    {
+        1 => Loc["Cari.Wizard.Step1"].Value,
+        2 => Loc["Cari.Wizard.Step2"].Value,
+        3 => Loc["Cari.Wizard.Step3"].Value,
+        _ => Loc["Cari.Wizard.Step4"].Value
+    };
+
+    private static string Fmt(decimal v) =>
+        v.ToString("N2", System.Globalization.CultureInfo.GetCultureInfo("tr-TR")) + " ₺";
+
+    private RenderFragment Row(string label, string value) => __builder =>
+    {
+        <div class="d-flex justify-space-between py-1" style="border-bottom:1px solid var(--mud-palette-divider);">
+            <span style="color:var(--mud-palette-text-secondary);font-size:12.5px;">@label</span>
+            <span style="font-weight:500;">@value</span>
+        </div>
+    };
+
+    private string MethodLabel(PaymentMethod m) => m switch
+    {
+        PaymentMethod.Cash => Loc["Cari.Wizard.Channel.Cash"].Value,
+        PaymentMethod.CreditCard => Loc["Cari.Wizard.Channel.Pos"].Value,
+        PaymentMethod.Check => Loc["Cari.Wizard.Channel.Check"].Value,
+        _ => m.ToString()
+    };
+
+    private string SourceLabel(AccrualSource s) => s switch
+    {
+        AccrualSource.Budget => Loc["Cari.Source.Budget"].Value,
+        AccrualSource.Invoice => Loc["Cari.Source.Invoice"].Value,
+        AccrualSource.DirectCharge => Loc["Cari.Source.Direct"].Value,
+        AccrualSource.LateFee => Loc["Cari.Source.LateFee"].Value,
+        _ => s.ToString()
+    };
+
+    private static string TurkishMonth(int m) => m switch
+    {
+        1 => "Ocak", 2 => "Şubat", 3 => "Mart", 4 => "Nisan",
+        5 => "Mayıs", 6 => "Haziran", 7 => "Temmuz", 8 => "Ağustos",
+        9 => "Eylül", 10 => "Ekim", 11 => "Kasım", 12 => "Aralık",
+        _ => m.ToString()
+    };
+}
