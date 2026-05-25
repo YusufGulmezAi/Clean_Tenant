@@ -9,11 +9,18 @@ namespace CleanTenant.Infrastructure.Persistence.Seeding;
 /// işaretlenir; UI'da silinemez / yeniden adlandırılamaz.
 /// </para>
 /// <para>
-/// <b>Permission haritalaması Faz 1'e ertelendi.</b> Şimdi sadece rol kayıtları
-/// oluşturulur; permission atamaları yapılmaz.
+/// <b>İzin haritalaması (karar 2026-05-24):</b>
+/// <list type="bullet">
+///   <item><c>SystemAdmin</c> — tam erişim operatör rolü; <see cref="CatalogSeeder"/>
+///   katalogdaki TÜM izinleri otomatik atar ve yeni izinlerle birlikte büyür.</item>
+///   <item><c>TenantAdmin</c> / <c>CompanyAdmin</c> — seed ile izin <b>atanmaz</b>
+///   (başlangıçta boş); izinlerini SystemAdmin, Rol Yönetimi ekranından düzenler.</item>
+/// </list>
 /// </para>
 /// <para>
-/// <b>Toplam 13 rol:</b> System (7) + Tenant (1) + Company (1) + Unit (4).
+/// <b>Toplam 3 rol:</b> System (1) + Tenant (1) + Company (1). Eski operatör
+/// (Developer/Support/Accountant…) ve Unit (Malik/Kiracı…) rolleri kaldırıldı;
+/// gerekli olduğunda UI'dan özel rol olarak oluşturulur.
 /// </para>
 /// </summary>
 public static class BuiltInRoleCatalog
@@ -27,25 +34,13 @@ public static class BuiltInRoleCatalog
     /// <summary>Tüm built-in roller.</summary>
     public static readonly IReadOnlyList<Definition> All =
     [
-        // ---------- System (7) — SaaS işletmecisinin personeli ----------
-        new("Developer", "Geliştirici; debug ve teknik müdahale için tam erişim", ScopeLevel.System),
-        new("SystemAdmin", "Sistem yöneticisi; tenant onboarding, ortam ayarları", ScopeLevel.System),
-        new("CustomerSupport", "Müşteri destek temsilcisi; Support Mode'da tenant'a erişir", ScopeLevel.System),
-        new("TechnicalSupport", "Teknik destek; log/audit görüntüleme, derin erişim", ScopeLevel.System),
-        new("Accountant", "Muhasebe; fatura ve ödeme yönetimi", ScopeLevel.System),
-        new("Manager", "Yönetici; iş metrikleri, raporlar", ScopeLevel.System),
-        new("Sales", "Satış; demo erişimi, lead yönetimi", ScopeLevel.System),
+        // ---------- System (1) — SaaS işletmecisinin tam yetkili operatörü ----------
+        new("SystemAdmin", "Sistem yöneticisi; tam erişim + tüm rollerin izin yönetimi", ScopeLevel.System),
 
-        // ---------- Tenant (1 minimum) ----------
-        new("TenantAdmin", "Tenant yöneticisi; tenant geneli tam yetki", ScopeLevel.Tenant),
+        // ---------- Tenant (1) — izinleri SystemAdmin tarafından atanır (başlangıçta boş) ----------
+        new("TenantAdmin", "Tenant yöneticisi; izinleri SystemAdmin tarafından atanır", ScopeLevel.Tenant),
 
-        // ---------- Company (1 minimum) ----------
-        new("CompanyAdmin", "Şirket yöneticisi; şirket geneli tam yetki", ScopeLevel.Company),
-
-        // ---------- Unit (4) — Bağımsız bölüm sakini rolleri ----------
-        new("Malik", "Bağımsız bölümün maliki (tam mülkiyet)", ScopeLevel.Unit),
-        new("Hissedar", "Bağımsız bölümün hissedar maliki (paylı mülkiyet)", ScopeLevel.Unit),
-        new("Sakin", "Bağımsız bölümde oturan kişi (mülk sahibi olmayan)", ScopeLevel.Unit),
-        new("Kiracı", "Bağımsız bölümün kiracısı", ScopeLevel.Unit),
+        // ---------- Company (1) — izinleri SystemAdmin tarafından atanır (başlangıçta boş) ----------
+        new("CompanyAdmin", "Şirket yöneticisi; izinleri SystemAdmin tarafından atanır", ScopeLevel.Company),
     ];
 }

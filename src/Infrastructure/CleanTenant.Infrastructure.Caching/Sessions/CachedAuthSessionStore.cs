@@ -144,6 +144,19 @@ public sealed class CachedAuthSessionStore : IAuthSessionStore
         return _inner.GetActiveSessionIdsForUserAsync(userId, cancellationToken);
     }
 
+    /// <inheritdoc />
+    public async Task<bool> UpdatePreservingTtlAsync(AuthSession session, CancellationToken cancellationToken = default)
+    {
+        var updated = await _inner.UpdatePreservingTtlAsync(session, cancellationToken);
+        if (updated)
+        {
+            // Güncel versiyonu hemen L1'e koy + diğer instance'ların L1'ini düşür.
+            SetL1(session);
+            await PublishRevocationAsync(session.SessionId);
+        }
+        return updated;
+    }
+
     /// <summary>Pub/sub subscriber'ı bu metodla L1'den siler.</summary>
     internal void RemoveFromL1Only(Guid sessionId)
     {

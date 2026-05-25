@@ -118,4 +118,22 @@ public sealed class RedisAuthSessionStore : IAuthSessionStore
         var values = await db.SetMembersAsync(_keys.UserSessionsKey(userId));
         return [.. values.Select(v => Guid.ParseExact(v!, "N"))];
     }
+
+    /// <inheritdoc />
+    public async Task<bool> UpdatePreservingTtlAsync(AuthSession session, CancellationToken cancellationToken = default)
+    {
+        var db = _redis.GetDatabase();
+        var key = _keys.SessionKey(session.SessionId);
+
+        // Mevcut kalan TTL'i oku — session yoksa / TTL'siz ise güncelleme yapma.
+        var ttl = await db.KeyTimeToLiveAsync(key);
+        if (ttl is null)
+        {
+            return false;
+        }
+
+        var json = JsonSerializer.Serialize(session, JsonOptions);
+        await db.StringSetAsync(key, json, ttl);
+        return true;
+    }
 }

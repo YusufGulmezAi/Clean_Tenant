@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using CleanTenant.Application.Common.Auth;
+using CleanTenant.Application.Common.Authorization;
 using CleanTenant.Infrastructure.Identity.Context;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -39,6 +40,7 @@ public sealed class SessionLookupMiddleware
     public async Task InvokeAsync(
         HttpContext context,
         IAuthSessionStore sessionStore,
+        ISessionFreshener sessionFreshener,
         HttpUserContext userContext)
     {
         if (context.User.Identity?.IsAuthenticated != true)
@@ -57,7 +59,9 @@ public sealed class SessionLookupMiddleware
             return;
         }
 
-        var session = await sessionStore.GetAsync(sessionId, context.RequestAborted);
+        // GetFreshAsync: authorization damgası bayatsa izinleri yeniden çözüp oturumu
+        // tazeler → yeni yetkiler re-login gerektirmeden bu istekte geçerli olur.
+        var session = await sessionFreshener.GetFreshAsync(sessionId, context.RequestAborted);
         if (session is null)
         {
             if (await HandleMissingSessionAsync(context, "session_revoked_or_expired", "Oturum revoke edilmiş veya süresi dolmuş."))

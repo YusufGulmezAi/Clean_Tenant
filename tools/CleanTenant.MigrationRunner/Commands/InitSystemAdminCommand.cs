@@ -13,7 +13,7 @@ namespace CleanTenant.MigrationRunner.Commands;
 
 /// <summary>
 /// <c>init-system-admin</c> alt komutu. Production deploy sonrası bir
-/// kez çalıştırılır; tek bir Developer System kullanıcı oluşturur.
+/// kez çalıştırılır; tek bir SystemAdmin (tam erişim) System kullanıcı oluşturur.
 /// Şifre interaktif olarak prompt edilir (CLI history'ye düşmez).
 /// </summary>
 internal static class InitSystemAdminCommand
@@ -44,7 +44,7 @@ internal static class InitSystemAdminCommand
 
         var command = new Command(
             "init-system-admin",
-            "Production bootstrap: tek bir Developer System kullanıcı oluşturur.")
+            "Production bootstrap: tek bir SystemAdmin (tam erişim) System kullanıcı oluşturur.")
         {
             envOption, emailOption, firstNameOption, lastNameOption,
         };
@@ -91,16 +91,16 @@ internal static class InitSystemAdminCommand
             return;
         }
 
-        // Developer rolünü bul
-        var developerRole = await db.Roles
+        // SystemAdmin (tam erişim) rolünü bul
+        var systemAdminRole = await db.Roles
             .AsNoTracking()
-            .Where(r => r.NormalizedName == "DEVELOPER" && r.Scope == ScopeLevel.System)
+            .Where(r => r.NormalizedName == "SYSTEMADMIN" && r.Scope == ScopeLevel.System)
             .Select(r => r.Id)
             .FirstOrDefaultAsync();
-        if (developerRole == Guid.Empty)
+        if (systemAdminRole == Guid.Empty)
         {
             Console.Error.WriteLine(
-                "Hata: Developer (System) rolü bulunamadı. Önce 'seed --env " + environment + "' çalıştırın.");
+                "Hata: SystemAdmin (System) rolü bulunamadı. Önce 'seed --env " + environment + "' çalıştırın.");
             Environment.ExitCode = 1;
             return;
         }
@@ -130,7 +130,7 @@ internal static class InitSystemAdminCommand
         db.UserRoleAssignments.Add(new UserRoleAssignment
         {
             UserId = user.Id,
-            RoleId = developerRole,
+            RoleId = systemAdminRole,
             ScopeLevel = ScopeLevel.System,
             AssignedAt = DateTimeOffset.UtcNow,
             IsActive = true,

@@ -1,7 +1,12 @@
 @using CleanTenant.Application.Common.Auth
+@using CleanTenant.Application.Features.Auth.CurrentSession
+@using MediatR
+@using Microsoft.AspNetCore.Components.Routing
 @inject AuthenticationStateProvider AuthProvider
 @inject IStringLocalizer Loc
-@inject ICurrentSessionAccessor SessionAccessor
+@inject IMediator Mediator
+@inject NavigationManager Nav
+@implements IDisposable
 
 @*
     v0.2.3.c — Scope-aware sol drawer.
@@ -206,12 +211,23 @@
             </MudNavGroup>
         }
 
-        @* ── Yapı Şeması ────────────────────────────────────────────── *@
-        @if (Matches("Yapı Şeması"))
+        @* ── Tanımlar (Yapı Şeması vb. tanım ekranları) ─────────────── *@
+        var definitionsChildren = new[]
         {
-            <MudNavLink Href="/company/building-schema" Icon="@Icons.Material.Filled.AccountTree">
-                Yapı Şeması
-            </MudNavLink>
+            (Loc["NavMenu.BuildingSchema"].Value, "/company/building-schema", Icons.Material.Filled.AccountTree),
+        };
+        var definitionsVisible = AnyMatch(definitionsChildren.Select(c => c.Item1));
+        @if (definitionsVisible)
+        {
+            <MudNavGroup Title="@Loc["NavMenu.Definitions"]" Icon="@Icons.Material.Filled.Category" Expanded="@IsSearching">
+                @foreach (var (title, href, icon) in definitionsChildren)
+                {
+                    if (Matches(title))
+                    {
+                        <MudNavLink Href="@href" Icon="@icon">@title</MudNavLink>
+                    }
+                }
+            </MudNavGroup>
         }
 
         @* ── Bütçe Yönetimi ─────────────────────────────────────────── *@
@@ -314,6 +330,30 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // Navigasyonda izinleri yeniden değerlendir: admin bir yetkiyi değiştirince
+        // kullanıcı başka sayfaya geçtiğinde menü re-login olmadan güncellenir.
+        Nav.LocationChanged += OnLocationChanged;
+        await LoadContextAndPermissionsAsync();
+    }
+
+    private async void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        // async void: istisna ASLA kaçmamalı (circuit/süreç riski). İzin tazeleme
+        // best-effort — başarısız olursa menü eski bayraklarla kalır, sonraki
+        // navigasyonda yeniden denenir.
+        try
+        {
+            await LoadContextAndPermissionsAsync();
+            await InvokeAsync(StateHasChanged);
+        }
+        catch
+        {
+            // yut — navigasyon izin tazeleme hatası UI'ı çökertmemeli
+        }
+    }
+
+    private async Task LoadContextAndPermissionsAsync()
+    {
         var authState = await AuthProvider.GetAuthenticationStateAsync();
         var user = authState.User;
         if (user?.Identity?.IsAuthenticated != true)
@@ -323,32 +363,27 @@
 
         _scope = user.FindFirst("scope")?.Value;
 
-        if (user.FindFirst("tenant_id") is { Value: var tid } && Guid.TryParseExact(tid, "N", out var tenantGuid))
-        {
-            _activeTenantId = tenantGuid;
-        }
-        if (user.FindFirst("company_id") is { Value: var cid } && Guid.TryParseExact(cid, "N", out var companyGuid))
-        {
-            _activeCompanyId = companyGuid;
-        }
+        _activeTenantId = user.FindFirst("tenant_id") is { Value: var tid }
+            && Guid.TryParseExact(tid, "N", out var tenantGuid) ? tenantGuid : null;
+        _activeCompanyId = user.FindFirst("company_id") is { Value: var cid }
+            && Guid.TryParseExact(cid, "N", out var companyGuid) ? companyGuid : null;
 
-        // System scope tüm yetkilere sahiptir; Tenant scope için session permission'ı kontrol et.
+        // System scope tüm yetkilere sahiptir (claim'den; her zaman güvenilir).
+        // Diğer scope'larda izinler MediatR üzerinden TAZE alınır — pipeline
+        // (SessionLoaderBehavior) oturumu damga bayatsa yeniden çözer.
         if (string.Equals(_scope, "System", StringComparison.OrdinalIgnoreCase))
         {
-            _canManageUsers = true;
-            _canViewBudget = true;
-            _canViewCari = true;
-            _canManageCompanyUsers = true;
-            _canViewCollections = true;
+            _canManageUsers = _canViewBudget = _canViewCari = _canManageCompanyUsers = _canViewCollections = true;
         }
         else
         {
-            var session = SessionAccessor.Current;
-            _canManageUsers = session is not null && session.Permissions.Contains("Tenant.Users.Manage");
-            _canViewBudget = session is not null && session.Permissions.Contains("tenant.budget.view");
-            _canViewCari = session is not null && session.Permissions.Contains("tenant.party.view");
-            _canManageCompanyUsers = session is not null && session.Permissions.Contains("Company.Users.Manage");
-            _canViewCollections = session is not null && session.Permissions.Contains("tenant.collection.view");
+            var info = await Mediator.Send(new GetCurrentSessionInfoQuery());
+            var perms = info.PermissionCodes;
+            _canManageUsers = perms.Contains("Tenant.Users.Manage");
+            _canViewBudget = perms.Contains("tenant.budget.view");
+            _canViewCari = perms.Contains("tenant.party.view");
+            _canManageCompanyUsers = perms.Contains("Company.Users.Manage");
+            _canViewCollections = perms.Contains("tenant.collection.view");
         }
 
         // Etkin bağlam: tenant_id/company_id doluysa (System operatörü destek bağlamına
@@ -356,6 +391,11 @@
         _effectiveScope = _activeCompanyId.HasValue ? "Company"
                         : _activeTenantId.HasValue ? "Tenant"
                         : "System";
+    }
+
+    public void Dispose()
+    {
+        Nav.LocationChanged -= OnLocationChanged;
     }
 
     private void OnSearchChanged(string value)

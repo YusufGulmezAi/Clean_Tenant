@@ -50,6 +50,10 @@ public static class DependencyInjection
             instanceId: Guid.NewGuid().ToString("N")));
         services.AddSingleton<IAuthSessionStore>(sp => sp.GetRequiredService<CachedAuthSessionStore>());
 
+        // Global authorization damgası (lazy izin tazeleme) — TTL'siz Redis key,
+        // stateless → singleton.
+        services.AddSingleton<IAuthorizationStampStore, RedisAuthorizationStampStore>();
+
         // Pub/sub subscriber — multi-instance L1 senkronizasyonu
         services.AddHostedService<AuthSessionInvalidationSubscriber>();
 

@@ -85,4 +85,13 @@ public sealed class AuthSession
 
     /// <summary>Son aktivite anı; her HTTP isteğinde güncellenir (sliding TTL için).</summary>
     public DateTimeOffset LastActivity { get; set; }
+
+    /// <summary>
+    /// İzinlerin hangi "authorization damgası" ile çözüldüğü. Global damga
+    /// (<c>IAuthorizationStampStore</c>) bir yetki değişiminde artar; bir sonraki
+    /// istekte bu değer global damgayla eşleşmiyorsa izinler yeniden çözülür
+    /// (re-login gerektirmeden). <c>null</c> = damgasız (eski/yeni oturum) →
+    /// ilk istekte bir kez tazelenir.
+    /// </summary>
+    public string? AuthzStamp { get; init; }
 }

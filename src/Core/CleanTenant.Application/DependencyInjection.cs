@@ -63,6 +63,19 @@ public static class DependencyInjection
         services.AddScoped<Common.Authorization.IScopePermissionResolver,
             Common.Authorization.ScopePermissionResolver>();
 
+        // Lazy izin tazeleme: her istekte oturumun authorization damgası global
+        // damgayla kıyaslanır; bayatsa izinler yeniden çözülüp oturum güncellenir
+        // (re-login gerektirmez). IAuthSessionStore + IAuthorizationStampStore +
+        // resolver'a bağlı → scoped.
+        services.AddScoped<Common.Authorization.ISessionFreshener,
+            Common.Authorization.SessionFreshener>();
+
+        // TDHP hesap planı provisioner — şirketin ilk Mali Dönemi açılırken (ve manuel
+        // "Hesap planını başlat") standart planı idempotent ekler. IMainDbContext +
+        // ICatalogDbContext'e bağlı → scoped.
+        services.AddScoped<Features.Main.Accounting.Provisioning.IChartOfAccountsProvisioner,
+            Features.Main.Accounting.Provisioning.ChartOfAccountsProvisioner>();
+
         return services;
     }
 }

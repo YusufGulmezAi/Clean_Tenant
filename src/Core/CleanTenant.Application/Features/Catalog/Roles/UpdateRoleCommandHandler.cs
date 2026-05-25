@@ -38,10 +38,21 @@ public sealed class UpdateRoleCommandHandler : IRequestHandler<UpdateRoleCommand
 
         RoleAccessGuard.EnsureCanManageRole(_sessionAccessor.Current, role);
 
-        // Built-in metadata yeniden adlandırılamaz; ama System bu kuralı bypass eder
-        // çünkü RoleAccessGuard System'i geçirir. Yine de güvenlik adına explicit blok:
+        // Built-in rollerin adı/açıklaması değiştirilemez (yalnız izinleri düzenlenir).
+        // ÖNEMLİ: Yalnız gerçek bir DEĞİŞİKLİK varsa reddet. İzin düzenleme akışında
+        // UI bu komutu (ad/açıklama değişmese de) gönderebiliyor; aynı değerlerle gelen
+        // çağrıyı no-op kabul et ki "sadece izin" kaydetme bloklanmasın.
         if (role.IsBuiltIn)
-            throw new InvalidOperationException("Built-in rollerin adı/açıklaması değiştirilemez (sadece izinleri).");
+        {
+            var nameChanged = !string.Equals(role.Name, request.Name, StringComparison.Ordinal);
+            var descChanged = !string.Equals(
+                role.Description ?? string.Empty, request.Description ?? string.Empty, StringComparison.Ordinal);
+
+            if (nameChanged || descChanged)
+                throw new InvalidOperationException("Built-in rollerin adı/açıklaması değiştirilemez (sadece izinleri).");
+
+            return Unit.Value; // değişiklik yok → metadata güncellemesi yapılmaz
+        }
 
         role.Name = request.Name;
         role.Description = request.Description;

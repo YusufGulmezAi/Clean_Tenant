@@ -14,7 +14,7 @@ namespace CleanTenant.Infrastructure.Persistence.Seeding;
 /// olarak şu kayıtları idempotent şekilde oluşturur:
 /// <list type="bullet">
 ///   <item>Geliştirici System admin kullanıcı (Yusuf Gülmez)</item>
-///   <item>Yusuf'a Developer rol ataması (System scope)</item>
+///   <item>Yusuf'a SystemAdmin (tam erişim) rol ataması (System scope)</item>
 /// </list>
 /// <para>
 /// Demo tenant <b>bilinçli olarak</b> seed edilmez — tenant'lar UI üzerinden
@@ -65,7 +65,7 @@ public sealed class DevSeedData
         if (existing is not null)
         {
             _logger.LogInformation("Dev admin kullanıcı zaten mevcut: {Email}", AdminEmail);
-            await EnsureDeveloperRoleAssignmentAsync(existing.Id);
+            await EnsureSystemAdminRoleAssignmentAsync(existing.Id);
             return;
         }
 
@@ -88,27 +88,27 @@ public sealed class DevSeedData
         }
 
         _logger.LogInformation("Dev admin kullanıcı oluşturuldu: {Email}", AdminEmail);
-        await EnsureDeveloperRoleAssignmentAsync(user.Id);
+        await EnsureSystemAdminRoleAssignmentAsync(user.Id);
     }
 
-    private async Task EnsureDeveloperRoleAssignmentAsync(Guid userId)
+    private async Task EnsureSystemAdminRoleAssignmentAsync(Guid userId)
     {
-        var developerRole = await _db.Roles
+        var systemAdminRole = await _db.Roles
             .AsNoTracking()
-            .Where(r => r.NormalizedName == "DEVELOPER" && r.Scope == ScopeLevel.System)
+            .Where(r => r.NormalizedName == "SYSTEMADMIN" && r.Scope == ScopeLevel.System)
             .Select(r => r.Id)
             .FirstOrDefaultAsync();
 
-        if (developerRole == Guid.Empty)
+        if (systemAdminRole == Guid.Empty)
         {
             throw new InvalidOperationException(
-                "Developer built-in rolü bulunamadı. SeedCoreCatalogAsync çalıştırılmış olmalı.");
+                "SystemAdmin built-in rolü bulunamadı. SeedCoreCatalogAsync çalıştırılmış olmalı.");
         }
 
         var alreadyAssigned = await _db.UserRoleAssignments
             .AsNoTracking()
             .AnyAsync(a => a.UserId == userId
-                        && a.RoleId == developerRole
+                        && a.RoleId == systemAdminRole
                         && a.ScopeLevel == ScopeLevel.System);
 
         if (alreadyAssigned)
@@ -119,13 +119,13 @@ public sealed class DevSeedData
         _db.UserRoleAssignments.Add(new UserRoleAssignment
         {
             UserId = userId,
-            RoleId = developerRole,
+            RoleId = systemAdminRole,
             ScopeLevel = ScopeLevel.System,
             AssignedAt = DateTimeOffset.UtcNow,
             IsActive = true,
         });
 
         await _db.SaveChangesAsync();
-        _logger.LogInformation("Dev admin'e Developer (System) rolü atandı.");
+        _logger.LogInformation("Dev admin'e SystemAdmin (System, tam erişim) rolü atandı.");
     }
 }

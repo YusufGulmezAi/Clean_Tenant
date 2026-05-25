@@ -1,4 +1,5 @@
 using CleanTenant.Application.Common.Persistence;
+using CleanTenant.Application.Features.Main.Accounting.Provisioning;
 using CleanTenant.Domain.Tenant.Accounting;
 using CleanTenant.Domain.Tenant.Accounting.Enums;
 using MediatR;
@@ -13,19 +14,28 @@ namespace CleanTenant.Application.Features.Main.Accounting.FiscalYears;
 /// Çakışan dönem kontrolü yapar (ACC-205). Takvim dışı dönemler desteklenir
 /// ancak log uyarısı verilir. 12 aylık dönemler otomatik oluşturulur.
 /// </para>
+/// <para>
+/// <b>Hesap planı otomasyonu:</b> Şirketin ilk Mali Dönemi oluşturulduğunda
+/// standart TDHP hesap planı <see cref="IChartOfAccountsProvisioner"/> ile
+/// otomatik eklenir (idempotent; sonraki dönemlerde no-op). Best-effort:
+/// hesap planı eklenemese de mali dönem oluşturulur.
+/// </para>
 /// </summary>
 public sealed class CreateFiscalYearCommandHandler
     : IRequestHandler<CreateFiscalYearCommand, Result<FiscalYearDetail>>
 {
     private readonly IMainDbContext _db;
+    private readonly IChartOfAccountsProvisioner _chartProvisioner;
     private readonly ILogger<CreateFiscalYearCommandHandler> _logger;
 
     /// <summary>DI bağımlılıklarını alır.</summary>
     public CreateFiscalYearCommandHandler(
         IMainDbContext db,
+        IChartOfAccountsProvisioner chartProvisioner,
         ILogger<CreateFiscalYearCommandHandler> logger)
     {
         _db = db;
+        _chartProvisioner = chartProvisioner;
         _logger = logger;
     }
 
@@ -104,6 +114,27 @@ public sealed class CreateFiscalYearCommandHandler
         fiscalYear.Periods = periods;
         _db.FiscalYears.Add(fiscalYear);
         await _db.SaveChangesAsync(cancellationToken);
+
+        // Şirketin ilk Mali Dönemi açıldığında standart TDHP hesap planını otomatik
+        // ekle (idempotent — hesap planı zaten varsa no-op). Best-effort: hesap planı
+        // eklenemese bile mali dönem oluşturulmuş kalır.
+        try
+        {
+            var addedCodes = await _chartProvisioner.EnsureStandardChartAsync(
+                command.CompanyId, command.TenantId, cancellationToken);
+            if (addedCodes > 0)
+            {
+                _logger.LogInformation(
+                    "Mali dönem oluşturma ile şirket {CompanyId} için TDHP hesap planı eklendi ({Count} kod).",
+                    command.CompanyId, addedCodes);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Şirket {CompanyId} için TDHP hesap planı otomatik eklenemedi; mali dönem yine de oluşturuldu.",
+                command.CompanyId);
+        }
 
         var periodSummaries = periods
             .Select(p => new PeriodSummary(

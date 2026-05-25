@@ -90,6 +90,9 @@ public sealed class AssignPermissionsToRoleCommandHandler : IRequestHandler<Assi
 
         await _db.SaveChangesAsync(cancellationToken);
 
+        // InvalidateRoleAsync hem read-cache'leri temizler hem de global authorization
+        // damgasını yükseltir → bu role sahip kullanıcıların aktif oturumları bir sonraki
+        // istekte izinleri yeniden çözer (re-login gerekmez; lazy/pull modeli).
         await _cacheInvalidator.InvalidateRoleAsync(request.RoleId, cancellationToken);
 
         return Unit.Value;

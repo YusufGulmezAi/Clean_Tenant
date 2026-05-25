@@ -277,7 +277,12 @@
             }
             else
             {
-                await Mediator.Send(new UpdateRoleCommand(_roleId, _name.Trim(), _description));
+                // Built-in rollerin adı/açıklaması değiştirilemez → yalnız izinleri kaydet.
+                // (Custom rollerde önce metadata, sonra izinler güncellenir.)
+                if (!_isBuiltIn)
+                {
+                    await Mediator.Send(new UpdateRoleCommand(_roleId, _name.Trim(), _description));
+                }
                 await Mediator.Send(new AssignPermissionsToRoleCommand(_roleId, _selection.ToList()));
 
                 Snackbar.Add(Loc["Roles.Edit.UpdateSuccess"].Value, Severity.Success);

@@ -49,4 +49,12 @@ public interface IAuthSessionStore
     /// Bir kullanıcının tüm aktif session id'lerini döner (toplu güncelleme için).
     /// </summary>
     Task<IReadOnlyList<Guid>> GetActiveSessionIdsForUserAsync(Guid userId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Session içeriğini, Redis'teki <b>mevcut TTL'i koruyarak</b> günceller (sliding
+    /// pencereyi sıfırlamaz). Rol izni değişiminde aktif oturumların izin snapshot'ını
+    /// re-login gerektirmeden tazelemek için kullanılır.
+    /// </summary>
+    /// <returns>Session mevcuttu ve güncellendiyse <c>true</c>; bulunamadıysa <c>false</c>.</returns>
+    Task<bool> UpdatePreservingTtlAsync(AuthSession session, CancellationToken cancellationToken = default);
 }

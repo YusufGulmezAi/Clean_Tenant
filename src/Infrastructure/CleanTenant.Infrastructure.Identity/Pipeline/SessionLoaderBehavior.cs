@@ -1,4 +1,5 @@
 using CleanTenant.Application.Common.Auth;
+using CleanTenant.Application.Common.Authorization;
 using CleanTenant.Infrastructure.Identity.Context;
 using MediatR;
 using Microsoft.AspNetCore.Http;
@@ -28,17 +29,17 @@ public sealed class SessionLoaderBehavior<TRequest, TResponse> : IPipelineBehavi
     where TRequest : IRequest<TResponse>
 {
     private readonly IHttpContextAccessor _httpContextAccessor;
-    private readonly IAuthSessionStore _sessionStore;
+    private readonly ISessionFreshener _sessionFreshener;
     private readonly HttpUserContext _userContext;
 
     /// <summary>DI bağımlılıklarını alır.</summary>
     public SessionLoaderBehavior(
         IHttpContextAccessor httpContextAccessor,
-        IAuthSessionStore sessionStore,
+        ISessionFreshener sessionFreshener,
         HttpUserContext userContext)
     {
         _httpContextAccessor = httpContextAccessor;
-        _sessionStore = sessionStore;
+        _sessionFreshener = sessionFreshener;
         _userContext = userContext;
     }
 
@@ -48,9 +49,17 @@ public sealed class SessionLoaderBehavior<TRequest, TResponse> : IPipelineBehavi
         RequestHandlerDelegate<TResponse> next,
         CancellationToken cancellationToken)
     {
-        // Middleware tarafından zaten dolduruldu — atla.
-        if (_userContext.Current is not null)
+        // Zaten yüklü (middleware veya Blazor circuit scope'u). Blazor Server'da
+        // HttpUserContext circuit boyunca kalıcı olduğundan, izin değişimini yakalamak
+        // için her istekte damgayı kontrol edip bayatsa tazelemeliyiz.
+        var current = _userContext.Current;
+        if (current is not null)
         {
+            var fresh = await _sessionFreshener.GetFreshAsync(current.SessionId, cancellationToken);
+            if (fresh is not null)
+            {
+                _userContext.Current = fresh;
+            }
             return await next();
         }
 
@@ -60,7 +69,9 @@ public sealed class SessionLoaderBehavior<TRequest, TResponse> : IPipelineBehavi
             var sidClaim = http.User.FindFirst(JwtClaimNames.SessionId)?.Value;
             if (!string.IsNullOrEmpty(sidClaim) && Guid.TryParse(sidClaim, out var sessionId))
             {
-                var session = await _sessionStore.GetAsync(sessionId, cancellationToken);
+                // GetFreshAsync: damga bayatsa izinleri yeniden çözüp oturumu tazeler
+                // (re-login gerektirmeden yeni yetkiler bu istekte geçerli olur).
+                var session = await _sessionFreshener.GetFreshAsync(sessionId, cancellationToken);
                 if (session is not null)
                 {
                     _userContext.Current = session;

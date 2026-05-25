@@ -299,9 +299,23 @@ public sealed class FullAuditInterceptor : SaveChangesInterceptor
     /// <summary>
     /// Aktif support session varsa Catalog ChangeTracker'a o session'ı yükler ve
     /// WriteActionCount'unu artırır. Bu değişiklik aynı SaveChanges içinde commit edilir.
+    /// <para>
+    /// <see cref="SupportSession"/> yalnız <b>Catalog</b> modelinde map'lidir. Bu
+    /// interceptor Main/Catalog gibi birden çok context'e takılı olduğundan, onu
+    /// map ETMEYEN bir context (ör. Main) kaydederken <c>Set&lt;SupportSession&gt;()</c>
+    /// "type is not included in the model" hatası fırlatır. Bu yüzden modelde yoksa
+    /// güvenle atlanır (Main yazımı support sayacını artırmaz — sayaç Catalog
+    /// yazımlarında işler).
+    /// </para>
     /// </summary>
     private static void IncrementSupportWriteCount(DbContext context, Guid supportSessionId)
     {
+        // Context bu entity'yi map etmiyorsa (Main/Audit/Log) sessizce çık.
+        if (context.Model.FindEntityType(typeof(SupportSession)) is null)
+        {
+            return;
+        }
+
         var supportSession = context.Set<SupportSession>().Find(supportSessionId);
         if (supportSession is null)
         {

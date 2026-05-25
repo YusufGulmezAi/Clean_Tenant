@@ -1,3 +1,4 @@
+using CleanTenant.Application.Common.Auth;
 using CleanTenant.Application.Common.Caching;
 
 namespace CleanTenant.Infrastructure.Caching.Readers;
@@ -16,11 +17,13 @@ namespace CleanTenant.Infrastructure.Caching.Readers;
 public sealed class CacheInvalidator : ICacheInvalidator
 {
     private readonly ICacheStore _cache;
+    private readonly IAuthorizationStampStore _authzStamp;
 
     /// <summary>DI bağımlılıklarını alır.</summary>
-    public CacheInvalidator(ICacheStore cache)
+    public CacheInvalidator(ICacheStore cache, IAuthorizationStampStore authzStamp)
     {
         _cache = cache;
+        _authzStamp = authzStamp;
     }
 
     /// <inheritdoc />
@@ -63,11 +66,16 @@ public sealed class CacheInvalidator : ICacheInvalidator
         // Scope-based list cache'i sil (scope level bilinmediği için prefix-based yeterli değil,
         // tüm scope cache'leri temizle)
         await _cache.RemoveByPrefixAsync(CacheKeys.Role.Prefix, cancellationToken);
+        // Yetki değişti → aktif oturumlar bir sonraki istekte izinleri yeniden çözsün.
+        await _authzStamp.BumpAsync(cancellationToken);
     }
 
     /// <inheritdoc />
-    public Task InvalidateAllRolesAsync(CancellationToken cancellationToken = default)
-        => _cache.RemoveByPrefixAsync(CacheKeys.Role.Prefix, cancellationToken);
+    public async Task InvalidateAllRolesAsync(CancellationToken cancellationToken = default)
+    {
+        await _cache.RemoveByPrefixAsync(CacheKeys.Role.Prefix, cancellationToken);
+        await _authzStamp.BumpAsync(cancellationToken);
+    }
 
     /// <inheritdoc />
     public async Task InvalidatePermissionsAsync(CancellationToken cancellationToken = default)
@@ -76,9 +84,14 @@ public sealed class CacheInvalidator : ICacheInvalidator
         // Permission update → tüm role detail'ler de potentially etkilenir (PermissionIds denormalize)
         await _cache.RemoveByPrefixAsync(CacheKeys.Role.Prefix, cancellationToken);
         await _cache.RemoveByPrefixAsync(CacheKeys.Authorization.Prefix, cancellationToken);
+        await _authzStamp.BumpAsync(cancellationToken);
     }
 
     /// <inheritdoc />
-    public Task InvalidateAllUserContextsAsync(CancellationToken cancellationToken = default)
-        => _cache.RemoveByPrefixAsync(CacheKeys.User.Prefix, cancellationToken);
+    public async Task InvalidateAllUserContextsAsync(CancellationToken cancellationToken = default)
+    {
+        await _cache.RemoveByPrefixAsync(CacheKeys.User.Prefix, cancellationToken);
+        // Kullanıcı-rol atamaları değişmiş olabilir → oturumları bayatlat.
+        await _authzStamp.BumpAsync(cancellationToken);
+    }
 }
