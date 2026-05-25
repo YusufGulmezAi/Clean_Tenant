@@ -503,7 +503,25 @@ else
         _isSubmitting = true;
         try
         {
-            var result = await Mediator.Send(new ResetUserPasswordCommand(_targetUrlCode!, _newPassword));
+            // Şifre sıfırlama da diğer kullanıcı işlemleri gibi scope-bilinçlidir:
+            // Tenant/Company bağlamında ilgili scope komutu (Tenant/Company.Users.Manage +
+            // sahiplik guard'ı) çalışır; aksi halde System komutu kullanılır.
+            Result result;
+            if (Scope == ScopeLevel.Tenant && TenantId.HasValue)
+            {
+                result = await Mediator.Send(
+                    new ResetTenantUserPasswordCommand(_targetUrlCode!, _newPassword, TenantId.Value));
+            }
+            else if (Scope == ScopeLevel.Company && TenantId.HasValue && CompanyId.HasValue)
+            {
+                result = await Mediator.Send(
+                    new ResetCompanyUserPasswordCommand(_targetUrlCode!, _newPassword, TenantId.Value, CompanyId.Value));
+            }
+            else
+            {
+                result = await Mediator.Send(new ResetUserPasswordCommand(_targetUrlCode!, _newPassword));
+            }
+
             if (result.IsSuccess)
             {
                 Snackbar.Add(Loc["SystemUsers.ResetPasswordSuccess"].Value, Severity.Success);
