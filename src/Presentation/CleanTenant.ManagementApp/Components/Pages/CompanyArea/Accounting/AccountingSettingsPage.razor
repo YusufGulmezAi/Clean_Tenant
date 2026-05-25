@@ -27,23 +27,49 @@ else
     @if (_settings is null || !_settings.IsActivated)
     {
         <MudAlert Severity="Severity.Info" Class="mb-4">
-            Şirket için muhasebe henüz aktifleştirilmemiş.
-            Aktifleştirme işlemi hesap planını (TDHP) ve cari takvim yılı için varsayılan mali yılı otomatik oluşturur.
+            Şirket için muhasebe henüz aktifleştirilmemiş. Aktifleştirme; hesap planını (TDHP)
+            ve <b>ilk mali yılı</b> oluşturur. Mali yıl tarih aralığını sitenin kendi dönemine
+            göre aşağıdan ayarlayabilirsiniz (varsayılan cari takvim yılı).
         </MudAlert>
 
-        <div class="d-flex justify-center mt-6">
-            <MudButton Color="Color.Primary" Variant="Variant.Filled"
-                       Size="Size.Large"
-                       StartIcon="@Icons.Material.Filled.AccountBalance"
-                       OnClick="@ActivateAsync"
-                       Disabled="@_activating">
-                @if (_activating)
-                {
-                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
-                }
-                Muhasebeyi Aktifleştir
-            </MudButton>
-        </div>
+        <MudPaper Class="pa-4 mb-4" Elevation="1">
+            <MudText Typo="Typo.subtitle1" Class="mb-3">İlk Mali Yıl</MudText>
+            <MudForm @ref="_fyMudForm">
+                <MudGrid Spacing="2">
+                    <MudItem xs="12" sm="4">
+                        <MudTextField @bind-Value="_fyForm.Label" Label="Etiket (örn: 2026, 2026-2027)"
+                                      Required="true" MaxLength="50" />
+                    </MudItem>
+                    <MudItem xs="12" sm="4">
+                        <MudDatePicker @bind-Date="_fyForm.StartDateDt" Label="Başlangıç Tarihi"
+                                       DateFormat="dd.MM.yyyy" Required="true" />
+                    </MudItem>
+                    <MudItem xs="12" sm="4">
+                        <MudDatePicker @bind-Date="_fyForm.EndDateDt" Label="Bitiş Tarihi"
+                                       DateFormat="dd.MM.yyyy" Required="true" />
+                    </MudItem>
+                    @if (_fyForm.IsNonCalendar)
+                    {
+                        <MudItem xs="12">
+                            <MudAlert Severity="Severity.Info" Dense="true">
+                                Takvim dışı mali yıl: başlangıç ve bitiş yılları farklı.
+                            </MudAlert>
+                        </MudItem>
+                    }
+                </MudGrid>
+            </MudForm>
+            <div class="d-flex justify-center mt-4">
+                <MudButton Color="Color.Primary" Variant="Variant.Filled" Size="Size.Large"
+                           StartIcon="@Icons.Material.Filled.AccountBalance"
+                           OnClick="@ActivateAsync" Disabled="@_activating">
+                    @if (_activating)
+                    {
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                    }
+                    Muhasebeyi Aktifleştir
+                </MudButton>
+            </div>
+        </MudPaper>
     }
     else
     {
@@ -103,6 +129,8 @@ else
 
     private AccountingSettingsDto? _settings;
     private SettingsForm _form = new();
+    private MudForm? _fyMudForm;
+    private FiscalYearActivationForm _fyForm = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -116,6 +144,7 @@ else
         else { _unauthorized = true; _initialized = true; return; }
         if (user.FindFirst("tenant_id") is { Value: var tid } && Guid.TryParseExact(tid, "N", out var tGuid))
             _tenantId = tGuid;
+        _fyForm.Label = DateTime.Today.Year.ToString(System.Globalization.CultureInfo.InvariantCulture);
         await LoadDataAsync();
         _initialized = true;
     }
@@ -144,10 +173,27 @@ else
             return;
         }
 
+        if (_fyMudForm is not null)
+        {
+            await _fyMudForm.Validate();
+            if (!_fyMudForm.IsValid) return;
+        }
+        if (_fyForm.StartDate is null || _fyForm.EndDate is null)
+        {
+            Snackbar.Add("Mali yıl başlangıç ve bitiş tarihi zorunludur.", Severity.Warning);
+            return;
+        }
+        if (_fyForm.EndDate <= _fyForm.StartDate)
+        {
+            Snackbar.Add("Bitiş tarihi başlangıç tarihinden sonra olmalıdır.", Severity.Warning);
+            return;
+        }
+
         _activating = true;
         try
         {
-            var result = await Mediator.Send(new ActivateAccountingCommand(_companyId, _tenantId.Value));
+            var result = await Mediator.Send(new ActivateAccountingCommand(
+                _companyId, _tenantId.Value, _fyForm.Label, _fyForm.StartDate, _fyForm.EndDate));
             if (result.IsFailure)
             {
                 Snackbar.Add(result.FirstError.Message, Severity.Error);
@@ -204,5 +250,15 @@ else
         public bool RequireApproval { get; set; }
         public VatPeriod VatPeriod { get; set; } = VatPeriod.Monthly;
         public bool EDefterEnabled { get; set; }
+    }
+
+    private sealed class FiscalYearActivationForm
+    {
+        public string Label { get; set; } = "";
+        public DateTime? StartDateDt { get; set; } = new DateTime(DateTime.Today.Year, 1, 1);
+        public DateTime? EndDateDt { get; set; } = new DateTime(DateTime.Today.Year, 12, 31);
+        public DateOnly? StartDate => StartDateDt.HasValue ? DateOnly.FromDateTime(StartDateDt.Value) : null;
+        public DateOnly? EndDate => EndDateDt.HasValue ? DateOnly.FromDateTime(EndDateDt.Value) : null;
+        public bool IsNonCalendar => StartDate.HasValue && EndDate.HasValue && StartDate.Value.Year != EndDate.Value.Year;
     }
 }

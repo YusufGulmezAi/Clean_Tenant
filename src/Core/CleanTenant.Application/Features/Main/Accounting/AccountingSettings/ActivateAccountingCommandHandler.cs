@@ -72,10 +72,16 @@ public sealed class ActivateAccountingCommandHandler
         if (initResult.IsFailure)
             return Result<AccountingSettingsDto>.Failure(initResult.FirstError);
 
-        // 3. Varsayılan FiscalYear oluştur (cari takvim yılı)
+        // 3. İlk FiscalYear oluştur — kullanıcı tarih verdiyse o aralık (sitenin kendi
+        //    dönemi), vermediyse cari takvim yılı (geriye uyum: WebApi vb. eski çağrılar).
         var currentYear = DateTime.Today.Year;
-        var fiscalYearStartDate = new DateOnly(currentYear, 1, 1);
-        var fiscalYearEndDate = new DateOnly(currentYear, 12, 31);
+        var fiscalYearStartDate = command.FiscalYearStart ?? new DateOnly(currentYear, 1, 1);
+        var fiscalYearEndDate = command.FiscalYearEnd ?? new DateOnly(currentYear, 12, 31);
+        var fiscalYearLabel = !string.IsNullOrWhiteSpace(command.FiscalYearLabel)
+            ? command.FiscalYearLabel.Trim()
+            : (fiscalYearStartDate.Year == fiscalYearEndDate.Year
+                ? $"{fiscalYearStartDate.Year}"
+                : $"{fiscalYearStartDate.Year}-{fiscalYearEndDate.Year}");
 
         var hasFiscalYear = await _db.FiscalYears
             .AnyAsync(fy => fy.CompanyId == command.CompanyId && !fy.IsDeleted, cancellationToken);
@@ -86,7 +92,7 @@ public sealed class ActivateAccountingCommandHandler
                 new CreateFiscalYearCommand(
                     command.CompanyId,
                     command.TenantId,
-                    $"{currentYear}",
+                    fiscalYearLabel,
                     fiscalYearStartDate,
                     fiscalYearEndDate,
                     SetAsCurrent: true),
