@@ -6,7 +6,8 @@ namespace CleanTenant.Infrastructure.Export.BuildingSchema;
 
 /// <summary>
 /// <see cref="IBuildingSchemaExcelService"/>'in ClosedXML tabanlı implementasyonu.
-/// Şablon üretimi ve import parsing/validasyon sorumluluğunu üstlenir.
+/// Şablon üretimi (talimat + kolon rehberi + veri doğrulama dropdown'ları) ve
+/// import parsing/satır-bazlı validasyon sorumluluğunu üstlenir.
 /// </summary>
 public sealed class BuildingSchemaExcelService : IBuildingSchemaExcelService
 {
@@ -19,6 +20,7 @@ public sealed class BuildingSchemaExcelService : IBuildingSchemaExcelService
         ("AVM",           BuildingType.ShoppingMall),
         ("Ofis",          BuildingType.Office),
         ("Depo",          BuildingType.Warehouse),
+        ("Dükkan",        BuildingType.Shop),
         ("Diğer",         BuildingType.Other),
     ];
 
@@ -47,37 +49,33 @@ public sealed class BuildingSchemaExcelService : IBuildingSchemaExcelService
         ("GüneyBatı",  Orientation.SouthWest),
     ];
 
+    // Etiket↔değer eşlemesi merkezî katalogdan (Domain) gelir — tek kaynak.
     private static readonly (string Label, ApartmentLayout Value)[] LayoutMap =
-    [
-        ("Stüdyo", ApartmentLayout.Studio),
-        ("1+0",    ApartmentLayout.OneRoom),
-        ("1+1",    ApartmentLayout.OneBedroom),
-        ("2+1",    ApartmentLayout.TwoBedroom),
-        ("3+1",    ApartmentLayout.ThreeBedroom),
-        ("4+1",    ApartmentLayout.FourBedroom),
-        ("5+1",    ApartmentLayout.FiveBedroom),
-        ("Diğer",  ApartmentLayout.Other),
-    ];
+        ApartmentLayoutExtensions.Ordered.Select(x => (x.Label, x.Value)).ToArray();
 
     // ── Sütun indisleri (1-tabanlı) ─────────────────────────────────────────
 
-    private const int ColBlockName     = 1;
-    private const int ColParcelName    = 2;
-    private const int ColBuildingName  = 3;
-    private const int ColBuildingType  = 4;
-    private const int ColUnitNumber    = 5;
-    private const int ColUnitType      = 6;
-    private const int ColSquareMeters  = 7;
-    private const int ColLandShare     = 8;
-    private const int ColAllocatedArea = 9;
-    private const int ColOrientation   = 10;
-    private const int ColFloor         = 11;
-    private const int ColLayout        = 12;
-    private const int ColError         = 13;
+    private const int ColLandName      = 1;   // Ada
+    private const int ColParcelName    = 2;   // Parsel
+    private const int ColBuildingName  = 3;   // Yapı
+    private const int ColBuildingType  = 4;   // Yapı Tipi (liste)
+    private const int ColMunicipalNo   = 5;   // Belediye No (opsiyonel)
+    private const int ColBlockName     = 6;   // Blok (opsiyonel)
+    private const int ColUnitNumber    = 7;   // BB No
+    private const int ColUnitType      = 8;   // BB Tipi (liste)
+    private const int ColSquareMeters  = 9;   // m²
+    private const int ColLandShare     = 10;  // Arsa Payı
+    private const int ColAllocatedArea = 11;  // Tahsis Alanı
+    private const int ColOrientation   = 12;  // Yön (liste)
+    private const int ColFloor         = 13;  // Kat
+    private const int ColLayout        = 14;  // Oda/Salon (liste)
+    private const int ColError         = 15;  // HATA (import çıktısı)
+    private const int ColCount         = 15;
 
-    private const int HeaderRow  = 1;
-    private const int ExampleRow = 2;
-    private const int DataStart  = 3;
+    // Talimat bloğu en üstte; veri tablosu başlığın HEMEN altından başlar
+    // (örnek/gri satır yok — kullanıcının ilk satırı atlanmasın diye).
+    private const int HeaderRow  = 27;
+    private const int DataStart  = 28;
     private const int DataEnd    = 10000;
 
     // ── Şablon üretimi ───────────────────────────────────────────────────────
@@ -87,13 +85,13 @@ public sealed class BuildingSchemaExcelService : IBuildingSchemaExcelService
     {
         using var wb = new XLWorkbook();
         var ws = wb.Worksheets.Add("Şablon");
-        var ls = wb.Worksheets.Add("_Listeler");
+        var ls = wb.Worksheets.Add("Geçerli Değerler");
 
         FillListSheet(ls);
-        ls.Visibility = XLWorksheetVisibility.Hidden;
+        // Liste sayfası GÖRÜNÜR bırakılır — kullanıcı geçerli değerleri referans alabilir.
 
+        AddInstructions(ws);
         AddHeaders(ws);
-        AddExampleRow(ws);
         AddDataValidations(ws, ls);
         SetColumnWidths(ws);
 
@@ -104,26 +102,126 @@ public sealed class BuildingSchemaExcelService : IBuildingSchemaExcelService
 
     private static void FillListSheet(IXLWorksheet ls)
     {
+        // 1. satır = kolon başlıkları; geçerli değerler 2. satırdan itibaren.
+        string[] titles = ["Yapı Tipi", "BB Tipi", "Yön", "Oda/Salon"];
+        for (int c = 0; c < titles.Length; c++)
+        {
+            var h = ls.Cell(1, c + 1);
+            h.Value = titles[c];
+            h.Style.Font.Bold = true;
+            h.Style.Font.FontColor = XLColor.White;
+            h.Style.Fill.BackgroundColor = XLColor.FromArgb(31, 73, 125);
+            h.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+            ls.Column(c + 1).Width = 18;
+        }
+
         for (int i = 0; i < BuildingTypeMap.Length; i++)
-            ls.Cell(i + 1, 1).Value = BuildingTypeMap[i].Label;
+            ls.Cell(i + 2, 1).Value = BuildingTypeMap[i].Label;
 
         for (int i = 0; i < UnitTypeMap.Length; i++)
-            ls.Cell(i + 1, 2).Value = UnitTypeMap[i].Label;
+            ls.Cell(i + 2, 2).Value = UnitTypeMap[i].Label;
 
         for (int i = 0; i < OrientationMap.Length; i++)
-            ls.Cell(i + 1, 3).Value = OrientationMap[i].Label;
+            ls.Cell(i + 2, 3).Value = OrientationMap[i].Label;
 
         for (int i = 0; i < LayoutMap.Length; i++)
-            ls.Cell(i + 1, 4).Value = LayoutMap[i].Label;
+            ls.Cell(i + 2, 4).Value = LayoutMap[i].Label;
+    }
+
+    // Görünür talimat bloğu: başlık + genel kurallar + kolon rehberi tablosu.
+    private static void AddInstructions(IXLWorksheet ws)
+    {
+        // Başlık
+        var title = ws.Cell(1, 1);
+        title.Value = "BAĞIMSIZ BÖLÜM (BB) TOPLU YÜKLEME ŞABLONU";
+        ws.Range(1, 1, 1, ColCount).Merge();
+        title.Style.Font.Bold = true;
+        title.Style.Font.FontSize = 14;
+        title.Style.Font.FontColor = XLColor.White;
+        title.Style.Fill.BackgroundColor = XLColor.FromArgb(31, 73, 125);
+        title.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+        ws.Row(1).Height = 22;
+
+        // Genel kurallar
+        var notes = new[]
+        {
+            "Verileri aşağıdaki BAŞLIK satırının HEMEN altındaki ilk satırdan itibaren girin (boş satır bırakmayın).",
+            "Zorunlu kolonlar: Ada, Parsel, Yapı, BB No ve m². (m² 0'dan büyük olmalıdır.)",
+            "Blok opsiyoneldir — boş bırakılırsa Bağımsız Bölüm doğrudan Yapı altına eklenir.",
+            "Yapı Tipi, BB Tipi, Yön ve Oda/Salon hücrelerinde sağ kenardaki oktan açılır listeden SEÇİM yapın.",
+            "Sayısal kolonlar: m² ve Tahsis Alanı ondalıklı olabilir; Arsa Payı ve Kat tam sayıdır.",
+            "Satır SIRASI önemlidir — yükleme sırası tüm liste ve raporlarda aynen korunur.",
+            "Aynı Yapı (veya aynı Blok) içinde BB No tekrar edemez. Hatalı satırlar yüklemede en sağda kırmızı 'HATA' kolonuyla işaretlenir.",
+        };
+        int r = 3;
+        foreach (var note in notes)
+        {
+            var cell = ws.Cell(r, 1);
+            cell.Value = "•  " + note;
+            ws.Range(r, 1, r, ColCount).Merge();
+            cell.Style.Alignment.WrapText = false;
+            cell.Style.Font.FontColor = XLColor.FromArgb(60, 60, 60);
+            r++;
+        }
+
+        // Kolon rehberi başlığı
+        const int guideTitleRow = 11;
+        var guideTitle = ws.Cell(guideTitleRow, 1);
+        guideTitle.Value = "KOLON REHBERİ";
+        ws.Range(guideTitleRow, 1, guideTitleRow, 4).Merge();
+        guideTitle.Style.Font.Bold = true;
+        guideTitle.Style.Font.FontColor = XLColor.White;
+        guideTitle.Style.Fill.BackgroundColor = XLColor.FromArgb(84, 130, 53);
+
+        // Rehber tablo başlığı
+        int gh = guideTitleRow + 1; // 12
+        string[] guideHeaders = ["Kolon", "Zorunlu", "Tip", "Açıklama / Geçerli Değerler"];
+        for (int c = 0; c < guideHeaders.Length; c++)
+        {
+            var cell = ws.Cell(gh, c + 1);
+            cell.Value = guideHeaders[c];
+            cell.Style.Font.Bold = true;
+            cell.Style.Fill.BackgroundColor = XLColor.FromArgb(226, 239, 218);
+        }
+
+        // Rehber satırları
+        var guide = new (string Col, string Required, string Type, string Desc)[]
+        {
+            ("Ada",              "Evet",  "Metin",     "Ada adı/no (en fazla 100 karakter)"),
+            ("Parsel",           "Evet",  "Metin",     "Parsel adı/no (en fazla 100 karakter)"),
+            ("Yapı",             "Evet",  "Metin",     "Yapı/bina adı (en fazla 200 karakter)"),
+            ("Yapı Tipi",        "Evet",  "Liste",     "Konut, Konut+İşyeri, AVM, Ofis, Depo, Dükkan, Diğer"),
+            ("Belediye No",      "Hayır", "Metin",     "Yapının belediye/kapı no'su (opsiyonel, max 50)"),
+            ("Blok",             "Hayır", "Metin",     "Blok/kule adı (örn. A Blok). Boş = doğrudan Yapı altı"),
+            ("BB No",            "Evet",  "Metin",     "Bağımsız bölüm no (en fazla 20 karakter)"),
+            ("BB Tipi",          "Evet",  "Liste",     "Daire, Ofis, Dükkan, Mağaza, Depo, Otopark, Sığınak, Diğer"),
+            ("m²",               "Evet",  "Sayı",      "Brüt alan; 0'dan büyük, ondalık olabilir (örn. 85,5)"),
+            ("Arsa Payı",        "Evet",  "Tam sayı",  "0 veya üzeri"),
+            ("Tahsis Alanı (m²)","Hayır", "Sayı",      "Balkon/teras vb. (boş veya 0 olabilir)"),
+            ("Yön",              "Hayır", "Liste",     "Belirsiz, Kuzey, Güney, Doğu, Batı, KuzeyDoğu, KuzeyBatı, GüneyDoğu, GüneyBatı"),
+            ("Kat",              "Evet",  "Tam sayı",  "Bodrum için negatif olabilir"),
+            ("Oda/Salon",        "Hayır", "Liste",     "Bilinmiyor, Stüdyo (1+0), 1+1, ... 10 üzeri (boş = Bilinmiyor)"),
+        };
+        int gr = gh + 1; // 13
+        foreach (var g in guide)
+        {
+            ws.Cell(gr, 1).Value = g.Col;
+            ws.Cell(gr, 2).Value = g.Required;
+            ws.Cell(gr, 3).Value = g.Type;
+            ws.Cell(gr, 4).Value = g.Desc;
+            if (string.Equals(g.Required, "Evet", StringComparison.Ordinal))
+                ws.Cell(gr, 2).Style.Font.FontColor = XLColor.FromArgb(192, 0, 0);
+            gr++;
+        }
     }
 
     private static void AddHeaders(IXLWorksheet ws)
     {
         var headers = new[]
         {
-            "Ada Adı", "Parsel Adı", "Yapı Adı", "Yapı Tipi",
-            "BB No",   "BB Tipi",   "m²",        "Arsa Payı",
-            "Tahsis Alanı (m²)", "Yön",          "Kat",       "Oda/Salon",
+            "Ada", "Parsel", "Yapı", "Yapı Tipi", "Belediye No",
+            "Blok", "BB No", "BB Tipi", "m²",
+            "Arsa Payı", "Tahsis Alanı (m²)", "Yön", "Kat", "Oda/Salon",
         };
 
         for (int c = 0; c < headers.Length; c++)
@@ -137,37 +235,13 @@ public sealed class BuildingSchemaExcelService : IBuildingSchemaExcelService
         }
     }
 
-    private static void AddExampleRow(IXLWorksheet ws)
-    {
-        var examples = new object[]
-        {
-            "123", "1", "A Blok", "Konut",
-            "1",   "Daire", 85.50m, 15,
-            "",    "Güney", 2, "3+1",
-        };
-
-        for (int c = 0; c < examples.Length; c++)
-        {
-            var cell = ws.Cell(ExampleRow, c + 1);
-            if (examples[c] is decimal d)
-                cell.Value = d;
-            else if (examples[c] is int i)
-                cell.Value = i;
-            else
-                cell.Value = examples[c]?.ToString() ?? "";
-
-            cell.Style.Font.Italic = true;
-            cell.Style.Font.FontColor = XLColor.Gray;
-            cell.Style.Fill.BackgroundColor = XLColor.FromArgb(242, 242, 242);
-        }
-    }
-
     private static void AddDataValidations(IXLWorksheet ws, IXLWorksheet ls)
     {
-        SetListValidation(ws, ColBuildingType, ls.Range(1, 1, BuildingTypeMap.Length, 1));
-        SetListValidation(ws, ColUnitType,     ls.Range(1, 2, UnitTypeMap.Length,     2));
-        SetListValidation(ws, ColOrientation,  ls.Range(1, 3, OrientationMap.Length,  3));
-        SetListValidation(ws, ColLayout,       ls.Range(1, 4, LayoutMap.Length,       4));
+        // Başlık satırı (1) hariç, değerler 2. satırdan başlar.
+        SetListValidation(ws, ColBuildingType, ls.Range(2, 1, BuildingTypeMap.Length + 1, 1));
+        SetListValidation(ws, ColUnitType,     ls.Range(2, 2, UnitTypeMap.Length + 1,     2));
+        SetListValidation(ws, ColOrientation,  ls.Range(2, 3, OrientationMap.Length + 1,  3));
+        SetListValidation(ws, ColLayout,       ls.Range(2, 4, LayoutMap.Length + 1,       4));
     }
 
     private static void SetListValidation(IXLWorksheet ws, int col, IXLRange listRange)
@@ -183,10 +257,12 @@ public sealed class BuildingSchemaExcelService : IBuildingSchemaExcelService
 
     private static void SetColumnWidths(IXLWorksheet ws)
     {
-        ws.Column(ColBlockName).Width     = 14;
-        ws.Column(ColParcelName).Width    = 14;
+        ws.Column(ColLandName).Width      = 12;
+        ws.Column(ColParcelName).Width    = 12;
         ws.Column(ColBuildingName).Width  = 18;
         ws.Column(ColBuildingType).Width  = 16;
+        ws.Column(ColMunicipalNo).Width   = 14;
+        ws.Column(ColBlockName).Width     = 14;
         ws.Column(ColUnitNumber).Width    = 10;
         ws.Column(ColUnitType).Width      = 14;
         ws.Column(ColSquareMeters).Width  = 10;
@@ -194,7 +270,7 @@ public sealed class BuildingSchemaExcelService : IBuildingSchemaExcelService
         ws.Column(ColAllocatedArea).Width = 18;
         ws.Column(ColOrientation).Width   = 14;
         ws.Column(ColFloor).Width         = 8;
-        ws.Column(ColLayout).Width        = 12;
+        ws.Column(ColLayout).Width        = 14;
     }
 
     // ── Import parsing + validasyon ──────────────────────────────────────────
@@ -213,28 +289,34 @@ public sealed class BuildingSchemaExcelService : IBuildingSchemaExcelService
 
         var rows    = new List<BuildingSchemaImportRow>();
         var hasAnyError = false;
-        int lastRow = ws.LastRowUsed()?.RowNumber() ?? ExampleRow;
+        int lastRow = ws.LastRowUsed()?.RowNumber() ?? HeaderRow;
 
         for (int r = DataStart; r <= lastRow; r++)
         {
-            var blockName    = ws.Cell(r, ColBlockName).GetString().Trim();
+            var landName     = ws.Cell(r, ColLandName).GetString().Trim();
             var parcelName   = ws.Cell(r, ColParcelName).GetString().Trim();
             var buildingName = ws.Cell(r, ColBuildingName).GetString().Trim();
+            var municipalNo  = ws.Cell(r, ColMunicipalNo).GetString().Trim();
+            var blockName    = ws.Cell(r, ColBlockName).GetString().Trim();
             var unitNumber   = ws.Cell(r, ColUnitNumber).GetString().Trim();
 
-            // Tamamen boş satır → atla
-            if (string.IsNullOrEmpty(blockName) && string.IsNullOrEmpty(parcelName)
+            // Tamamen boş satır → atla (blok opsiyonel, kontrole dahil değil)
+            if (string.IsNullOrEmpty(landName) && string.IsNullOrEmpty(parcelName)
                 && string.IsNullOrEmpty(buildingName) && string.IsNullOrEmpty(unitNumber))
                 continue;
 
             var errors = new List<string>();
 
-            if (string.IsNullOrEmpty(blockName) || blockName.Length > 100)
-                errors.Add("Ada Adı zorunlu (max 100).");
+            if (string.IsNullOrEmpty(landName) || landName.Length > 100)
+                errors.Add("Ada zorunlu (max 100).");
             if (string.IsNullOrEmpty(parcelName) || parcelName.Length > 100)
-                errors.Add("Parsel Adı zorunlu (max 100).");
+                errors.Add("Parsel zorunlu (max 100).");
             if (string.IsNullOrEmpty(buildingName) || buildingName.Length > 200)
-                errors.Add("Yapı Adı zorunlu (max 200).");
+                errors.Add("Yapı zorunlu (max 200).");
+            if (municipalNo.Length > 50)
+                errors.Add("Belediye No en fazla 50 karakter olmalı.");
+            if (blockName.Length > 100)
+                errors.Add("Blok en fazla 100 karakter olmalı.");
             if (string.IsNullOrEmpty(unitNumber) || unitNumber.Length > 20)
                 errors.Add("BB No zorunlu (max 20).");
 
@@ -260,10 +342,10 @@ public sealed class BuildingSchemaExcelService : IBuildingSchemaExcelService
             var allocCell = ws.Cell(r, ColAllocatedArea);
             if (!allocCell.IsEmpty())
             {
-                if (TryGetDecimal(allocCell, out var alloc) && alloc > 0)
+                if (TryGetDecimal(allocCell, out var alloc) && alloc >= 0)
                     allocatedArea = alloc;
                 else
-                    errors.Add("Tahsis Alanı 0'dan büyük olmalı.");
+                    errors.Add("Tahsis Alanı 0 veya daha büyük olmalı.");
             }
 
             Orientation orientation = Orientation.Unknown;
@@ -275,7 +357,8 @@ public sealed class BuildingSchemaExcelService : IBuildingSchemaExcelService
             if (!TryGetInt(ws.Cell(r, ColFloor), out floor))
                 errors.Add("Kat sayı olmalı.");
 
-            ApartmentLayout layout = ApartmentLayout.Other;
+            // Boş bırakılırsa "Bilinmiyor" (Unknown) atanır; dolu ama listede yoksa hata.
+            ApartmentLayout layout = ApartmentLayout.Unknown;
             var layoutLabel = ws.Cell(r, ColLayout).GetString().Trim();
             if (!string.IsNullOrEmpty(layoutLabel) && !layoutByLabel.TryGetValue(layoutLabel, out layout))
                 errors.Add($"Oda/Salon geçersiz: '{layoutLabel}'.");
@@ -292,10 +375,12 @@ public sealed class BuildingSchemaExcelService : IBuildingSchemaExcelService
             {
                 rows.Add(new BuildingSchemaImportRow
                 {
-                    LandName     = blockName,
+                    LandName     = landName,
                     ParcelName   = parcelName,
                     BuildingName = buildingName,
                     BuildingType = buildingType,
+                    MunicipalNo  = string.IsNullOrEmpty(municipalNo) ? null : municipalNo,
+                    BlockName    = string.IsNullOrEmpty(blockName) ? null : blockName,
                     UnitNumber   = unitNumber,
                     UnitType     = unitType,
                     SquareMeters = squareMeters,

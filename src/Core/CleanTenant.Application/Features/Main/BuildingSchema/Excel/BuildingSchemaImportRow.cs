@@ -20,6 +20,12 @@ public sealed class BuildingSchemaImportRow
     /// <summary>Yapı tipi.</summary>
     public BuildingType BuildingType { get; init; }
 
+    /// <summary>Yapının belediye/kapı no'su (opsiyonel).</summary>
+    public string? MunicipalNo { get; init; }
+
+    /// <summary>Blok/Kule adı (opsiyonel). Boşsa BB doğrudan Yapı altına bağlanır.</summary>
+    public string? BlockName { get; init; }
+
     /// <summary>Bağımsız bölüm numarası.</summary>
     public string UnitNumber { get; init; } = "";
 
