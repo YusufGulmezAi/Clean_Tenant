@@ -5,6 +5,7 @@ using CleanTenant.Application.Features.Main.Budgeting.Budgets;
 using CleanTenant.Application.Features.Main.Budgeting.BudgetLineVersions;
 using CleanTenant.Application.Features.Main.Budgeting.Templates;
 using CleanTenant.Application.Features.Main.BuildingSchema.Queries;
+using CleanTenant.Application.Features.Main.Collections.Queries;
 using CleanTenant.Application.Features.Main.Collections.RecordCollection;
 using CleanTenant.Application.Features.Main.LateFees.GenerateLateFeeCharges;
 using CleanTenant.Application.Features.Main.LateFees.SetLateFeePolicy;
@@ -606,6 +607,88 @@ public sealed class BudgetChainE2ETests : IClassFixture<BudgetE2EFixture>
         kpi.TotalCollected.Should().Be(1_000m);
         kpi.NetBalance.Should().Be(0m);
         kpi.OverdueAmount.Should().Be(0m);
+    }
+
+    [Fact]
+    public async Task Senaryo9_tahsilat_sihirbazi_baglam_acik_borc_FIFO_onizleme()
+    {
+        // S5c: sihirbazın backend'i — bağlam (açık dönem + kasa/banka/çek sınıflandırma),
+        // açık borç FIFO sırası (TBK m.101) ve tahsilat sonrası borç düşümü.
+        var s = await SeedScenarioAsync(unitCount: 3, plannedAnnual: 36_000m, DistributionModel.Equal);
+        var unit0 = s.UnitIds[0];
+
+        // Gecikme geliri + banka(102) + çek(101) yaprak hesapları
+        Guid lateFeeIncomeId;
+        using (var scope = _fixture.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<MainDbContext>();
+            var income = new AccountCode { TenantId = s.TenantId, CompanyId = s.CompanyId, Code = "642.001.001", Name = "Gecikme Faizi Geliri", Level = AccountLevel.Detail, IsDetail = true, IsActive = true };
+            var bank = new AccountCode { TenantId = s.TenantId, CompanyId = s.CompanyId, Code = "102.001.001", Name = "Banka", Level = AccountLevel.Detail, IsDetail = true, IsActive = true };
+            var check = new AccountCode { TenantId = s.TenantId, CompanyId = s.CompanyId, Code = "101.001.001", Name = "Alınan Çekler", Level = AccountLevel.Detail, IsDetail = true, IsActive = true };
+            db.AccountCodes.AddRange(income, bank, check);
+            await db.SaveChangesAsync();
+            lateFeeIncomeId = income.Id;
+        }
+
+        // Mart tahakkuğu (BB#1 anapara 1000, vade 2026-04-15)
+        _fixture.Clock.UtcNow = new DateTimeOffset(2026, 3, 10, 0, 0, 0, TimeSpan.Zero);
+        Ok(await SendAsync(new GenerateBudgetAccrualCommand(s.TenantId, s.CompanyId, s.BudgetId, 2026, 3)));
+
+        // Gecikme politikası + faiz → BB#1'e 30 gecikme detayı
+        Ok(await SendAsync(new SetLateFeePolicyCommand(
+            s.TenantId, s.CompanyId, BudgetId: null,
+            MonthlyRatePercent: 3m, IsCompound: false, GraceDays: 0, IncomeAccountCodeId: lateFeeIncomeId)));
+        _fixture.Clock.UtcNow = new DateTimeOffset(2026, 5, 15, 0, 0, 0, TimeSpan.Zero);
+        Ok(await SendAsync(new GenerateLateFeeChargesCommand(
+            s.TenantId, s.CompanyId, new DateOnly(2026, 5, 15))));
+
+        // ── 1. Bağlam: açık dönem + kasa/banka/çek sınıflandırması ───────────────
+        var ctx = Ok(await SendAsync(new GetCollectionContextQuery(s.CompanyId)));
+        ctx.OpenPeriods.Should().Contain(p => p.Year == 2026 && p.Month == 3);
+        ctx.CashAccounts.Should().Contain(a => a.Code == "100.001.001" && a.Kind == CashAccountKind.Cash);
+        ctx.CashAccounts.Should().Contain(a => a.Code == "101.001.001" && a.Kind == CashAccountKind.Check);
+        ctx.CashAccounts.Should().Contain(a => a.Code == "102.001.001" && a.Kind == CashAccountKind.Bank);
+
+        // ── 2. Açık borç FIFO: BB#1 = gecikme 30 (önce) + anapara 1000 ───────────
+        var open = Ok(await SendAsync(new GetUnitOpenDebtQuery(s.CompanyId, unit0)));
+        open.TotalOpen.Should().Be(1_030m);
+        open.Lines.Should().HaveCount(2);
+        open.Lines[0].Source.Should().Be(AccrualSource.LateFee, "TBK m.101: önce gecikme faizi");
+        open.Lines[0].OpenAmount.Should().Be(30m);
+        open.Lines[1].Source.Should().Be(AccrualSource.Budget);
+        open.Lines[1].OpenAmount.Should().Be(1_000m);
+
+        // Sihirbazın client-side FIFO önizlemesiyle aynı dağıtım (30 → tümü gecikmeye)
+        var preview = ComputeFifoPreview(open.Lines, 30m);
+        preview.Should().ContainSingle();
+        preview[0].applied.Should().Be(30m);
+        preview[0].line.Source.Should().Be(AccrualSource.LateFee);
+
+        // ── 3. 30 tahsilat → gecikme kapanır, açık borç 1000'e düşer ─────────────
+        Ok(await SendAsync(new RecordCollectionCommand(
+            s.TenantId, s.CompanyId, unit0, s.PeriodId,
+            new DateOnly(2026, 5, 16), 30m, PaymentMethod.Cash, s.CashAccountCodeId)));
+
+        var after = Ok(await SendAsync(new GetUnitOpenDebtQuery(s.CompanyId, unit0)));
+        after.TotalOpen.Should().Be(1_000m);
+        after.Lines.Should().ContainSingle();
+        after.Lines[0].Source.Should().Be(AccrualSource.Budget, "gecikme kapandı, anapara açık");
+    }
+
+    /// <summary>Sihirbazın <c>CollectionWizardDialog.ComputeAllocation</c> mantığının test ikizi.</summary>
+    private static List<(OpenDebtLine line, decimal applied)> ComputeFifoPreview(
+        IReadOnlyList<OpenDebtLine> lines, decimal amount)
+    {
+        var result = new List<(OpenDebtLine, decimal)>();
+        var remaining = amount;
+        foreach (var l in lines)
+        {
+            if (remaining <= 0m) break;
+            var apply = Math.Min(remaining, l.OpenAmount);
+            result.Add((l, apply));
+            remaining -= apply;
+        }
+        return result;
     }
 
     [Fact]
