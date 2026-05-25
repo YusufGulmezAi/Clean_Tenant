@@ -131,6 +131,9 @@ public sealed class MainDbContext : DbContext, IMainDbContext
     /// <summary>Tahsilat dağıtım satırları.</summary>
     public DbSet<CollectionAllocation> CollectionAllocations => Set<CollectionAllocation>();
 
+    /// <summary>Avans (fazla ödeme) iadeleri.</summary>
+    public DbSet<CollectionRefund> CollectionRefunds => Set<CollectionRefund>();
+
     // ── Gecikme Faizi Modülü (FAZ 7B+) ───────────────────────────────────────
     /// <summary>Gecikme faizi politikaları (şirket varsayılanı + bütçe override).</summary>
     public DbSet<LateFeePolicy> LateFeePolicies => Set<LateFeePolicy>();

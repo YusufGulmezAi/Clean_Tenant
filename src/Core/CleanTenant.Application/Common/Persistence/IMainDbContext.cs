@@ -122,6 +122,9 @@ public interface IMainDbContext
     /// <summary>Tahsilat dağıtım satırları (AccrualDetail'lere).</summary>
     DbSet<CollectionAllocation> CollectionAllocations { get; }
 
+    /// <summary>Avans (fazla ödeme) iadeleri.</summary>
+    DbSet<CollectionRefund> CollectionRefunds { get; }
+
     // ── Gecikme Faizi Modülü (FAZ 7B+) ───────────────────────────────────────
     /// <summary>Gecikme faizi politikaları (şirket varsayılanı + bütçe override).</summary>
     DbSet<LateFeePolicy> LateFeePolicies { get; }

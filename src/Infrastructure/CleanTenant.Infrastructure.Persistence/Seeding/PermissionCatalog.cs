@@ -94,6 +94,8 @@ public static class PermissionCatalog
         new("tenant.collection.view",    "Tahsilat / borç görüntüleme", "AccrualCollection", ScopeLevel.Tenant),
         new("tenant.collection.record",  "Tahsilat kaydetme",           "AccrualCollection", ScopeLevel.Tenant),
         new("tenant.latefee.configure",  "Gecikme parametre yönetimi",  "AccrualCollection", ScopeLevel.Tenant),
+        new("tenant.advance.refund",     "Avans iadesi (nakit geri ödeme)", "AccrualCollection", ScopeLevel.Tenant),
+        new("tenant.correction.execute", "Resmi düzeltme / ters kayıt",  "AccrualCollection", ScopeLevel.Tenant),
 
         // ══════════ Muhasebe (/company/accounting/*) ══════════
         new("company.accounting.account-plan.read",  "Hesap planı görüntüleme",       "Accounting", ScopeLevel.Company),

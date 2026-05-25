@@ -77,6 +77,12 @@ else
                             </button>
                         }
                     }
+                    @if (_canRefund && _kpi.AdvanceBalance > 0)
+                    {
+                        <button class="qa-btn" @onclick="OpenRefundDialogAsync">
+                            @Loc["Cari.Card.RefundAdvance"]
+                        </button>
+                    }
                 </div>
             </div>
 
@@ -305,6 +311,7 @@ else
 
     private bool _unauthorized, _initialized;
     private bool _canRecord;
+    private bool _canRefund;
     private bool _applyingAdvance;
     private Guid _tenantId;
     private string _tab = "genel";
@@ -377,6 +384,7 @@ else
             _unauthorized = true; _initialized = true; return;
         }
         _canRecord = isSystem || (session?.Permissions.Contains("tenant.collection.record") ?? false);
+        _canRefund = isSystem || (session?.Permissions.Contains("tenant.advance.refund") ?? false);
         if (authState.User.FindFirst("tenant_id") is { Value: var tid } && Guid.TryParseExact(tid, "N", out var tGuid))
             _tenantId = tGuid;
 
@@ -448,6 +456,29 @@ else
         finally
         {
             _applyingAdvance = false;
+        }
+    }
+
+    private async Task OpenRefundDialogAsync()
+    {
+        if (!_canRefund || _tenures is null || _kpi.AdvanceBalance <= 0) return;
+        var parameters = new DialogParameters<RefundAdvanceDialog>
+        {
+            { x => x.TenantId, _tenantId },
+            { x => x.CompanyId, CompanyId },
+            { x => x.UnitId, UnitId },
+            { x => x.UnitNumber, _tenures.UnitNumber },
+            { x => x.AdvanceBalance, _kpi.AdvanceBalance },
+        };
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
+        var dialog = await DialogService.ShowAsync<RefundAdvanceDialog>(Loc["Cari.Refund.Title"].Value, parameters, options);
+        var result = await dialog.Result;
+        if (result is not null && !result.Canceled)
+        {
+            var pending = result.Data is true;
+            Snackbar.Add(pending ? Loc["Cari.Refund.PendingApproval"].Value : Loc["Cari.Refund.Success"].Value,
+                pending ? Severity.Info : Severity.Success);
+            await RefreshFinancialsAsync();
         }
     }
 

@@ -8,6 +8,7 @@ using CleanTenant.Application.Features.Main.BuildingSchema.Queries;
 using CleanTenant.Application.Features.Main.Collections.ApplyAdvance;
 using CleanTenant.Application.Features.Main.Collections.Queries;
 using CleanTenant.Application.Features.Main.Collections.RecordCollection;
+using CleanTenant.Application.Features.Main.Collections.RefundAdvance;
 using CleanTenant.Application.Features.Main.LateFees.GenerateLateFeeCharges;
 using CleanTenant.Application.Features.Main.LateFees.SetLateFeePolicy;
 using CleanTenant.Application.Features.Main.Parties.CurrentAccount;
@@ -804,6 +805,71 @@ public sealed class BudgetChainE2ETests : IClassFixture<BudgetE2EFixture>
         kpi.TotalCollected.Should().Be(1_500m);
         kpi.NetBalance.Should().Be(500m);
         kpi.AdvanceBalance.Should().Be(0m);
+    }
+
+    [Fact]
+    public async Task Senaryo12_avans_iadesi_yevmiye_ve_borc_durumu()
+    {
+        // F1 Slice 3: avans bakiyesinden nakit iade → Borç 120 / Alacak 100 yevmiye;
+        // UnallocatedAmount düşer; KPI/ledger iadeyi yansıtır.
+        var s = await SeedScenarioAsync(unitCount: 3, plannedAnnual: 36_000m, DistributionModel.Equal);
+        var unit0 = s.UnitIds[0];
+
+        _fixture.Clock.UtcNow = new DateTimeOffset(2026, 3, 10, 0, 0, 0, TimeSpan.Zero);
+        Ok(await SendAsync(new GenerateBudgetAccrualCommand(s.TenantId, s.CompanyId, s.BudgetId, 2026, 3)));
+        // 1500 ödeme → 500 avans
+        Ok(await SendAsync(new RecordCollectionCommand(
+            s.TenantId, s.CompanyId, unit0, s.PeriodId,
+            new DateOnly(2026, 3, 20), 1_500m, PaymentMethod.Cash, s.CashAccountCodeId)));
+
+        // Avansı aşan iade reddedilir (REF-002)
+        var tooMuch = await SendAsync(new RefundAdvanceCommand(
+            s.TenantId, s.CompanyId, unit0, 600m, new DateOnly(2026, 3, 25),
+            s.CashAccountCodeId, PaymentMethod.Cash));
+        tooMuch.IsFailure.Should().BeTrue();
+        tooMuch.FirstError.Code.Should().Be("REF-002");
+
+        // 300 iade → avans 200 kalır
+        var refund = Ok(await SendAsync(new RefundAdvanceCommand(
+            s.TenantId, s.CompanyId, unit0, 300m, new DateOnly(2026, 3, 25),
+            s.CashAccountCodeId, PaymentMethod.Cash, "DEKONT-1")));
+        refund.RefundedAmount.Should().Be(300m);
+        refund.RemainingAdvance.Should().Be(200m);
+        refund.PendingApproval.Should().BeFalse("muhasebe ayarı yok → RequireApproval false → Posted");
+
+        using (var scope = _fixture.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<MainDbContext>();
+            var rec = await db.CollectionRefunds.FirstAsync(r => r.Id == refund.RefundId);
+            rec.Amount.Should().Be(300m);
+            rec.UnitId.Should().Be(unit0);
+
+            var advanceLeft = await db.Collections
+                .Where(c => c.UnitId == unit0 && !c.IsDeleted).SumAsync(c => c.UnallocatedAmount);
+            advanceLeft.Should().Be(200m, "iade avanstan düşüldü");
+
+            var entry = await db.JournalEntries.Include(e => e.Lines)
+                .FirstAsync(e => e.ReferenceId == refund.RefundId);
+            entry.Reference.Should().Be("REFUND");
+            entry.Status.Should().Be(JournalEntryStatus.Posted);
+            entry.TotalDebit.Should().Be(300m);
+            entry.TotalCredit.Should().Be(300m);
+            entry.Lines.Should().HaveCount(2);
+            entry.Lines.Single(l => l.Credit > 0).AccountCodeValue.Should().Be("100.001.001", "nakit çıkış kasa");
+            entry.Lines.Single(l => l.Debit > 0).AccountCodeValue.Should().Be("120.001.001", "avansın durduğu 120");
+        }
+
+        // KPI: net tahsil 1500-300=1200 → net bakiye -200; avans 200
+        var kpi = Ok(await SendAsync(new GetUnitCurrentAccountKpiQuery(s.CompanyId, unit0)));
+        kpi.TotalCollected.Should().Be(1_200m, "iade düşülmüş net nakit");
+        kpi.NetBalance.Should().Be(-200m);
+        kpi.AdvanceBalance.Should().Be(200m);
+
+        // Ledger: borç 1000 + tahsilat 1000 + avans 500 - iade 300 → bakiye -200
+        var ledger = Ok(await SendAsync(new GetUnitLedgerQuery(s.CompanyId, unit0)));
+        ledger.Sum(r => r.Debit).Should().Be(1_300m, "tahakkuk 1000 + iade 300 borç");
+        ledger.Sum(r => r.Credit).Should().Be(1_500m, "tahsilat 1000 + avans 500");
+        ledger[^1].RunningBalance.Should().Be(-200m);
     }
 
     [Fact]

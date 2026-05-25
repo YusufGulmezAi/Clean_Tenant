@@ -1,0 +1,151 @@
+@* Avans iade dialog'u (F1 Slice 3) — avans bakiyesinden nakit geri ödeme. *@
+@inject MediatR.IMediator Mediator
+@inject IStringLocalizer Loc
+@using CleanTenant.Application.Features.Main.Collections.Queries
+@using CleanTenant.Application.Features.Main.Collections.RefundAdvance
+@using CleanTenant.Domain.Tenant.Collections.Enums
+
+<MudDialog>
+    <TitleContent>
+        <div class="d-flex align-center gap-2">
+            <MudIcon Icon="@Icons.Material.Filled.Undo" Color="Color.Warning" />
+            <MudText Typo="Typo.h6">@Loc["Cari.Refund.Title"] — @Loc["Cari.Card.Unit"] @UnitNumber</MudText>
+        </div>
+    </TitleContent>
+    <DialogContent>
+        <div style="min-width: 460px;">
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
+                @Loc["Cari.Refund.Available"]: <b>@Fmt(AdvanceBalance)</b>
+            </MudAlert>
+
+            @if (_loading)
+            {
+                <MudProgressLinear Indeterminate="true" Class="my-3" />
+            }
+            else
+            {
+                <MudGrid Spacing="2">
+                    <MudItem xs="12" sm="6">
+                        <MudNumericField T="decimal" @bind-Value="_amount" Label="@Loc["Cari.Refund.Amount"]"
+                                         Variant="Variant.Outlined" Min="0m" Max="AdvanceBalance" Format="N2" Immediate="true" />
+                        @if (_amount > AdvanceBalance)
+                        {
+                            <MudText Typo="Typo.caption" Color="Color.Error">@Loc["Cari.Refund.ExceedsAdvance"]</MudText>
+                        }
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudDatePicker @bind-Date="_refundDate" Label="@Loc["Cari.Refund.Date"]"
+                                       Variant="Variant.Outlined" DateFormat="dd.MM.yyyy" />
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudSelect T="CashAccountItem" @bind-Value="_cashAccount" Label="@Loc["Cari.Refund.CashAccount"]"
+                                   Variant="Variant.Outlined" Dense="true"
+                                   ToStringFunc="@(a => a is null ? "" : $"{a.Code} — {a.Name}")">
+                            @foreach (var a in _cashAccounts)
+                            {
+                                <MudSelectItem T="CashAccountItem" Value="a">@a.Code — @a.Name</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudSelect T="PaymentMethod" @bind-Value="_method" Label="@Loc["Cari.Refund.Method"]"
+                                   Variant="Variant.Outlined" Dense="true">
+                            <MudSelectItem Value="PaymentMethod.Cash">@Loc["Cari.Wizard.Channel.Cash"]</MudSelectItem>
+                            <MudSelectItem Value="PaymentMethod.BankTransfer">Havale / EFT</MudSelectItem>
+                            <MudSelectItem Value="PaymentMethod.Check">@Loc["Cari.Wizard.Channel.Check"]</MudSelectItem>
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="_reference" Label="@Loc["Cari.Refund.Reference"]"
+                                      Variant="Variant.Outlined" MaxLength="200" />
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="_description" Label="@Loc["Cari.Refund.Description"]"
+                                      Variant="Variant.Outlined" Lines="2" MaxLength="500" />
+                    </MudItem>
+                </MudGrid>
+
+                @if (!string.IsNullOrEmpty(_error))
+                {
+                    <MudAlert Severity="Severity.Error" Dense="true" Class="mt-3">@_error</MudAlert>
+                }
+            }
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="Cancel">@Loc["Cari.Refund.Cancel"]</MudButton>
+        <MudButton Color="Color.Warning" Variant="Variant.Filled" OnClick="SubmitAsync"
+                   Disabled="@(_submitting || _loading || _cashAccount is null || _amount <= 0m || _amount > AdvanceBalance)">
+            @if (_submitting)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            @Loc["Cari.Refund.Submit"]
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public Guid TenantId { get; set; }
+    [Parameter] public Guid CompanyId { get; set; }
+    [Parameter] public Guid UnitId { get; set; }
+    [Parameter] public string UnitNumber { get; set; } = "";
+    [Parameter] public decimal AdvanceBalance { get; set; }
+
+    private bool _loading = true;
+    private bool _submitting;
+    private string? _error;
+
+    private IReadOnlyList<CashAccountItem> _cashAccounts = [];
+    private CashAccountItem? _cashAccount;
+    private decimal _amount;
+    private DateTime? _refundDate = DateTime.Today;
+    private PaymentMethod _method = PaymentMethod.Cash;
+    private string _reference = "";
+    private string _description = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var ctx = await Mediator.Send(new GetCollectionContextQuery(CompanyId));
+        if (ctx.IsSuccess && ctx.Value is not null)
+        {
+            // İade için kasa/banka (100/102) öncelikli; çek (101) de listelenir
+            _cashAccounts = ctx.Value.CashAccounts;
+            _cashAccount = _cashAccounts.FirstOrDefault(a => a.Kind == CashAccountKind.Cash)
+                           ?? _cashAccounts.FirstOrDefault();
+        }
+        _amount = AdvanceBalance;
+        _loading = false;
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (_cashAccount is null || _amount <= 0m || _amount > AdvanceBalance) return;
+        _submitting = true;
+        _error = null;
+        try
+        {
+            var date = _refundDate.HasValue ? DateOnly.FromDateTime(_refundDate.Value) : DateOnly.FromDateTime(DateTime.Today);
+            var result = await Mediator.Send(new RefundAdvanceCommand(
+                TenantId, CompanyId, UnitId, _amount, date, _cashAccount.Id, _method,
+                string.IsNullOrWhiteSpace(_reference) ? null : _reference,
+                string.IsNullOrWhiteSpace(_description) ? null : _description));
+
+            if (result.IsSuccess)
+                MudDialog.Close(DialogResult.Ok(result.Value!.PendingApproval));
+            else
+                _error = result.FirstError.Message;
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private static string Fmt(decimal v) =>
+        v.ToString("N2", System.Globalization.CultureInfo.GetCultureInfo("tr-TR")) + " ₺";
+}

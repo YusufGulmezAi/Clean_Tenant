@@ -25,6 +25,10 @@ public sealed class CurrentAccountReader : ICurrentAccountReader
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
         var conn = db.Database.GetDbConnection();
 
+        // Banka-ekstresi modeli: tahakkuk (borç) + tahsilat TAM tutar (alacak) + iade (borç).
+        // Tahsilat tam tutarla kredilenir → fazla ödeme bakiyeyi negatife (avans) çeker;
+        // mahsup içsel olduğu için ayrı satır yok (tam tahsilat zaten kapsar); iade nakit
+        // çıkışı olarak borç gösterilir. Yürüyen bakiye = BB'nin net borcu (negatif = avans).
         const string sql = """
             WITH movements AS (
                 SELECT
@@ -42,35 +46,31 @@ public sealed class CurrentAccountReader : ICurrentAccountReader
 
                 UNION ALL
 
+                -- Tahsilat: tam tutar alacak (fazla ödeme bakiyeyi avansa/negatife çeker)
                 SELECT
                     c.payment_date::timestamptz AS movement_date,
                     COALESCE(NULLIF(c.description, ''), 'Tahsilat') AS description,
                     0::numeric                  AS debit,
-                    al.allocated_amount         AS credit,
+                    c.amount                    AS credit,
                     NULL::uuid                  AS party_id,
                     'Collection'                AS source,
                     2                           AS ord
-                FROM collection_allocations al
-                JOIN accrual_details d2 ON d2.id = al.accrual_detail_id
-                    AND d2.unit_id = @unitId AND d2.is_deleted = false
-                JOIN collections c ON c.id = al.collection_id
-                    AND c.company_id = @companyId AND c.is_deleted = false
-                WHERE al.is_deleted = false
+                FROM collections c
+                WHERE c.unit_id = @unitId AND c.company_id = @companyId AND c.is_deleted = false
 
                 UNION ALL
 
-                -- Avans (fazla ödeme): dağıtılmamış tutar BB lehine kredi (120 negatif)
+                -- Avans iadesi: nakit çıkış → borç hareketi (avans/kredi bakiyesini azaltır)
                 SELECT
-                    c.payment_date::timestamptz AS movement_date,
-                    'Avans (fazla ödeme)'       AS description,
-                    0::numeric                  AS debit,
-                    c.unallocated_amount        AS credit,
-                    NULL::uuid                  AS party_id,
-                    'Advance'                   AS source,
-                    2                           AS ord
-                FROM collections c
-                WHERE c.unit_id = @unitId AND c.company_id = @companyId
-                    AND c.is_deleted = false AND c.unallocated_amount > 0
+                    r.refund_date::timestamptz AS movement_date,
+                    'Avans iadesi'             AS description,
+                    r.amount                   AS debit,
+                    0::numeric                 AS credit,
+                    NULL::uuid                 AS party_id,
+                    'Refund'                   AS source,
+                    3                          AS ord
+                FROM collection_refunds r
+                WHERE r.unit_id = @unitId AND r.company_id = @companyId AND r.is_deleted = false
             )
             SELECT
                 m.movement_date AS Date,
@@ -125,7 +125,10 @@ public sealed class CurrentAccountReader : ICurrentAccountReader
                  ) paid ON true
                  WHERE d.unit_id = @unitId AND d.is_deleted = false) acc
                 CROSS JOIN
-                (SELECT COALESCE(SUM(c.amount), 0) AS total_collected,
+                (SELECT COALESCE(SUM(c.amount), 0)
+                        - COALESCE((SELECT SUM(r.amount) FROM collection_refunds r
+                                    WHERE r.unit_id = @unitId AND r.company_id = @companyId
+                                      AND r.is_deleted = false), 0) AS total_collected,
                         COALESCE(SUM(c.unallocated_amount), 0) AS advance_balance
                  FROM collections c
                  WHERE c.unit_id = @unitId AND c.company_id = @companyId AND c.is_deleted = false) coll
