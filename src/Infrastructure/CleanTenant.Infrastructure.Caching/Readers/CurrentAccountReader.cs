@@ -34,10 +34,11 @@ public sealed class CurrentAccountReader : ICurrentAccountReader
                 SELECT
                     make_date(a.year, a.month, 1)::timestamptz AS movement_date,
                     a.description AS description,
-                    d.amount      AS debit,
-                    0::numeric    AS credit,
+                    -- Düzeltme (negatif tutar) alacak tarafında gösterilir
+                    CASE WHEN d.amount >= 0 THEN d.amount ELSE 0 END AS debit,
+                    CASE WHEN d.amount < 0 THEN -d.amount ELSE 0 END AS credit,
                     d.primary_responsible_party_id AS party_id,
-                    'Accrual'     AS source,
+                    CASE WHEN a.source = 4 THEN 'Correction' ELSE 'Accrual' END AS source,
                     1             AS ord
                 FROM accrual_details d
                 JOIN accruals a ON a.id = d.accrual_id

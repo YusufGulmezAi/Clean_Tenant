@@ -53,6 +53,13 @@ public sealed class AccrualDetail : BaseEntity, ITenantScoped
     /// <summary>Sorumlu çözümleme notu (örn. "kiracı aktif", "boş dönem → malik").</summary>
     public string? ResponsibleResolvedNote { get; set; }
 
+    /// <summary>
+    /// Düzeltme (Correction) detayında, geri alınan ORİJİNAL tahakkuk detayına işaret eder
+    /// (negatif <see cref="Amount"/> taşır). Normal detaylarda null. Aşırı-ters-kayıt
+    /// kontrolü ve izlenebilirlik için.
+    /// </summary>
+    public Guid? CorrectedAccrualDetailId { get; set; }
+
     /// <summary>Gün-bazlı sorumluluk parçaları (Σ Amount = <see cref="Amount"/>).</summary>
     public ICollection<Parties.AccrualResponsibilitySplit> Responsibilities { get; set; } = [];
 }

@@ -1,4 +1,5 @@
 using System.Globalization;
+using CleanTenant.Application.Features.Main.Accruals.CorrectAccrual;
 using CleanTenant.Application.Features.Main.Accruals.GenerateBudgetAccrual;
 using CleanTenant.Application.Features.Main.Accruals.Queries;
 using CleanTenant.Application.Features.Main.Budgeting.Budgets;
@@ -870,6 +871,77 @@ public sealed class BudgetChainE2ETests : IClassFixture<BudgetE2EFixture>
         ledger.Sum(r => r.Debit).Should().Be(1_300m, "tahakkuk 1000 + iade 300 borç");
         ledger.Sum(r => r.Credit).Should().Be(1_500m, "tahsilat 1000 + avans 500");
         ledger[^1].RunningBalance.Should().Be(-200m);
+    }
+
+    [Fact]
+    public async Task Senaryo13_ters_kayit_correction_net_borcu_dusurur()
+    {
+        // F1 Slice 4: fazla/yanlış tahakkuğu ters kayıtla geri al. Geçmiş mutate edilmez;
+        // negatif Correction detayı + ters yönlü dengeli yevmiye (Borç 600 / Alacak 120).
+        var s = await SeedScenarioAsync(unitCount: 3, plannedAnnual: 36_000m, DistributionModel.Equal);
+        var unit0 = s.UnitIds[0];
+
+        _fixture.Clock.UtcNow = new DateTimeOffset(2026, 3, 10, 0, 0, 0, TimeSpan.Zero);
+        var acc = Ok(await SendAsync(new GenerateBudgetAccrualCommand(s.TenantId, s.CompanyId, s.BudgetId, 2026, 3)));
+
+        Guid detailId; Guid? originalEntryId;
+        using (var scope = _fixture.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<MainDbContext>();
+            var detail = await db.AccrualDetails.FirstAsync(d => d.AccrualId == acc.AccrualId && d.UnitId == unit0);
+            detailId = detail.Id;
+            originalEntryId = (await db.Accruals.FirstAsync(a => a.Id == acc.AccrualId)).JournalEntryId;
+        }
+
+        // Aşırı ters kayıt reddi (1100 > 1000)
+        var tooMuch = await SendAsync(new CorrectAccrualCommand(s.TenantId, s.CompanyId, detailId, 1_100m, "fazla"));
+        tooMuch.IsFailure.Should().BeTrue();
+        tooMuch.FirstError.Code.Should().Be("COR-005");
+
+        // 200 ters kayıt
+        var corr = Ok(await SendAsync(new CorrectAccrualCommand(s.TenantId, s.CompanyId, detailId, 200m, "yanlış tahakkuk")));
+        corr.Amount.Should().Be(200m);
+        corr.PendingApproval.Should().BeFalse();
+
+        using (var scope = _fixture.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<MainDbContext>();
+
+            var cAccrual = await db.Accruals.FirstAsync(a => a.Id == corr.CorrectionAccrualId);
+            cAccrual.Source.Should().Be(AccrualSource.Correction);
+            cAccrual.TotalAmount.Should().Be(-200m);
+
+            var cDetail = await db.AccrualDetails.FirstAsync(d => d.Id == corr.CorrectionDetailId);
+            cDetail.Amount.Should().Be(-200m, "negatif düzeltme detayı");
+            cDetail.CorrectedAccrualDetailId.Should().Be(detailId);
+            cDetail.UnitId.Should().Be(unit0);
+
+            // Ters yönlü dengeli yevmiye: Borç 600 (gelir) / Alacak 120 (alacak)
+            var entry = await db.JournalEntries.Include(e => e.Lines).FirstAsync(e => e.Id == corr.JournalEntryId);
+            entry.EntryType.Should().Be(EntryType.Correction);
+            entry.Status.Should().Be(JournalEntryStatus.Posted);
+            entry.OriginalEntryId.Should().Be(originalEntryId);
+            entry.TotalDebit.Should().Be(200m);
+            entry.TotalCredit.Should().Be(200m);
+            entry.Lines.Single(l => l.Debit > 0).AccountCodeValue.Should().Be("600.001.001", "gelir ters borç");
+            entry.Lines.Single(l => l.Credit > 0).AccountCodeValue.Should().Be("120.001.001", "alacak ters alacak");
+
+            // Düzeltme kaydı tekrar düzeltilemez
+            var reCorrect = await SendAsync(new CorrectAccrualCommand(s.TenantId, s.CompanyId, cDetail.Id, 50m));
+            reCorrect.IsFailure.Should().BeTrue();
+            reCorrect.FirstError.Code.Should().Be("COR-003");
+        }
+
+        // KPI: net tahakkuk 1000-200=800; net bakiye 800 (ödeme yok)
+        var kpi = Ok(await SendAsync(new GetUnitCurrentAccountKpiQuery(s.CompanyId, unit0)));
+        kpi.TotalAccrued.Should().Be(800m, "düzeltme net tahakkuğu düşürür");
+        kpi.NetBalance.Should().Be(800m);
+
+        // Ledger: tahakkuk borç 1000 + düzeltme alacak 200 → bakiye 800
+        var ledger = Ok(await SendAsync(new GetUnitLedgerQuery(s.CompanyId, unit0)));
+        ledger.Sum(r => r.Debit).Should().Be(1_000m);
+        ledger.Sum(r => r.Credit).Should().Be(200m, "düzeltme alacak tarafında");
+        ledger[^1].RunningBalance.Should().Be(800m);
     }
 
     [Fact]

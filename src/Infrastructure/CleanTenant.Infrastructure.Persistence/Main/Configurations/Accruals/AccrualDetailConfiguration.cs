@@ -15,10 +15,10 @@ internal sealed class AccrualDetailConfiguration : IEntityTypeConfiguration<Accr
     /// <inheritdoc />
     public void Configure(EntityTypeBuilder<AccrualDetail> builder)
     {
-        builder.ToTable("accrual_details", t =>
-        {
-            t.HasCheckConstraint("ck_accrual_details_amount", "amount >= 0");
-        });
+        // NOT: amount >= 0 CHECK kaldırıldı (F1) — Correction (ters kayıt) detayları
+        // NEGATİF tutar taşır; böylece TotalAccrued/overdue/FIFO net olarak kendiliğinden
+        // doğru hesaplanır. Negatif tutar yalnız kontrollü CorrectAccrualCommand'dan gelir.
+        builder.ToTable("accrual_details");
 
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Id).HasColumnType("uuid");
@@ -45,6 +45,11 @@ internal sealed class AccrualDetailConfiguration : IEntityTypeConfiguration<Accr
         builder.Property(x => x.PrimaryResponsiblePartyId).HasColumnType("uuid");
         builder.HasIndex(x => x.PrimaryResponsiblePartyId);
         builder.Property(x => x.ResponsibleResolvedNote).HasMaxLength(200);
+
+        // Düzeltme (F1) — Correction detayının geri aldığı orijinal detay
+        builder.Property(x => x.CorrectedAccrualDetailId).HasColumnType("uuid");
+        builder.HasIndex(x => x.CorrectedAccrualDetailId);
+
         builder.HasOne<Party>()
             .WithMany()
             .HasForeignKey(x => x.PrimaryResponsiblePartyId)

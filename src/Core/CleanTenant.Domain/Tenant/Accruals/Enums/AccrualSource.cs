@@ -33,5 +33,14 @@ public enum AccrualSource
     /// alacak hesabı) / Alacak gecikme-geliri. İdempotency partial index (source=0)
     /// kapsamı dışındadır; bir dönemde birden çok run serbesttir.
     /// </summary>
-    LateFee = 3
+    LateFee = 3,
+
+    /// <summary>
+    /// Düzeltme / ters kayıt (storno) tahakkuğu (CorrectAccrualCommand). Fazla/yanlış
+    /// bir tahakkuğu geri alır — geçmiş mutate edilmez, ayrı NEGATİF tutarlı detay +
+    /// ters yönlü dengeli yevmiye (Borç gelir / Alacak alacak) üretilir. İdempotency
+    /// index (source=0) kapsamı dışındadır. FIFO açık-borç (Remaining&gt;0) dışında kalır;
+    /// net bakiyeyi (KPI/ledger) düşürür.
+    /// </summary>
+    Correction = 4
 }
