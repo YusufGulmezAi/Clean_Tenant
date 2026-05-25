@@ -20,6 +20,9 @@ public enum BuildingType
     /// <summary>Depolama amaçlı yapı.</summary>
     Warehouse = 5,
 
+    /// <summary>Tek bir ticari birimden oluşan küçük yapı (dükkân, büfe vb.).</summary>
+    Shop = 6,
+
     /// <summary>Yukarıdaki kategorilere girmeyen yapı türü.</summary>
     Other = 99,
 }

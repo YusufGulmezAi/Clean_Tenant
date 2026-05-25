@@ -19,4 +19,7 @@ public sealed record CreateUnitCommand(
     decimal? AllocatedArea,
     int Floor,
     Orientation Orientation,
-    ApartmentLayout Layout) : IRequest<Result<Guid>>;
+    ApartmentLayout Layout,
+    // Opsiyonel: BB'nin bağlanacağı Blok. Null → doğrudan Building'e bağlanır.
+    // (Sona eklendi ki mevcut konum-bazlı çağrılar kırılmasın.)
+    Guid? BlockId = null) : IRequest<Result<Guid>>;

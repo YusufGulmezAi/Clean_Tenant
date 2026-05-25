@@ -5,7 +5,11 @@
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 @inject IStringLocalizer Loc
+@inject IJSRuntime JS
+@inject IMainCatalogReader CompanyReader
 @using CleanTenant.SharedKernel.Common.Results
+@using CleanTenant.Application.Features.Main.Readers
+@using CleanTenant.Application.Features.Main.BuildingSchema.Excel
 @using CleanTenant.Application.Features.Main.BuildingSchema.Queries
 @using CleanTenant.Application.Features.Main.BuildingSchema.Lands
 @using CleanTenant.Application.Features.Main.BuildingSchema.Parcels
@@ -13,6 +17,8 @@
 @using CleanTenant.Application.Features.Main.BuildingSchema.Blocks
 @using CleanTenant.Application.Features.Main.BuildingSchema.Units
 @using CleanTenant.Domain.Tenant.BuildingSchema
+@* Orientation hem MudBlazor'da hem domain'de var; bu sayfada domain enum'unu kastediyoruz. *@
+@using Orientation = CleanTenant.Domain.Tenant.BuildingSchema.Orientation
 
 <PageTitle>Yapı Şeması</PageTitle>
 
@@ -33,8 +39,14 @@ else
         <div class="d-flex gap-2">
             <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh"
                        OnClick="@ReloadAsync" Size="Size.Small">Yenile</MudButton>
+            <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                       StartIcon="@Icons.Material.Filled.FileDownload"
+                       OnClick="@DownloadTemplateAsync" Disabled="@_busy">Şablon İndir</MudButton>
             @if (_canManage)
             {
+                <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                           StartIcon="@Icons.Material.Filled.Upload"
+                           OnClick="@(() => _showImport = !_showImport)">Excel Yükle</MudButton>
                 <MudButton Variant="Variant.Filled" Color="Color.Primary"
                            StartIcon="@Icons.Material.Filled.AddLocationAlt"
                            OnClick="@(() => OpenForm(FormMode.AddLand, Guid.Empty))">
@@ -43,6 +55,112 @@ else
             }
         </div>
     </div>
+
+    @if (_showImport)
+    {
+        <MudPaper Elevation="1" Class="pa-4 mb-4">
+            <MudText Typo="Typo.subtitle1" GutterBottom="true">Excel ile Toplu Yükleme</MudText>
+            <MudText Typo="Typo.body2" Class="mb-2" Color="Color.Secondary">
+                Önce "Şablon İndir" ile şablonu alıp talimatlara göre doldurun, sonra buradan yükleyin.
+                Hatalı satırlar, en sağda kırmızı "HATA" kolonu işaretlenmiş bir dosya olarak geri indirilir.
+            </MudText>
+            <InputFile id="bs-import-file" OnChange="OnImportFileSelected" accept=".xlsx" style="display:none" />
+            <div class="d-flex align-center gap-3 flex-wrap">
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.AttachFile"
+                           Disabled="@_busy"
+                           OnClick="@(async () => await JS.InvokeVoidAsync("cleantenant.clickElement", "bs-import-file"))">
+                    Dosya Seç
+                </MudButton>
+                @if (_importFile is not null)
+                {
+                    <MudText Typo="Typo.body2">@_importFile.Name</MudText>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                               OnClick="@ImportExcelAsync" Disabled="@_busy">
+                        @if (_busy)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                            <span>Yükleniyor…</span>
+                        }
+                        else
+                        {
+                            <span>Yükle</span>
+                        }
+                    </MudButton>
+                }
+            </div>
+        </MudPaper>
+    }
+
+    @* ── Genel toplam kartları (Dashboard stili, renkli arka plan) ── *@
+    @if (_schema is not null)
+    {
+        <MudGrid Class="mb-4" Spacing="2">
+            <MudItem xs="6" sm="4" md="2">
+                <MudPaper Elevation="2" Class="pa-3 d-flex flex-column" Style="height:100%;background:var(--mud-palette-primary);color:#fff;">
+                    <div class="d-flex align-center mb-1">
+                        <MudIcon Icon="@Icons.Material.Filled.Map" Size="Size.Small" Style="color:#fff" />
+                        <MudText Typo="Typo.subtitle2" Class="ml-2">Ada</MudText>
+                    </div>
+                    <MudText Typo="Typo.h4">@LandCount.ToString("N0")</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" sm="4" md="2">
+                <MudPaper Elevation="2" Class="pa-3 d-flex flex-column" Style="height:100%;background:var(--mud-palette-info);color:#fff;">
+                    <div class="d-flex align-center mb-1">
+                        <MudIcon Icon="@Icons.Material.Filled.Layers" Size="Size.Small" Style="color:#fff" />
+                        <MudText Typo="Typo.subtitle2" Class="ml-2">Parsel</MudText>
+                    </div>
+                    <MudText Typo="Typo.h4">@ParcelCount.ToString("N0")</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" sm="4" md="2">
+                <MudPaper Elevation="2" Class="pa-3 d-flex flex-column" Style="height:100%;background:var(--mud-palette-tertiary);color:#fff;">
+                    <div class="d-flex align-center mb-1">
+                        <MudIcon Icon="@Icons.Material.Filled.Apartment" Size="Size.Small" Style="color:#fff" />
+                        <MudText Typo="Typo.subtitle2" Class="ml-2">Bina</MudText>
+                    </div>
+                    <MudText Typo="Typo.h4">@BuildingCount.ToString("N0")</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" sm="4" md="2">
+                <MudPaper Elevation="2" Class="pa-3 d-flex flex-column" Style="height:100%;background:var(--mud-palette-success);color:#fff;">
+                    <div class="d-flex align-center mb-1">
+                        <MudIcon Icon="@Icons.Material.Filled.MeetingRoom" Size="Size.Small" Style="color:#fff" />
+                        <MudText Typo="Typo.subtitle2" Class="ml-2">BB</MudText>
+                    </div>
+                    <MudText Typo="Typo.h4">@AllUnits.Count.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Style="color:rgba(255,255,255,.85)">@UnitTypeBreakdown(AllUnits)</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" sm="4" md="2">
+                <MudPaper Elevation="2" Class="pa-3 d-flex flex-column" Style="height:100%;background:var(--mud-palette-secondary);color:#fff;">
+                    <div class="d-flex align-center mb-1">
+                        <MudIcon Icon="@Icons.Material.Filled.SquareFoot" Size="Size.Small" Style="color:#fff" />
+                        <MudText Typo="Typo.subtitle2" Class="ml-2">Toplam m²</MudText>
+                    </div>
+                    <MudText Typo="Typo.h4">@TotalSqm.ToString("#,##0.##")</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" sm="4" md="2">
+                <MudPaper Elevation="2" Class="pa-3 d-flex flex-column" Style="height:100%;background:var(--mud-palette-dark);color:#fff;">
+                    <div class="d-flex align-center mb-1">
+                        <MudIcon Icon="@Icons.Material.Filled.AspectRatio" Size="Size.Small" Style="color:#fff" />
+                        <MudText Typo="Typo.subtitle2" Class="ml-2">Toplam Tahsis Alanı</MudText>
+                    </div>
+                    <MudText Typo="Typo.h4">@TotalAllocated.ToString("#,##0.##")</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" sm="4" md="2">
+                <MudPaper Elevation="2" Class="pa-3 d-flex flex-column" Style="height:100%;background:var(--mud-palette-warning);color:#fff;">
+                    <div class="d-flex align-center mb-1">
+                        <MudIcon Icon="@Icons.Material.Filled.Percent" Size="Size.Small" Style="color:#fff" />
+                        <MudText Typo="Typo.subtitle2" Class="ml-2">Toplam Arsa Payı</MudText>
+                    </div>
+                    <MudText Typo="Typo.h4">@TotalLandShare.ToString("N0")</MudText>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+    }
 
     @* ── Ada Ekleme Formu (en üst) ─────────────────────────────────── *@
     @if (_formMode == FormMode.AddLand)
@@ -67,32 +185,36 @@ else
     }
     else
     {
+        <MudExpansionPanels MultiExpansion="true">
         @foreach (var land in _schema.Lands.OrderBy(l => l.SortOrder))
         {
-            <MudPaper Class="mb-3 pa-0" Elevation="2">
-                @* ── Ada satırı ─── *@
-                <div class="d-flex align-center pa-3 gap-1"
-                     style="background:var(--mud-palette-background-grey); border-radius:4px 4px 0 0;">
-                    <MudIcon Icon="@Icons.Material.Filled.Map" Color="Color.Primary" Class="mr-2" />
-                    <MudText Typo="Typo.subtitle1" Class="flex-grow-1 fw-bold">@land.Name</MudText>
-                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mr-3">
-                        @land.Parcels.Count Parsel
-                    </MudText>
-                    @if (_canManage)
-                    {
-                        <MudIconButton Icon="@Icons.Material.Filled.AddCircleOutline" Size="Size.Small"
-                                       Title="Parsel Ekle" Color="Color.Success"
-                                       OnClick="@(() => OpenForm(FormMode.AddParcel, land.Id))" />
-                        <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
-                                       Title="Ada Düzenle" Color="Color.Default"
-                                       OnClick="@(() => OpenForm(FormMode.EditLand, land.Id, land.Name))" />
-                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small"
-                                       Title="Ada Sil" Color="Color.Error"
-                                       OnClick="@(() => DeleteLandAsync(land))" />
-                    }
-                </div>
-
-                <div class="pa-3">
+            <MudExpansionPanel @key="land.Id" Expanded="@_expanded.Contains(land.Id)"
+                               ExpandedChanged="@(v => SetExpanded(land.Id, v))">
+                <TitleContent>
+                    <div class="d-flex align-center" style="width:100%">
+                        <MudIcon Icon="@Icons.Material.Filled.Map" Color="Color.Primary" Class="mr-2" />
+                        <MudText Typo="Typo.subtitle1" Class="fw-bold mr-2">@land.Name</MudText>
+                        @LandSummary(land)
+                        @if (_canManage)
+                        {
+                            <div class="d-flex gap-1" @onclick:stopPropagation="true">
+                                <MudIconButton Icon="@Icons.Material.Filled.AddCircleOutline" Size="Size.Small"
+                                               Title="Parsel Ekle" Color="Color.Success"
+                                               OnClick="@(() => OpenForm(FormMode.AddParcel, land.Id))" />
+                                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                                               Title="Ada Düzenle" Color="Color.Default"
+                                               OnClick="@(() => OpenForm(FormMode.EditLand, land.Id, land.Name))" />
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small"
+                                               Title="Ada Sil" Color="Color.Error"
+                                               OnClick="@(() => DeleteLandAsync(land))" />
+                            </div>
+                        }
+                    </div>
+                </TitleContent>
+                <ChildContent>
+                @* Performans: ağır içerik yalnız panel açıkken render edilir (lazy). *@
+                @if (_expanded.Contains(land.Id))
+                {
                     @* ── Ada düzenleme / parsel ekleme formu ─── *@
                     @if (_formMode == FormMode.EditLand && _formParentId == land.Id)
                     {
@@ -121,31 +243,35 @@ else
                     }
 
                     @* ── Parseller ─── *@
+                    <MudExpansionPanels MultiExpansion="true" Class="ml-4">
                     @foreach (var parcel in land.Parcels.OrderBy(p => p.SortOrder))
                     {
-                        <MudPaper Class="mb-2 pa-0" Elevation="1" Style="margin-left:16px;">
-                            <div class="d-flex align-center pa-2 gap-1"
-                                 style="background:var(--mud-palette-surface);">
-                                <MudIcon Icon="@Icons.Material.Filled.Layers" Size="Size.Small" Color="Color.Secondary" Class="mr-2" />
-                                <MudText Typo="Typo.body1" Class="flex-grow-1">@parcel.Name</MudText>
-                                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mr-3">
-                                    @parcel.Buildings.Count Yapı
-                                </MudText>
-                                @if (_canManage)
-                                {
-                                    <MudIconButton Icon="@Icons.Material.Filled.AddCircleOutline" Size="Size.Small"
-                                                   Title="Yapı Ekle" Color="Color.Success"
-                                                   OnClick="@(() => OpenForm(FormMode.AddBuilding, parcel.Id))" />
-                                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
-                                                   Title="Parsel Düzenle" Color="Color.Default"
-                                                   OnClick="@(() => OpenForm(FormMode.EditParcel, parcel.Id, parcel.Name))" />
-                                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small"
-                                                   Title="Parsel Sil" Color="Color.Error"
-                                                   OnClick="@(() => DeleteParcelAsync(parcel))" />
-                                }
-                            </div>
-
-                            <div class="pa-2">
+                        <MudExpansionPanel @key="parcel.Id" Expanded="@_expanded.Contains(parcel.Id)"
+                                           ExpandedChanged="@(v => SetExpanded(parcel.Id, v))">
+                            <TitleContent>
+                                <div class="d-flex align-center" style="width:100%">
+                                    <MudIcon Icon="@Icons.Material.Filled.Layers" Size="Size.Small" Color="Color.Secondary" Class="mr-2" />
+                                    <MudText Typo="Typo.body1" Class="mr-2">@parcel.Name</MudText>
+                                    @ParcelSummary(parcel)
+                                    @if (_canManage)
+                                    {
+                                        <div class="d-flex gap-1" @onclick:stopPropagation="true">
+                                            <MudIconButton Icon="@Icons.Material.Filled.AddCircleOutline" Size="Size.Small"
+                                                           Title="Yapı Ekle" Color="Color.Success"
+                                                           OnClick="@(() => OpenForm(FormMode.AddBuilding, parcel.Id))" />
+                                            <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                                                           Title="Parsel Düzenle" Color="Color.Default"
+                                                           OnClick="@(() => OpenForm(FormMode.EditParcel, parcel.Id, parcel.Name))" />
+                                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small"
+                                                           Title="Parsel Sil" Color="Color.Error"
+                                                           OnClick="@(() => DeleteParcelAsync(parcel))" />
+                                        </div>
+                                    }
+                                </div>
+                            </TitleContent>
+                            <ChildContent>
+                            @if (_expanded.Contains(parcel.Id))
+                            {
                                 @* Parsel düzenleme / yapı ekleme formu *@
                                 @if (_formMode == FormMode.EditParcel && _formParentId == parcel.Id)
                                 {
@@ -172,7 +298,7 @@ else
                                                        Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width:160px">
                                                 @foreach (BuildingType bt in Enum.GetValues<BuildingType>())
                                                 {
-                                                    <MudSelectItem Value="bt">@bt.ToString()</MudSelectItem>
+                                                    <MudSelectItem Value="bt">@BuildingTypeLabel(bt)</MudSelectItem>
                                                 }
                                             </MudSelect>
                                             <MudButton Color="Color.Success" Variant="Variant.Filled"
@@ -183,37 +309,44 @@ else
                                 }
 
                                 @* ── Yapılar ─── *@
+                                <MudExpansionPanels MultiExpansion="true" Class="ml-4">
                                 @foreach (var building in parcel.Buildings.OrderBy(b => b.SortOrder))
                                 {
-                                    <MudPaper Class="mb-2 pa-0" Elevation="0"
-                                              Style="margin-left:16px; border:1px solid var(--mud-palette-lines-default);">
-                                        <div class="d-flex align-center pa-2 gap-1">
-                                            <MudIcon Icon="@Icons.Material.Filled.Apartment" Size="Size.Small" Color="Color.Tertiary" Class="mr-2" />
-                                            <MudText Typo="Typo.body2" Class="flex-grow-1 fw-medium">
-                                                @building.Name
-                                                @if (!string.IsNullOrEmpty(building.MunicipalNo))
+                                    <MudExpansionPanel @key="building.Id" Expanded="@_expanded.Contains(building.Id)"
+                                                       ExpandedChanged="@(v => SetExpanded(building.Id, v))">
+                                        <TitleContent>
+                                            <div class="d-flex align-center" style="width:100%">
+                                                <MudIcon Icon="@Icons.Material.Filled.Apartment" Size="Size.Small" Color="Color.Tertiary" Class="mr-2" />
+                                                <MudText Typo="Typo.body2" Class="fw-medium mr-2">
+                                                    @building.Name
+                                                    @if (!string.IsNullOrEmpty(building.MunicipalNo))
+                                                    {
+                                                        <MudChip T="string" Size="Size.Small" Class="ml-1">@building.MunicipalNo</MudChip>
+                                                    }
+                                                </MudText>
+                                                @BuildingSummary(building)
+                                                @if (_canManage)
                                                 {
-                                                    <MudChip T="string" Size="Size.Small" Class="ml-1">@building.MunicipalNo</MudChip>
+                                                    <div class="d-flex gap-1" @onclick:stopPropagation="true">
+                                                        <MudIconButton Icon="@Icons.Material.Filled.ViewWeek" Size="Size.Small"
+                                                                       Title="Blok Ekle" Color="Color.Info"
+                                                                       OnClick="@(() => OpenForm(FormMode.AddBlock, building.Id))" />
+                                                        <MudIconButton Icon="@Icons.Material.Filled.MeetingRoom" Size="Size.Small"
+                                                                       Title="Bağımsız Bölüm Ekle (bina altı)" Color="Color.Success"
+                                                                       OnClick="@(() => OpenAddUnit(building.Id, null))" />
+                                                        <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                                                                       Title="Yapı Düzenle" Color="Color.Default"
+                                                                       OnClick="@(() => OpenBuildingEdit(building))" />
+                                                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small"
+                                                                       Title="Yapı Sil" Color="Color.Error"
+                                                                       OnClick="@(() => DeleteBuildingAsync(building))" />
+                                                    </div>
                                                 }
-                                            </MudText>
-                                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mr-2">
-                                                @building.Blocks.Count Blok · @(building.Units.Count + building.Blocks.Sum(b => b.Units.Count)) BB
-                                            </MudText>
-                                            @if (_canManage)
-                                            {
-                                                <MudIconButton Icon="@Icons.Material.Filled.ViewWeek" Size="Size.Small"
-                                                               Title="Blok Ekle" Color="Color.Info"
-                                                               OnClick="@(() => OpenForm(FormMode.AddBlock, building.Id))" />
-                                                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
-                                                               Title="Yapı Düzenle" Color="Color.Default"
-                                                               OnClick="@(() => OpenBuildingEdit(building))" />
-                                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small"
-                                                               Title="Yapı Sil" Color="Color.Error"
-                                                               OnClick="@(() => DeleteBuildingAsync(building))" />
-                                            }
-                                        </div>
-
-                                        <div class="pa-2">
+                                            </div>
+                                        </TitleContent>
+                                        <ChildContent>
+                                        @if (_expanded.Contains(building.Id))
+                                        {
                                             @* Yapı düzenleme / blok ekleme formu *@
                                             @if (_formMode == FormMode.EditBuilding && _formParentId == building.Id)
                                             {
@@ -227,7 +360,7 @@ else
                                                                    Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width:160px">
                                                             @foreach (BuildingType bt in Enum.GetValues<BuildingType>())
                                                             {
-                                                                <MudSelectItem Value="bt">@bt.ToString()</MudSelectItem>
+                                                                <MudSelectItem Value="bt">@BuildingTypeLabel(bt)</MudSelectItem>
                                                             }
                                                         </MudSelect>
                                                         <MudButton Color="Color.Primary" Variant="Variant.Filled"
@@ -264,6 +397,9 @@ else
                                                     </MudChip>
                                                     @if (_canManage)
                                                     {
+                                                        <MudIconButton Icon="@Icons.Material.Filled.MeetingRoom" Size="Size.Small"
+                                                                       Color="Color.Success" Title="Bağımsız Bölüm Ekle"
+                                                                       OnClick="@(() => OpenAddUnit(building.Id, block.Id))" />
                                                         <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
                                                                        Color="Color.Default" Title="Blok Düzenle"
                                                                        OnClick="@(() => OpenForm(FormMode.EditBlock, block.Id, block.Name))" />
@@ -286,54 +422,56 @@ else
                                                         </div>
                                                     </MudPaper>
                                                 }
+                                                @* Blok altı BB ekleme/düzenleme formu *@
+                                                @if (IsUnitFormFor(building.Id, block.Id))
+                                                {
+                                                    @UnitFormPanel
+                                                }
                                                 @* Blok altındaki BB'ler *@
                                                 @if (block.Units.Count > 0)
                                                 {
-                                                    <div class="d-flex flex-wrap gap-1 mt-1 mb-1"
-                                                         style="margin-left:28px;">
-                                                        @foreach (var unit in block.Units.OrderBy(u => u.SortOrder))
-                                                        {
-                                                            <MudChip T="string" Size="Size.Small" Color="Color.Transparent"
-                                                                     Style="border:1px solid var(--mud-palette-lines-default);">
-                                                                @unit.Number
-                                                                <MudText Typo="Typo.caption" Class="ml-1">(@unit.SquareMeters m²)</MudText>
-                                                            </MudChip>
-                                                        }
+                                                    <div class="mt-1 mb-1" style="margin-left:28px;">
+                                                        @UnitTable(block.Units.OrderBy(u => u.SortOrder), building.Id)
                                                     </div>
                                                 }
                                             }
 
                                             @* ── Direkt (bloksuz) BB'ler ─── *@
+                                            @if (IsUnitFormFor(building.Id, null))
+                                            {
+                                                @UnitFormPanel
+                                            }
                                             @if (building.Units.Count > 0)
                                             {
-                                                <div class="d-flex flex-wrap gap-1 mt-1" style="margin-left:12px;">
-                                                    @foreach (var unit in building.Units.OrderBy(u => u.SortOrder))
-                                                    {
-                                                        <MudChip T="string" Size="Size.Small" Color="Color.Transparent"
-                                                                 Style="border:1px solid var(--mud-palette-lines-default);">
-                                                            @unit.Number
-                                                            <MudText Typo="Typo.caption" Class="ml-1">(@unit.SquareMeters m²)</MudText>
-                                                        </MudChip>
-                                                    }
+                                                <div class="mt-1" style="margin-left:12px;">
+                                                    @UnitTable(building.Units.OrderBy(u => u.SortOrder), building.Id)
                                                 </div>
                                             }
-                                        </div>
-                                    </MudPaper>
+                                        }
+                                        </ChildContent>
+                                    </MudExpansionPanel>
                                 }
-                            </div>
-                        </MudPaper>
+                                </MudExpansionPanels>
+                            }
+                            </ChildContent>
+                        </MudExpansionPanel>
                     }
-                </div>
-            </MudPaper>
+                    </MudExpansionPanels>
+                }
+                </ChildContent>
+            </MudExpansionPanel>
         }
+        </MudExpansionPanels>
     }
 }
 
 @code {
     private Guid _companyId;
+    private string _companyName = "";
     private bool _unauthorized;
     private bool _initialized;
     private bool _canManage;
+    private bool _busy;
     private BuildingSchemaDto? _schema;
 
     // ─── Form state ────────────────────────────────────────────────────────
@@ -343,13 +481,95 @@ else
     private string _formMunicipalNo = "";
     private BuildingType _formBuildingType = BuildingType.Residential;
 
+    // Accordion: açık panellerin id'leri (kontrollü genişletme). Form açılınca ilgili
+    // panel otomatik genişler ki form (ChildContent'te) görünür olsun.
+    private readonly HashSet<Guid> _expanded = new();
+    private void SetExpanded(Guid id, bool expanded)
+    {
+        if (expanded) _expanded.Add(id);
+        else _expanded.Remove(id);
+    }
+
+    // ── Excel toplu yükleme ───────────────────────────────────────────────
+    private bool _showImport;
+    private IBrowserFile? _importFile;
+
+    private async Task DownloadTemplateAsync()
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            var result = await Mediator.Send(new GenerateBuildingSchemaTemplateQuery());
+            if (result.IsSuccess)
+            {
+                var base64 = Convert.ToBase64String(result.Value!);
+                await JS.InvokeVoidAsync("cleantenant.downloadBlobBase64",
+                    BuildExcelFileName(), base64,
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            }
+            else Snackbar.Add(result.FirstError.Message, Severity.Error);
+        }
+        finally { _busy = false; }
+    }
+
+    // Dosya adı: "{Site Adı} Yapı Şeması [Hatalar] dd.MM.yyyy HH.mm.xlsx".
+    // (':' dosya adında geçersiz olduğu için saat ayıracı '.' kullanılır; site adı sanitize edilir.)
+    private string BuildExcelFileName(string? suffix = null)
+    {
+        var name = string.Join("_", _companyName.Split(System.IO.Path.GetInvalidFileNameChars()));
+        if (string.IsNullOrWhiteSpace(name)) name = "Site";
+        var s = string.IsNullOrEmpty(suffix) ? "" : " " + suffix;
+        return $"{name} Yapı Şeması{s} {DateTime.Now:dd.MM.yyyy HH.mm}.xlsx";
+    }
+
+    private void OnImportFileSelected(InputFileChangeEventArgs e) => _importFile = e.File;
+
+    private async Task ImportExcelAsync()
+    {
+        if (_importFile is null || _busy) return;
+        _busy = true;
+        StateHasChanged();   // spinner'ı hemen göster (parse/kayıt UI thread'ini meşgul edebilir)
+        try
+        {
+            // Blazor Server: BrowserFileStream yalnız ASENKRON okuma destekler; ClosedXML ise
+            // senkron okur. Önce async olarak MemoryStream'e kopyala, sonra onu gönder.
+            await using var browserStream = _importFile.OpenReadStream(maxAllowedSize: 10_485_760);
+            using var ms = new MemoryStream();
+            await browserStream.CopyToAsync(ms);
+            ms.Position = 0;
+            var result = await Mediator.Send(new ImportBuildingSchemaCommand(_companyId, ms));
+            if (result.IsFailure) { Snackbar.Add(result.FirstError.Message, Severity.Error); return; }
+
+            var importResult = result.Value;
+            if (importResult is null) return;
+            if (importResult.HasErrors && importResult.ErrorWorkbook is not null)
+            {
+                var base64 = Convert.ToBase64String(importResult.ErrorWorkbook);
+                await JS.InvokeVoidAsync("cleantenant.downloadBlobBase64",
+                    BuildExcelFileName("Hatalar"), base64,
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+                Snackbar.Add("Bazı satırlarda hata var. İndirilen dosyadaki kırmızı 'HATA' kolonunu düzeltip tekrar yükleyin.", Severity.Warning);
+            }
+            else
+            {
+                Snackbar.Add($"{importResult.ImportedUnitCount} bağımsız bölüm içe aktarıldı.", Severity.Success);
+                _showImport = false;
+                _importFile = null;
+                await ReloadAsync();
+            }
+        }
+        finally { _busy = false; }
+    }
+
     private enum FormMode
     {
         None,
         AddLand, EditLand,
         AddParcel, EditParcel,
         AddBuilding, EditBuilding,
-        AddBlock, EditBlock
+        AddBlock, EditBlock,
+        AddUnit, EditUnit
     }
 
     protected override async Task OnInitializedAsync()
@@ -368,6 +588,9 @@ else
             && Guid.TryParseExact(cid, "N", out var cGuid))
             _companyId = cGuid;
         else { _unauthorized = true; _initialized = true; return; }
+
+        var company = await CompanyReader.GetByIdAsync(_companyId);
+        _companyName = company?.Name ?? "Site";
 
         _canManage = true; // BuildingSchema.Manage permission — endpoint handler guard eder
 
@@ -393,6 +616,7 @@ else
         _formName = existingName;
         _formMunicipalNo = "";
         _formBuildingType = BuildingType.Residential;
+        _expanded.Add(targetId);  // formun göründüğü paneli aç
     }
 
     private void OpenBuildingEdit(BuildingDto b)
@@ -402,13 +626,29 @@ else
         _formName = b.Name;
         _formMunicipalNo = b.MunicipalNo ?? "";
         _formBuildingType = b.Type;
+        _expanded.Add(b.Id);
     }
 
     private void CancelForm()
     {
         _formMode = FormMode.None;
         _formName = "";
+        _editingUnitId = null;
+        _unitForm.Reset();
     }
+
+    // Yapı tipi enum'unu lokalize Türkçe/İngilizce etikete çevirir
+    // (DB-seed anahtarları: LocalizationCatalog "BuildingSchema.Type.*").
+    private string BuildingTypeLabel(BuildingType t) => t switch
+    {
+        BuildingType.Residential => Loc["BuildingSchema.Type.Konut"].Value,
+        BuildingType.ResidentialCommercial => Loc["BuildingSchema.Type.KonutIsyeri"].Value,
+        BuildingType.ShoppingMall => Loc["BuildingSchema.Type.Avm"].Value,
+        BuildingType.Office => Loc["BuildingSchema.Type.Ofis"].Value,
+        BuildingType.Warehouse => Loc["BuildingSchema.Type.Depo"].Value,
+        BuildingType.Shop => Loc["BuildingSchema.Type.Dukkan"].Value,
+        _ => Loc["BuildingSchema.Type.Diger"].Value,
+    };
 
     // ─── Land ──────────────────────────────────────────────────────────────
 
@@ -429,7 +669,10 @@ else
     private async Task DeleteLandAsync(LandDto land)
     {
         var confirmed = await DialogService.ShowMessageBox(
-            "Ada Sil", $"\"{land.Name}\" adası silinsin mi? Alt parseller de etkilenir.", "Evet, Sil", "Hayır");
+            "Ada Sil",
+            $"\"{land.Name}\" adası ve altındaki TÜM parsel, yapı, blok ve bağımsız bölümler silinecek. " +
+            "Kullanımda olan (tahakkuk, malik/kiracı vb.) bağımsız bölüm varsa silme engellenir. Devam edilsin mi?",
+            "Evet, Sil", "Hayır");
         if (confirmed != true) return;
 
         var result = await Mediator.Send(new DeleteLandCommand(land.Id));
@@ -457,7 +700,10 @@ else
     private async Task DeleteParcelAsync(ParcelDto parcel)
     {
         var confirmed = await DialogService.ShowMessageBox(
-            "Parsel Sil", $"\"{parcel.Name}\" parseli silinsin mi?", "Evet, Sil", "Hayır");
+            "Parsel Sil",
+            $"\"{parcel.Name}\" parseli ve altındaki TÜM yapı, blok ve bağımsız bölümler silinecek. " +
+            "Kullanımda olan bağımsız bölüm varsa silme engellenir. Devam edilsin mi?",
+            "Evet, Sil", "Hayır");
         if (confirmed != true) return;
 
         var result = await Mediator.Send(new DeleteParcelCommand(parcel.Id));
@@ -488,7 +734,10 @@ else
     private async Task DeleteBuildingAsync(BuildingDto building)
     {
         var confirmed = await DialogService.ShowMessageBox(
-            "Yapı Sil", $"\"{building.Name}\" yapısı silinsin mi?", "Evet, Sil", "Hayır");
+            "Yapı Sil",
+            $"\"{building.Name}\" yapısı ve altındaki TÜM blok ve bağımsız bölümler silinecek. " +
+            "Kullanımda olan bağımsız bölüm varsa silme engellenir. Devam edilsin mi?",
+            "Evet, Sil", "Hayır");
         if (confirmed != true) return;
 
         var result = await Mediator.Send(new DeleteBuildingCommand(building.Id));
@@ -516,12 +765,309 @@ else
     private async Task DeleteBlockAsync(BlockDto block)
     {
         var confirmed = await DialogService.ShowMessageBox(
-            "Blok Sil", $"\"{block.Name}\" bloğu silinsin mi? Blokta bağımsız bölüm varsa silinemez.", "Evet, Sil", "Hayır");
+            "Blok Sil",
+            $"\"{block.Name}\" bloğu ve altındaki TÜM bağımsız bölümler silinecek. " +
+            "Kullanımda olan bağımsız bölüm varsa silme engellenir. Devam edilsin mi?",
+            "Evet, Sil", "Hayır");
         if (confirmed != true) return;
 
         var result = await Mediator.Send(new DeleteBlockCommand(block.Id));
         if (result.IsFailure) { Snackbar.Add(result.FirstError.Message, Severity.Error); return; }
         Snackbar.Add("Blok silindi.", Severity.Success);
         await ReloadAsync();
+    }
+
+    // ─── Bağımsız Bölüm (Unit) ───────────────────────────────────────────────
+
+    // Unit form state — paylaşımlı: aktif form ya bir blok altında ya da bina altında.
+    private Guid _unitFormBuildingId;
+    private Guid? _unitFormBlockId;   // null → bina-altı (bloksuz)
+    private Guid? _editingUnitId;     // null → ekleme, dolu → düzenleme
+    private readonly UnitFormModel _unitForm = new();
+
+    // Form, yalnız aktif bağlamın (building + block) bulunduğu yerde render edilir.
+    private bool IsUnitFormFor(Guid buildingId, Guid? blockId) =>
+        (_formMode == FormMode.AddUnit || _formMode == FormMode.EditUnit)
+        && _unitFormBuildingId == buildingId
+        && _unitFormBlockId == blockId;
+
+    private void OpenAddUnit(Guid buildingId, Guid? blockId)
+    {
+        _formMode = FormMode.AddUnit;
+        _unitFormBuildingId = buildingId;
+        _unitFormBlockId = blockId;
+        _editingUnitId = null;
+        _unitForm.Reset();
+        _expanded.Add(buildingId);
+    }
+
+    private void OpenEditUnit(UnitDto unit, Guid buildingId)
+    {
+        _formMode = FormMode.EditUnit;
+        _unitFormBuildingId = buildingId;
+        _unitFormBlockId = unit.BlockId;
+        _editingUnitId = unit.Id;
+        _unitForm.Load(unit);
+        _expanded.Add(buildingId);
+    }
+
+    private async Task SaveUnitAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_unitForm.Number)) return;
+
+        string? error = null;
+        if (_editingUnitId.HasValue)
+        {
+            var r = await Mediator.Send(new UpdateUnitCommand(
+                _editingUnitId.Value, _unitForm.Number.Trim(), _unitForm.NationalAddressCode,
+                _unitForm.Type, _unitForm.SquareMeters, _unitForm.LandShare, _unitForm.AllocatedArea,
+                _unitForm.Floor, _unitForm.Orientation, _unitForm.Layout, _unitFormBlockId));
+            if (r.IsFailure) error = r.FirstError.Message;
+        }
+        else
+        {
+            var r = await Mediator.Send(new CreateUnitCommand(
+                _unitFormBuildingId, _unitForm.Number.Trim(), _unitForm.NationalAddressCode,
+                _unitForm.Type, _unitForm.SquareMeters, _unitForm.LandShare, _unitForm.AllocatedArea,
+                _unitForm.Floor, _unitForm.Orientation, _unitForm.Layout, _unitFormBlockId));
+            if (r.IsFailure) error = r.FirstError.Message;
+        }
+
+        if (error is not null) { Snackbar.Add(error, Severity.Error); return; }
+        Snackbar.Add("Bağımsız bölüm kaydedildi.", Severity.Success);
+        CancelForm();
+        await ReloadAsync();
+    }
+
+    private async Task DeleteUnitAsync(UnitDto unit)
+    {
+        var confirmed = await DialogService.ShowMessageBox(
+            "Bağımsız Bölüm Sil",
+            $"\"{unit.Number}\" bağımsız bölümü silinecek. Sistemde kullanılıyorsa (tahakkuk, malik/kiracı vb.) silme engellenir. Devam edilsin mi?",
+            "Evet, Sil", "Hayır");
+        if (confirmed != true) return;
+
+        var result = await Mediator.Send(new DeleteUnitCommand(unit.Id));
+        if (result.IsFailure) { Snackbar.Add(result.FirstError.Message, Severity.Error); return; }
+        Snackbar.Add("Bağımsız bölüm silindi.", Severity.Success);
+        await ReloadAsync();
+    }
+
+    // BB ekleme/düzenleme formu (state-driven; aktif bağlamda render edilir).
+    private RenderFragment UnitFormPanel => @<MudPaper Class="pa-3 mb-2 mud-border-success border-l-4" Elevation="0" Style="margin-left:28px;">
+        <MudText Typo="Typo.body2" Class="mb-2">
+            @(_editingUnitId.HasValue ? "Bağımsız Bölüm Düzenle" : "Yeni Bağımsız Bölüm")@(_unitFormBlockId is null ? " (bina altı)" : "")
+        </MudText>
+        <div class="d-flex flex-wrap gap-2 align-center">
+            <MudTextField @bind-Value="_unitForm.Number" Label="No" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:110px" Immediate="true" />
+            <MudNumericField T="decimal" @bind-Value="_unitForm.SquareMeters" Label="m²" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" Format="F2" Style="max-width:110px" />
+            <MudNumericField T="int" @bind-Value="_unitForm.LandShare" Label="Arsa Payı" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" Style="max-width:110px" />
+            <MudNumericField T="decimal?" @bind-Value="_unitForm.AllocatedArea" Label="Tahsis Alanı" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" Format="F2" Style="max-width:120px" />
+            <MudNumericField T="int" @bind-Value="_unitForm.Floor" Label="Kat" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:80px" />
+            <MudSelect T="UnitType" @bind-Value="_unitForm.Type" Label="Tip" Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width:130px">
+                @foreach (UnitType t in Enum.GetValues<UnitType>())
+                {
+                    <MudSelectItem Value="t">@UnitTypeLabel(t)</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSelect T="Orientation" @bind-Value="_unitForm.Orientation" Label="Cephe" Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width:130px">
+                @foreach (Orientation o in Enum.GetValues<Orientation>())
+                {
+                    <MudSelectItem Value="o">@OrientationLabel(o)</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSelect T="ApartmentLayout" @bind-Value="_unitForm.Layout" Label="Düzen" Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width:110px">
+                @foreach (ApartmentLayout l in Enum.GetValues<ApartmentLayout>())
+                {
+                    <MudSelectItem Value="l">@LayoutLabel(l)</MudSelectItem>
+                }
+            </MudSelect>
+            <MudButton Color="Color.Success" Variant="Variant.Filled" OnClick="@SaveUnitAsync"
+                       Disabled="@(string.IsNullOrWhiteSpace(_unitForm.Number))">Kaydet</MudButton>
+            <MudButton Variant="Variant.Text" OnClick="@CancelForm">İptal</MudButton>
+        </div>
+    </MudPaper>;
+
+    // BB'leri tablo yapısında, düzenle/sil aksiyonlarıyla listeler.
+    private RenderFragment UnitTable(IEnumerable<UnitDto> units, Guid buildingId) =>
+        @<MudSimpleTable Dense="true" Hover="true" Bordered="true" Striped="true" Elevation="0" Style="background:transparent">
+            <thead>
+                <tr>
+                    <th>No</th>
+                    <th>Tip</th>
+                    <th style="text-align:right">m²</th>
+                    <th style="text-align:right">Tahsis Alanı</th>
+                    <th style="text-align:right">Arsa Payı</th>
+                    <th style="text-align:right">Kat</th>
+                    <th>Düzen</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var unit in units)
+                {
+                    <tr>
+                        <td style="font-weight:500">@unit.Number</td>
+                        <td>@UnitTypeLabel(unit.Type)</td>
+                        <td style="text-align:right">@unit.SquareMeters.ToString("0.##")</td>
+                        <td style="text-align:right">@(unit.AllocatedArea?.ToString("0.##") ?? "—")</td>
+                        <td style="text-align:right">@unit.LandShare</td>
+                        <td style="text-align:right">@unit.Floor</td>
+                        <td>@LayoutLabel(unit.Layout)</td>
+                        <td style="text-align:right;white-space:nowrap">
+                            @if (_canManage)
+                            {
+                                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Title="Düzenle"
+                                               OnClick="@(() => OpenEditUnit(unit, buildingId))" />
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" Title="Sil"
+                                               OnClick="@(() => DeleteUnitAsync(unit))" />
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>;
+
+    // ─── Etiket yardımcıları (DB-seed: BuildingSchema.* anahtarları) ──────────
+
+    private string UnitTypeLabel(UnitType t) => t switch
+    {
+        UnitType.Apartment => Loc["BuildingSchema.Unit.Type.Daire"].Value,
+        UnitType.Office => Loc["BuildingSchema.Unit.Type.Ofis"].Value,
+        UnitType.Shop => Loc["BuildingSchema.Unit.Type.Dukkan"].Value,
+        UnitType.Store => Loc["BuildingSchema.Unit.Type.Magaza"].Value,
+        UnitType.Storage => Loc["BuildingSchema.Unit.Type.Depo"].Value,
+        UnitType.Parking => Loc["BuildingSchema.Unit.Type.Otopark"].Value,
+        UnitType.Shelter => Loc["BuildingSchema.Unit.Type.Siginak"].Value,
+        _ => Loc["BuildingSchema.Type.Diger"].Value,
+    };
+
+    private string OrientationLabel(Orientation o) => o switch
+    {
+        Orientation.North => Loc["BuildingSchema.Orient.North"].Value,
+        Orientation.South => Loc["BuildingSchema.Orient.South"].Value,
+        Orientation.East => Loc["BuildingSchema.Orient.East"].Value,
+        Orientation.West => Loc["BuildingSchema.Orient.West"].Value,
+        Orientation.NorthEast => Loc["BuildingSchema.Orient.NE"].Value,
+        Orientation.NorthWest => Loc["BuildingSchema.Orient.NW"].Value,
+        Orientation.SouthEast => Loc["BuildingSchema.Orient.SE"].Value,
+        Orientation.SouthWest => Loc["BuildingSchema.Orient.SW"].Value,
+        _ => Loc["BuildingSchema.Orient.Unknown"].Value,
+    };
+
+    private string LayoutLabel(ApartmentLayout l) => l.ToDisplay();
+
+    // ─── Özet istatistikleri (yüklü _schema'dan hesaplanır) ──────────────────
+    private int LandCount => _schema?.Lands.Count ?? 0;
+    private int ParcelCount => _schema?.Lands.Sum(l => l.Parcels.Count) ?? 0;
+    private int BuildingCount => _schema?.Lands.Sum(l => l.Parcels.Sum(p => p.Buildings.Count)) ?? 0;
+
+    private List<UnitDto> AllUnits => _schema is null
+        ? []
+        : _schema.Lands
+            .SelectMany(l => l.Parcels)
+            .SelectMany(p => p.Buildings)
+            .SelectMany(b => b.Units.Concat(b.Blocks.SelectMany(bk => bk.Units)))
+            .ToList();
+
+    private decimal TotalSqm => AllUnits.Sum(u => u.SquareMeters);
+    private decimal TotalAllocated => AllUnits.Sum(u => u.AllocatedArea ?? 0);
+    private int TotalLandShare => AllUnits.Sum(u => u.LandShare);
+
+    // "12 (8 Daire, 3 Dükkan, 1 Ofis)" biçiminde tip-kırılımlı sayım.
+    private string UnitBreakdown(IEnumerable<UnitDto> source)
+    {
+        var units = source as IReadOnlyCollection<UnitDto> ?? source.ToList();
+        if (units.Count == 0) return "0";
+        var byType = units.GroupBy(u => u.Type)
+            .OrderByDescending(g => g.Count())
+            .Select(g => $"{g.Count()} {UnitTypeLabel(g.Key)}");
+        return $"{units.Count} ({string.Join(", ", byType)})";
+    }
+
+    // Sadece tip kırılımı ("8 Daire, 3 Dükkan") — sayım/parantez yok (kart alt-yazısı için).
+    private string UnitTypeBreakdown(IEnumerable<UnitDto> source)
+    {
+        var units = source as IReadOnlyCollection<UnitDto> ?? source.ToList();
+        if (units.Count == 0) return "—";
+        return string.Join(", ", units.GroupBy(u => u.Type)
+            .OrderByDescending(g => g.Count())
+            .Select(g => $"{g.Count()} {UnitTypeLabel(g.Key)}"));
+    }
+
+    // Bir alt-ağacın tüm BB'leri (blok-altı + bina-altı).
+    private static IEnumerable<UnitDto> UnitsOf(BuildingDto b) => b.Units.Concat(b.Blocks.SelectMany(bk => bk.Units));
+    private static IEnumerable<UnitDto> UnitsOf(ParcelDto p) => p.Buildings.SelectMany(b => UnitsOf(b));
+    private static IEnumerable<UnitDto> UnitsOf(LandDto l) => l.Parcels.SelectMany(p => UnitsOf(p));
+
+    // Renkli tek metrik rozeti ("Etiket: Değer").
+    private RenderFragment MetricChip(string label, string value, Color color) =>
+        @<MudChip T="string" Size="Size.Small" Color="@color" Variant="Variant.Filled" Class="ma-0">@label: @value</MudChip>;
+
+    // Seviye adının yanındaki renkli özet grubu (flex-grow → aksiyon butonlarını sağa iter).
+    private RenderFragment LandSummary(LandDto l) =>
+        @<div class="d-flex flex-wrap align-center gap-1 flex-grow-1">
+            <MudText Typo="Typo.caption" Class="mr-1" Style="opacity:.6;font-weight:600">Toplam</MudText>
+            @MetricChip("Parsel", l.Parcels.Count.ToString(), Color.Info)
+            @MetricChip("Bina", l.Parcels.Sum(p => p.Buildings.Count).ToString(), Color.Tertiary)
+            @MetricChip("BB", UnitBreakdown(UnitsOf(l)), Color.Success)
+            @MetricChip("m²", UnitsOf(l).Sum(u => u.SquareMeters).ToString("0.##"), Color.Primary)
+            @MetricChip("Arsa Payı", UnitsOf(l).Sum(u => u.LandShare).ToString(), Color.Secondary)
+        </div>;
+
+    private RenderFragment ParcelSummary(ParcelDto p) =>
+        @<div class="d-flex flex-wrap align-center gap-1 flex-grow-1">
+            <MudText Typo="Typo.caption" Class="mr-1" Style="opacity:.6;font-weight:600">Toplam</MudText>
+            @MetricChip("Bina", p.Buildings.Count.ToString(), Color.Tertiary)
+            @MetricChip("BB", UnitBreakdown(UnitsOf(p)), Color.Success)
+            @MetricChip("m²", UnitsOf(p).Sum(u => u.SquareMeters).ToString("0.##"), Color.Primary)
+            @MetricChip("Arsa Payı", UnitsOf(p).Sum(u => u.LandShare).ToString(), Color.Secondary)
+        </div>;
+
+    private RenderFragment BuildingSummary(BuildingDto b) =>
+        @<div class="d-flex flex-wrap align-center gap-1 flex-grow-1">
+            <MudText Typo="Typo.caption" Class="mr-1" Style="opacity:.6;font-weight:600">Toplam</MudText>
+            @MetricChip("BB", UnitBreakdown(UnitsOf(b)), Color.Success)
+            @MetricChip("m²", UnitsOf(b).Sum(u => u.SquareMeters).ToString("0.##"), Color.Primary)
+            @MetricChip("Arsa Payı", UnitsOf(b).Sum(u => u.LandShare).ToString(), Color.Secondary)
+        </div>;
+
+    private sealed class UnitFormModel
+    {
+        public string Number { get; set; } = "";
+        public string? NationalAddressCode { get; set; }
+        public UnitType Type { get; set; } = UnitType.Apartment;
+        public decimal SquareMeters { get; set; }
+        public int LandShare { get; set; }
+        public decimal? AllocatedArea { get; set; }
+        public int Floor { get; set; }
+        public Orientation Orientation { get; set; } = Orientation.Unknown;
+        public ApartmentLayout Layout { get; set; } = ApartmentLayout.Unknown;
+
+        public void Reset()
+        {
+            Number = "";
+            NationalAddressCode = null;
+            Type = UnitType.Apartment;
+            SquareMeters = 0;
+            LandShare = 0;
+            AllocatedArea = null;
+            Floor = 0;
+            Orientation = Orientation.Unknown;
+            Layout = ApartmentLayout.Unknown;
+        }
+
+        public void Load(UnitDto u)
+        {
+            Number = u.Number;
+            NationalAddressCode = u.NationalAddressCode;
+            Type = u.Type;
+            SquareMeters = u.SquareMeters;
+            LandShare = u.LandShare;
+            AllocatedArea = u.AllocatedArea;
+            Floor = u.Floor;
+            Orientation = u.Orientation;
+            Layout = u.Layout;
+        }
     }
 }

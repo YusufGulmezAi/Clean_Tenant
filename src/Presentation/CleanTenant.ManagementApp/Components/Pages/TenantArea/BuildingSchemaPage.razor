@@ -958,10 +958,16 @@ else
     {
         if (_importFile is null || _isBusy) return;
         _isBusy = true;
+        StateHasChanged();   // spinner'ı hemen göster (parse/kayıt UI thread'ini meşgul edebilir)
         try
         {
-            await using var stream = _importFile.OpenReadStream(maxAllowedSize: 10_485_760);
-            var result = await Mediator.Send(new ImportBuildingSchemaCommand(CompanyId, stream));
+            // Blazor Server: BrowserFileStream yalnız ASENKRON okuma destekler; ClosedXML ise
+            // senkron okur. Önce async olarak MemoryStream'e kopyala, sonra onu gönder.
+            await using var browserStream = _importFile.OpenReadStream(maxAllowedSize: 10_485_760);
+            using var ms = new MemoryStream();
+            await browserStream.CopyToAsync(ms);
+            ms.Position = 0;
+            var result = await Mediator.Send(new ImportBuildingSchemaCommand(CompanyId, ms));
 
             if (result.IsFailure) { Snackbar.Add(result.FirstError.Message, Severity.Error); return; }
 
@@ -995,6 +1001,7 @@ else
         BuildingType.ShoppingMall => Loc["BuildingSchema.Type.Avm"].Value,
         BuildingType.Office => Loc["BuildingSchema.Type.Ofis"].Value,
         BuildingType.Warehouse => Loc["BuildingSchema.Type.Depo"].Value,
+        BuildingType.Shop => Loc["BuildingSchema.Type.Dukkan"].Value,
         _ => Loc["BuildingSchema.Type.Diger"].Value,
     };
 
@@ -1023,17 +1030,7 @@ else
         _ => Loc["BuildingSchema.Orient.Unknown"].Value,
     };
 
-    private string LayoutLabel(ApartmentLayout l) => l switch
-    {
-        ApartmentLayout.Studio => Loc["BuildingSchema.Layout.Studio"].Value,
-        ApartmentLayout.OneRoom => "1+0",
-        ApartmentLayout.OneBedroom => "1+1",
-        ApartmentLayout.TwoBedroom => "2+1",
-        ApartmentLayout.ThreeBedroom => "3+1",
-        ApartmentLayout.FourBedroom => "4+1",
-        ApartmentLayout.FiveBedroom => "5+1",
-        _ => Loc["BuildingSchema.Type.Diger"].Value,
-    };
+    private string LayoutLabel(ApartmentLayout l) => l.ToDisplay();
 
     // ── Inner models ─────────────────────────────────────────────────────────
 
@@ -1068,7 +1065,7 @@ else
         public decimal? AllocatedArea { get; set; }
         public int Floor { get; set; }
         public CleanTenant.Domain.Tenant.BuildingSchema.Orientation Orientation { get; set; } = CleanTenant.Domain.Tenant.BuildingSchema.Orientation.Unknown;
-        public ApartmentLayout Layout { get; set; } = ApartmentLayout.OneBedroom;
+        public ApartmentLayout Layout { get; set; } = ApartmentLayout.Unknown;
 
         public void Reset()
         {
@@ -1080,7 +1077,7 @@ else
             AllocatedArea = null;
             Floor = 0;
             Orientation = CleanTenant.Domain.Tenant.BuildingSchema.Orientation.Unknown;
-            Layout = ApartmentLayout.OneBedroom;
+            Layout = ApartmentLayout.Unknown;
         }
 
         public void Load(UnitDto u)

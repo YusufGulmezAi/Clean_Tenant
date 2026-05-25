@@ -23,6 +23,28 @@ public sealed class UpdateUnitCommandHandler : IRequestHandler<UpdateUnitCommand
         if (unit is null)
             return Result.Failure(Error.NotFound("UNIT-NOT-FOUND", "Bağımsız bölüm bulunamadı."));
 
+        // Blok verildiyse: var olmalı ve BB'nin binasına ait olmalı. Null → bina-altı (blok yok).
+        if (command.BlockId.HasValue)
+        {
+            var blockMatchesBuilding = await _db.Blocks
+                .AnyAsync(b => b.Id == command.BlockId.Value
+                            && b.BuildingId == unit.BuildingId, cancellationToken);
+            if (!blockMatchesBuilding)
+                return Result.Failure(Error.Validation(
+                    "BLOCK-BUILDING-MISMATCH", "Seçilen blok bu binaya ait değil."));
+        }
+
+        // Numara benzersizliği (kendisi hariç; hedef kapsam = yeni BlockId / bina-altı).
+        var numberTaken = command.BlockId.HasValue
+            ? await _db.Units.AnyAsync(u => u.Id != command.UnitId && u.BlockId == command.BlockId.Value
+                                         && u.Number == command.Number && !u.IsDeleted, cancellationToken)
+            : await _db.Units.AnyAsync(u => u.Id != command.UnitId && u.BuildingId == unit.BuildingId && u.BlockId == null
+                                         && u.Number == command.Number && !u.IsDeleted, cancellationToken);
+        if (numberTaken)
+            return Result.Failure(Error.Conflict(
+                "UNIT-NUMBER-DUPLICATE", $"\"{command.Number}\" numarası bu kapsamda zaten kullanılıyor."));
+
+        unit.BlockId = command.BlockId;
         unit.Number = command.Number;
         unit.NationalAddressCode = command.NationalAddressCode;
         unit.Type = command.Type;

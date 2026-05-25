@@ -28,20 +28,26 @@ public sealed class GetBuildingSchemaQueryHandler
             return Result<BuildingSchemaDto>.Failure(
                 Error.NotFound("COMPANY-NOT-FOUND", "Site bulunamadı."));
 
-        // Tüm hiyerarşiyi tek sorguda yükle
+        // Tüm hiyerarşiyi tek sorguda yükle.
+        // AsNoTracking: salt-okunur read; ayrıca uzun ömürlü (circuit-scoped) DbContext'te
+        // soft-delete sonrası navigation koleksiyonlarının bayatlamasını (silinen öğenin
+        // ekranda kalması) önler — her sorgu taze graf döndürür.
         var lands = await _db.Lands
-            .Where(l => l.CompanyId == query.CompanyId)
+            .AsNoTracking()
+            .Where(l => l.CompanyId == query.CompanyId && !l.IsDeleted)
             .OrderBy(l => l.SortOrder)
-            // Parcels/Buildings filtreleri YALNIZ ilk zincirde (EF Core: bir navigation'a
-            // tek filtre kuralı). İkinci dal (block'suz BB'ler) aynı filtrelenmiş koleksiyonu
-            // yeniden kullanır; yalnız yaprak Buildings.Units kendi filtresini taşır.
+            // İki dal aynı Parcels/Buildings filtresini taşır (EF Core: bir navigation'a
+            // birden çok filtreli Include yalnız filtreler AYNIYSA kabul edilir). Böylece
+            // soft-delete edilen Parsel/Bina her iki dalda da dışlanır → silme anında yansır.
+            // 1. dal: Building.Units (tüm BB'ler) — blok-altı/bina-altı ayrımı bellekte yapılır.
+            .Include(l => l.Parcels.Where(p => !p.IsDeleted).OrderBy(p => p.SortOrder))
+                .ThenInclude(p => p.Buildings.Where(bl => !bl.IsDeleted).OrderBy(bl => bl.SortOrder))
+                    .ThenInclude(bl => bl.Units.Where(u => !u.IsDeleted).OrderBy(u => u.SortOrder))
+            // 2. dal: Building.Blocks → Block.Units.
             .Include(l => l.Parcels.Where(p => !p.IsDeleted).OrderBy(p => p.SortOrder))
                 .ThenInclude(p => p.Buildings.Where(bl => !bl.IsDeleted).OrderBy(bl => bl.SortOrder))
                     .ThenInclude(bl => bl.Blocks.Where(bk => !bk.IsDeleted).OrderBy(bk => bk.SortOrder))
                         .ThenInclude(bk => bk.Units.Where(u => !u.IsDeleted).OrderBy(u => u.SortOrder))
-            .Include(l => l.Parcels)
-                .ThenInclude(p => p.Buildings)
-                    .ThenInclude(bl => bl.Units.Where(u => !u.IsDeleted && u.BlockId == null).OrderBy(u => u.SortOrder))
             .ToListAsync(cancellationToken);
 
         var schema = new BuildingSchemaDto(

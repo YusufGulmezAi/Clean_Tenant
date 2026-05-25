@@ -18,6 +18,7 @@ namespace CleanTenant.Application.Features.Main.BuildingSchema.Units;
 /// <param name="Floor">Bulunduğu kat.</param>
 /// <param name="Orientation">Cephe yönü.</param>
 /// <param name="Layout">Oda-salon düzeni.</param>
+/// <param name="BlockId">Bağlanacağı Blok (opsiyonel); null → bina-altı.</param>
 [RequirePermission("BuildingSchema.Manage")]
 public sealed record UpdateUnitCommand(
     Guid UnitId,
@@ -29,4 +30,7 @@ public sealed record UpdateUnitCommand(
     decimal? AllocatedArea,
     int Floor,
     Orientation Orientation,
-    ApartmentLayout Layout) : IRequest<Result>;
+    ApartmentLayout Layout,
+    // Opsiyonel: BB'nin bağlanacağı Blok. Null → doğrudan Building'e bağlanır.
+    // (Sona eklendi ki mevcut konum-bazlı çağrılar kırılmasın.)
+    Guid? BlockId = null) : IRequest<Result>;
