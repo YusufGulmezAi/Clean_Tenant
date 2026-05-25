@@ -59,12 +59,13 @@ public sealed class GenerateLateFeeChargesCommandHandler
             return Result<LateFeeChargeResult>.Failure(
                 Error.Failure("LF-002", "Kapalı döneme gecikme faizi işlenemez."));
 
-        // ── 2. Açık + vadesi geçmiş anapara detayları (LateFee hariç) ────────────
+        // ── 2. Açık + vadesi geçmiş anapara detayları (LateFee + Correction hariç) ─
         var principal = await (
             from d in _db.AccrualDetails
             join a in _db.Accruals on d.AccrualId equals a.Id
             where a.CompanyId == request.CompanyId
                 && a.Source != AccrualSource.LateFee
+                && a.Source != AccrualSource.Correction
                 && !d.IsDeleted && !a.IsDeleted
             select new { d.Id, d.UnitId, d.Amount, d.DueDate, a.BudgetId, a.ReceivableAccountCodeId }
         ).ToListAsync(cancellationToken);
@@ -78,6 +79,16 @@ public sealed class GenerateLateFeeChargesCommandHandler
             .Where(al => principalIds.Contains(al.AccrualDetailId) && !al.IsDeleted)
             .GroupBy(al => al.AccrualDetailId)
             .Select(g => new { DetailId = g.Key, Sum = g.Sum(x => x.AllocatedAmount) })
+            .ToListAsync(cancellationToken))
+            .ToDictionary(x => x.DetailId, x => x.Sum);
+
+        // Ters kayıt netlemesi: anaparaya bağlı düzeltmeler gecikme tabanından düşülür
+        // → düzeltilmiş anaparaya gecikme işlenir (fazla faiz önlenir).
+        var principalCorrections = (await _db.AccrualDetails
+            .Where(d => d.CorrectedAccrualDetailId != null
+                     && principalIds.Contains(d.CorrectedAccrualDetailId.Value) && !d.IsDeleted)
+            .GroupBy(d => d.CorrectedAccrualDetailId!.Value)
+            .Select(g => new { DetailId = g.Key, Sum = g.Sum(x => -x.Amount) })
             .ToListAsync(cancellationToken))
             .ToDictionary(x => x.DetailId, x => x.Sum);
 
@@ -109,7 +120,8 @@ public sealed class GenerateLateFeeChargesCommandHandler
                 x.DueDate,
                 x.BudgetId,
                 x.ReceivableAccountCodeId,
-                Remaining = x.Amount - allocByDetail.GetValueOrDefault(x.Id, 0m),
+                Remaining = x.Amount - allocByDetail.GetValueOrDefault(x.Id, 0m)
+                            - principalCorrections.GetValueOrDefault(x.Id, 0m),
             })
             .Where(x => x.Remaining > 0m && x.DueDate < request.AsOfDate)
             .ToList();

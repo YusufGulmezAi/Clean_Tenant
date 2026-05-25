@@ -945,6 +945,140 @@ public sealed class BudgetChainE2ETests : IClassFixture<BudgetE2EFixture>
     }
 
     [Fact]
+    public async Task Senaryo15_odenmis_detay_duzeltme_avansa_donusur()
+    {
+        // F1 Slice 5: ödenmiş bir tahakkuk düzeltilince fazla ödeme AVANSA çevrilir
+        // (allocation azalır + unallocated artar); FIFO netlemesiyle orijinal kapanır.
+        var s = await SeedScenarioAsync(unitCount: 3, plannedAnnual: 36_000m, DistributionModel.Equal);
+        var unit0 = s.UnitIds[0];
+
+        _fixture.Clock.UtcNow = new DateTimeOffset(2026, 3, 10, 0, 0, 0, TimeSpan.Zero);
+        var acc = Ok(await SendAsync(new GenerateBudgetAccrualCommand(s.TenantId, s.CompanyId, s.BudgetId, 2026, 3)));
+        // Tam ödeme 1000
+        Ok(await SendAsync(new RecordCollectionCommand(
+            s.TenantId, s.CompanyId, unit0, s.PeriodId,
+            new DateOnly(2026, 3, 20), 1_000m, PaymentMethod.Cash, s.CashAccountCodeId)));
+
+        Guid detailId;
+        using (var scope = _fixture.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<MainDbContext>();
+            detailId = (await db.AccrualDetails.FirstAsync(d => d.AccrualId == acc.AccrualId && d.UnitId == unit0)).Id;
+        }
+
+        // 200 ters kayıt → ödenmiş olduğundan 200 avansa döner
+        Ok(await SendAsync(new CorrectAccrualCommand(s.TenantId, s.CompanyId, detailId, 200m, "fazla tahakkuk")));
+
+        // Açık borç netlendi → 0 (orijinal 1000 − allocation 800 − düzeltme 200)
+        var open = Ok(await SendAsync(new GetUnitOpenDebtQuery(s.CompanyId, unit0)));
+        open.TotalOpen.Should().Be(0m, "düzeltme + netleme sonrası açık borç yok");
+
+        var kpi = Ok(await SendAsync(new GetUnitCurrentAccountKpiQuery(s.CompanyId, unit0)));
+        kpi.TotalAccrued.Should().Be(800m);
+        kpi.NetBalance.Should().Be(-200m, "fazla ödeme alacaklı");
+        kpi.AdvanceBalance.Should().Be(200m, "düzeltme fazlası avansa döndü");
+
+        using (var scope = _fixture.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<MainDbContext>();
+            var allocated = await db.CollectionAllocations
+                .Where(a => a.AccrualDetailId == detailId && !a.IsDeleted).SumAsync(a => a.AllocatedAmount);
+            allocated.Should().Be(800m, "200 allocation avansa taşındı");
+        }
+
+        // Avans iade edilebilir → 200 iade, avans 0
+        var refund = Ok(await SendAsync(new RefundAdvanceCommand(
+            s.TenantId, s.CompanyId, unit0, 200m, new DateOnly(2026, 3, 25), s.CashAccountCodeId, PaymentMethod.Cash)));
+        refund.RemainingAdvance.Should().Be(0m);
+        var kpi2 = Ok(await SendAsync(new GetUnitCurrentAccountKpiQuery(s.CompanyId, unit0)));
+        kpi2.AdvanceBalance.Should().Be(0m);
+        kpi2.NetBalance.Should().Be(0m, "düzeltme sonrası net kapanış");
+    }
+
+    [Fact]
+    public async Task Senaryo16_odenmemis_duzeltme_FIFO_netleme()
+    {
+        // F1 Slice 5: ödenmemiş detay düzeltilince açık borç netlenir; kalan tutar ödenince kapanır.
+        var s = await SeedScenarioAsync(unitCount: 3, plannedAnnual: 36_000m, DistributionModel.Equal);
+        var unit0 = s.UnitIds[0];
+
+        _fixture.Clock.UtcNow = new DateTimeOffset(2026, 3, 10, 0, 0, 0, TimeSpan.Zero);
+        var acc = Ok(await SendAsync(new GenerateBudgetAccrualCommand(s.TenantId, s.CompanyId, s.BudgetId, 2026, 3)));
+        Guid detailId;
+        using (var scope = _fixture.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<MainDbContext>();
+            detailId = (await db.AccrualDetails.FirstAsync(d => d.AccrualId == acc.AccrualId && d.UnitId == unit0)).Id;
+        }
+
+        Ok(await SendAsync(new CorrectAccrualCommand(s.TenantId, s.CompanyId, detailId, 200m, "düzeltme")));
+
+        var open = Ok(await SendAsync(new GetUnitOpenDebtQuery(s.CompanyId, unit0)));
+        open.TotalOpen.Should().Be(800m, "1000 − 200 düzeltme = 800 açık");
+
+        // 800 ödenince tam kapanır (fazla ödeme yok)
+        var col = Ok(await SendAsync(new RecordCollectionCommand(
+            s.TenantId, s.CompanyId, unit0, s.PeriodId,
+            new DateOnly(2026, 3, 22), 800m, PaymentMethod.Cash, s.CashAccountCodeId)));
+        col.UnallocatedAmount.Should().Be(0m, "netlenmiş borç tam kapandı, avans yok");
+
+        var kpi = Ok(await SendAsync(new GetUnitCurrentAccountKpiQuery(s.CompanyId, unit0)));
+        kpi.NetBalance.Should().Be(0m);
+        kpi.AdvanceBalance.Should().Be(0m);
+    }
+
+    [Fact]
+    public async Task Senaryo17_gecikme_tabani_duzeltmeyi_netler()
+    {
+        // F1 Slice 5: gecikme faizi tabanı düzeltilmiş anaparaya göre hesaplanır (fazla faiz yok).
+        var s = await SeedScenarioAsync(unitCount: 3, plannedAnnual: 36_000m, DistributionModel.Equal);
+        var unit0 = s.UnitIds[0];
+
+        Guid lateFeeIncomeId;
+        using (var scope = _fixture.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<MainDbContext>();
+            var income = new AccountCode { TenantId = s.TenantId, CompanyId = s.CompanyId, Code = "642.001.001", Name = "Gecikme Faizi Geliri", Level = AccountLevel.Detail, IsDetail = true, IsActive = true };
+            db.AccountCodes.Add(income);
+            await db.SaveChangesAsync();
+            lateFeeIncomeId = income.Id;
+        }
+
+        _fixture.Clock.UtcNow = new DateTimeOffset(2026, 3, 10, 0, 0, 0, TimeSpan.Zero);
+        var acc = Ok(await SendAsync(new GenerateBudgetAccrualCommand(s.TenantId, s.CompanyId, s.BudgetId, 2026, 3)));
+        Guid detailId;
+        using (var scope = _fixture.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<MainDbContext>();
+            detailId = (await db.AccrualDetails.FirstAsync(d => d.AccrualId == acc.AccrualId && d.UnitId == unit0)).Id;
+        }
+
+        // Anaparayı 200 düşür (net 800)
+        Ok(await SendAsync(new CorrectAccrualCommand(s.TenantId, s.CompanyId, detailId, 200m, "düzeltme")));
+
+        // %3 aylık, grace 0
+        Ok(await SendAsync(new SetLateFeePolicyCommand(
+            s.TenantId, s.CompanyId, BudgetId: null,
+            MonthlyRatePercent: 3m, IsCompound: false, GraceDays: 0, IncomeAccountCodeId: lateFeeIncomeId)));
+
+        // Vade 2026-04-15, 30 gün sonra → 800 × %3 × 30/30 = 24 (1000 olsa 30 olurdu)
+        _fixture.Clock.UtcNow = new DateTimeOffset(2026, 5, 15, 0, 0, 0, TimeSpan.Zero);
+        var lateFee = Ok(await SendAsync(new GenerateLateFeeChargesCommand(
+            s.TenantId, s.CompanyId, new DateOnly(2026, 5, 15))));
+
+        using (var scope = _fixture.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<MainDbContext>();
+            var lateDetail = await (
+                from d in db.AccrualDetails
+                join a in db.Accruals on d.AccrualId equals a.Id
+                where d.UnitId == unit0 && a.Source == AccrualSource.LateFee
+                select d).FirstAsync();
+            lateDetail.Amount.Should().Be(24m, "gecikme düzeltilmiş 800 anaparaya işlendi (1000'e değil)");
+        }
+    }
+
+    [Fact]
     public async Task GetBuildingSchema_cogul_filtreli_include_calisir()
     {
         // Regresyon: Parcels/Buildings çoğul filtreli Include "tek filtre" EF hatası

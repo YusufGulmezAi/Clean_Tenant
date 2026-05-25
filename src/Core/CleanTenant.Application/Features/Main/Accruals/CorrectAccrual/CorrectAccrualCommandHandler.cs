@@ -123,6 +123,34 @@ public sealed class CorrectAccrualCommandHandler
         correctionAccrual.Details.Add(correctionDetail);
         _db.Accruals.Add(correctionAccrual);
 
+        // Ödenmiş detay düzeltildiyse fazla ödemeyi AVANSA çevir: yeni etkin tutarın
+        // (= orijinal − toplam düzeltme) üzerindeki tahsisleri kaynak Collection'ın
+        // UnallocatedAmount'una taşı (collection.amount = allocations + unallocated invariantı korunur).
+        var effectiveCharge = original.Detail.Amount - (alreadyCorrected + request.Amount);
+        var allocations = await _db.CollectionAllocations
+            .Where(al => al.AccrualDetailId == request.AccrualDetailId && !al.IsDeleted)
+            .ToListAsync(cancellationToken);
+        var totalAllocated = allocations.Sum(a => a.AllocatedAmount);
+        var excess = totalAllocated - effectiveCharge;
+        if (excess > 0m)
+        {
+            var colIds = allocations.Select(a => a.CollectionId).Distinct().ToList();
+            var cols = await _db.Collections
+                .Where(c => colIds.Contains(c.Id) && !c.IsDeleted)
+                .ToListAsync(cancellationToken);
+            var colMap = cols.ToDictionary(c => c.Id);
+            var remainingToMove = excess;
+            foreach (var al in allocations)
+            {
+                if (remainingToMove <= 0m) break;
+                var take = Math.Min(remainingToMove, al.AllocatedAmount);
+                al.AllocatedAmount -= take;
+                if (colMap.TryGetValue(al.CollectionId, out var col))
+                    col.UnallocatedAmount += take;
+                remainingToMove -= take;
+            }
+        }
+
         // Ters yönlü yevmiye: Borç 600 (gelir) / Alacak 120 (alacak) — pozitif tutar.
         // Numara serisi Normal (paylaşımlı → (company, entry_number) benzersiz).
         var sequence = await _db.EntrySequences

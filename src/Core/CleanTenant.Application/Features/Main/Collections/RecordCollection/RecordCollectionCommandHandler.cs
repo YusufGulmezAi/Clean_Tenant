@@ -56,12 +56,12 @@ public sealed class RecordCollectionCommandHandler
             return Result<CollectionResult>.Failure(
                 Error.Failure("COL-004", "Geçersiz/pasif/özet kasa-banka hesabı (yaprak gerekir)."));
 
-        // BB'nin açık tahakkuk detayları (en eski vade önce)
+        // BB'nin açık tahakkuk detayları (en eski vade önce) — Correction olmayanlar
         var details = await (
             from d in _db.AccrualDetails
             join a in _db.Accruals on d.AccrualId equals a.Id
             where d.UnitId == request.UnitId && a.CompanyId == request.CompanyId
-                && !d.IsDeleted && !a.IsDeleted
+                && !d.IsDeleted && !a.IsDeleted && a.Source != AccrualSource.Correction
             select new { d.Id, d.Amount, d.DueDate, a.ReceivableAccountCodeId, a.Source }
         ).ToListAsync(cancellationToken);
 
@@ -73,6 +73,15 @@ public sealed class RecordCollectionCommandHandler
             .ToListAsync(cancellationToken))
             .ToDictionary(x => x.DetailId, x => x.Sum);
 
+        // Ters kayıt netlemesi: orijinal detaya bağlı Correction tutarları açık borçtan düşülür
+        var correctionMap = (await _db.AccrualDetails
+            .Where(d => d.CorrectedAccrualDetailId != null
+                     && detailIds.Contains(d.CorrectedAccrualDetailId.Value) && !d.IsDeleted)
+            .GroupBy(d => d.CorrectedAccrualDetailId!.Value)
+            .Select(g => new { DetailId = g.Key, Sum = g.Sum(x => -x.Amount) })
+            .ToListAsync(cancellationToken))
+            .ToDictionary(x => x.DetailId, x => x.Sum);
+
         var open = details
             .Select(d => new
             {
@@ -80,7 +89,8 @@ public sealed class RecordCollectionCommandHandler
                 d.ReceivableAccountCodeId,
                 d.DueDate,
                 d.Source,
-                Remaining = d.Amount - allocatedMap.GetValueOrDefault(d.Id, 0m),
+                Remaining = d.Amount - allocatedMap.GetValueOrDefault(d.Id, 0m)
+                            - correctionMap.GetValueOrDefault(d.Id, 0m),
             })
             .Where(d => d.Remaining > 0m)
             // TBK m.101: en eski vade içinde önce gecikme faizi, sonra anapara
