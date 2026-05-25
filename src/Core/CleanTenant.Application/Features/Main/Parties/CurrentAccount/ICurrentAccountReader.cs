@@ -31,7 +31,8 @@ public sealed record CurrentAccountKpi(
     decimal TotalAccrued,
     decimal TotalCollected,
     decimal NetBalance,
-    decimal OverdueAmount);
+    decimal OverdueAmount,
+    decimal AdvanceBalance);
 
 /// <summary>BB listesi satırı (borç özetli).</summary>
 public sealed record UnitOverviewRow(

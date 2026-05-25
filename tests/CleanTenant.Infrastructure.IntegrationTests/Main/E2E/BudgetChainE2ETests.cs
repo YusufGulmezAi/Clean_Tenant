@@ -5,6 +5,7 @@ using CleanTenant.Application.Features.Main.Budgeting.Budgets;
 using CleanTenant.Application.Features.Main.Budgeting.BudgetLineVersions;
 using CleanTenant.Application.Features.Main.Budgeting.Templates;
 using CleanTenant.Application.Features.Main.BuildingSchema.Queries;
+using CleanTenant.Application.Features.Main.Collections.ApplyAdvance;
 using CleanTenant.Application.Features.Main.Collections.Queries;
 using CleanTenant.Application.Features.Main.Collections.RecordCollection;
 using CleanTenant.Application.Features.Main.LateFees.GenerateLateFeeCharges;
@@ -742,6 +743,67 @@ public sealed class BudgetChainE2ETests : IClassFixture<BudgetE2EFixture>
         ledger.Sum(r => r.Debit).Should().Be(1_000m);
         ledger.Sum(r => r.Credit).Should().Be(1_500m, "tahsilat 1000 + avans 500");
         ledger[^1].RunningBalance.Should().Be(-500m, "avans sonrası alacaklı bakiye");
+    }
+
+    [Fact]
+    public async Task Senaryo11_avans_yeni_borca_mahsup_GL_notr()
+    {
+        // F1 Slice 2: biriken avans, sonraki ayın borcuna FIFO mahsup edilir.
+        // GL-nötr: nakit zaten girmişti → yeni yevmiye AÇILMAZ, yalnız allocation.
+        var s = await SeedScenarioAsync(unitCount: 3, plannedAnnual: 36_000m, DistributionModel.Equal);
+        var unit0 = s.UnitIds[0];
+
+        // Mart: 1000 borç → 1500 ödeme (500 avans)
+        _fixture.Clock.UtcNow = new DateTimeOffset(2026, 3, 10, 0, 0, 0, TimeSpan.Zero);
+        Ok(await SendAsync(new GenerateBudgetAccrualCommand(s.TenantId, s.CompanyId, s.BudgetId, 2026, 3)));
+        Ok(await SendAsync(new RecordCollectionCommand(
+            s.TenantId, s.CompanyId, unit0, s.PeriodId,
+            new DateOnly(2026, 3, 20), 1_500m, PaymentMethod.Cash, s.CashAccountCodeId)));
+
+        // Nisan: 1000 yeni borç
+        _fixture.Clock.UtcNow = new DateTimeOffset(2026, 4, 10, 0, 0, 0, TimeSpan.Zero);
+        Ok(await SendAsync(new GenerateBudgetAccrualCommand(s.TenantId, s.CompanyId, s.BudgetId, 2026, 4)));
+
+        int journalCountBefore;
+        using (var scope = _fixture.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<MainDbContext>();
+            journalCountBefore = await db.JournalEntries.CountAsync(e => e.CompanyId == s.CompanyId && !e.IsDeleted);
+        }
+
+        // Avansı mahsup et → 500 Nisan borcuna
+        var res = Ok(await SendAsync(new ApplyAdvanceCommand(s.TenantId, s.CompanyId, unit0)));
+        res.AppliedAmount.Should().Be(500m);
+        res.AllocationCount.Should().Be(1);
+        res.RemainingAdvance.Should().Be(0m);
+
+        using (var scope = _fixture.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<MainDbContext>();
+
+            var advanceLeft = await db.Collections
+                .Where(c => c.UnitId == unit0 && !c.IsDeleted).SumAsync(c => c.UnallocatedAmount);
+            advanceLeft.Should().Be(0m, "avans tükendi");
+
+            var aprilDetail = await (
+                from d in db.AccrualDetails
+                join a in db.Accruals on d.AccrualId equals a.Id
+                where d.UnitId == unit0 && a.Year == 2026 && a.Month == 4 && a.Source == AccrualSource.Budget
+                select d).FirstAsync();
+            var aprilPaid = await db.CollectionAllocations
+                .Where(al => al.AccrualDetailId == aprilDetail.Id && !al.IsDeleted).SumAsync(al => al.AllocatedAmount);
+            aprilPaid.Should().Be(500m, "avans Nisan borcuna mahsup");
+
+            var journalCountAfter = await db.JournalEntries.CountAsync(e => e.CompanyId == s.CompanyId && !e.IsDeleted);
+            journalCountAfter.Should().Be(journalCountBefore, "mahsup GL-nötr → yeni yevmiye yok");
+        }
+
+        // KPI: 2000 tahakkuk, 1500 nakit, net 500 borçlu, avans 0
+        var kpi = Ok(await SendAsync(new GetUnitCurrentAccountKpiQuery(s.CompanyId, unit0)));
+        kpi.TotalAccrued.Should().Be(2_000m);
+        kpi.TotalCollected.Should().Be(1_500m);
+        kpi.NetBalance.Should().Be(500m);
+        kpi.AdvanceBalance.Should().Be(0m);
     }
 
     [Fact]

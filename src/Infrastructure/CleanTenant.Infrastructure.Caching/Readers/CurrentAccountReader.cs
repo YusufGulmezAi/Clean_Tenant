@@ -108,7 +108,8 @@ public sealed class CurrentAccountReader : ICurrentAccountReader
                 acc.total_accrued                          AS TotalAccrued,
                 coll.total_collected                       AS TotalCollected,
                 acc.total_accrued - coll.total_collected   AS NetBalance,
-                acc.overdue                                AS OverdueAmount
+                acc.overdue                                AS OverdueAmount,
+                coll.advance_balance                       AS AdvanceBalance
             FROM
                 (SELECT
                      COALESCE(SUM(d.amount), 0) AS total_accrued,
@@ -124,7 +125,8 @@ public sealed class CurrentAccountReader : ICurrentAccountReader
                  ) paid ON true
                  WHERE d.unit_id = @unitId AND d.is_deleted = false) acc
                 CROSS JOIN
-                (SELECT COALESCE(SUM(c.amount), 0) AS total_collected
+                (SELECT COALESCE(SUM(c.amount), 0) AS total_collected,
+                        COALESCE(SUM(c.unallocated_amount), 0) AS advance_balance
                  FROM collections c
                  WHERE c.unit_id = @unitId AND c.company_id = @companyId AND c.is_deleted = false) coll
             """;

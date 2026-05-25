@@ -15,6 +15,7 @@
 @using CleanTenant.Application.Features.Main.Parties.Tenures
 @using CleanTenant.Application.Features.Main.Accruals.Queries
 @using CleanTenant.Application.Features.Main.Collections.Queries
+@using CleanTenant.Application.Features.Main.Collections.ApplyAdvance
 @using CleanTenant.Domain.Tenant.Parties.Enums
 
 <PageTitle>@(_tenures is null ? Loc["Cari.Card.PageTitle"].Value : $"Daire {_tenures.UnitNumber}")</PageTitle>
@@ -69,6 +70,12 @@ else
                         <button class="qa-btn primary" @onclick="OpenCollectionWizardAsync">
                             + @Loc["Cari.Card.RecordCollection"]
                         </button>
+                        @if (_kpi.AdvanceBalance > 0)
+                        {
+                            <button class="qa-btn" @onclick="ApplyAdvanceAsync" disabled="@_applyingAdvance">
+                                @Loc["Cari.Card.ApplyAdvance"] (@Fmt(_kpi.AdvanceBalance))
+                            </button>
+                        }
                     }
                 </div>
             </div>
@@ -298,10 +305,11 @@ else
 
     private bool _unauthorized, _initialized;
     private bool _canRecord;
+    private bool _applyingAdvance;
     private Guid _tenantId;
     private string _tab = "genel";
     private UnitTenures? _tenures;
-    private CurrentAccountKpi _kpi = new(0, 0, 0, 0);
+    private CurrentAccountKpi _kpi = new(0, 0, 0, 0, 0);
     private OwnershipItem? _activeOwner;
     private TenancyItem? _activeTenant;
     private PartyDetail? _partyDetail;
@@ -415,6 +423,31 @@ else
         {
             Snackbar.Add(Loc["Cari.Wizard.Success"].Value, Severity.Success);
             await RefreshFinancialsAsync();
+        }
+    }
+
+    private async Task ApplyAdvanceAsync()
+    {
+        if (!_canRecord || _kpi.AdvanceBalance <= 0) return;
+        _applyingAdvance = true;
+        try
+        {
+            var result = await Mediator.Send(new ApplyAdvanceCommand(_tenantId, CompanyId, UnitId));
+            if (result.IsFailure)
+            {
+                Snackbar.Add(result.FirstError.Message, Severity.Error);
+                return;
+            }
+            var r = result.Value!;
+            Snackbar.Add(r.AppliedAmount > 0
+                ? string.Format(System.Globalization.CultureInfo.CurrentCulture, Loc["Cari.Card.AdvanceApplied"].Value, Fmt(r.AppliedAmount))
+                : Loc["Cari.Card.AdvanceNothing"].Value,
+                r.AppliedAmount > 0 ? Severity.Success : Severity.Info);
+            await RefreshFinancialsAsync();
+        }
+        finally
+        {
+            _applyingAdvance = false;
         }
     }
 
