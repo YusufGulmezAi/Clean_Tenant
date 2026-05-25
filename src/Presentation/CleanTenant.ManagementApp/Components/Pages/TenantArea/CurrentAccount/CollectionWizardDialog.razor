@@ -101,7 +101,7 @@
                     <MudGrid Spacing="2">
                         <MudItem xs="12" sm="6">
                             <MudNumericField T="decimal" @bind-Value="_amount" Label="@Loc["Cari.Wizard.Amount"]"
-                                             Variant="Variant.Outlined" Min="0m" Max="_openDebt.TotalOpen" Format="N2"
+                                             Variant="Variant.Outlined" Min="0m" Format="N2"
                                              Immediate="true" />
                             <MudButton Size="Size.Small" Variant="Variant.Text" Class="mt-1"
                                        OnClick="@(() => _amount = _openDebt!.TotalOpen)">
@@ -109,7 +109,9 @@
                             </MudButton>
                             @if (_amount > _openDebt.TotalOpen)
                             {
-                                <MudText Typo="Typo.caption" Color="Color.Error">@Loc["Cari.Wizard.AmountExceeds"]</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Info">
+                                    @Loc["Cari.Wizard.AdvanceInfo"] @Fmt(_amount - _openDebt.TotalOpen)
+                                </MudText>
                             }
                         </MudItem>
                         <MudItem xs="12" sm="6">
@@ -171,6 +173,12 @@
                             <MudText Typo="Typo.body2" Class="mud-text-secondary">@alloc.Count @Loc["Cari.Wizard.Summary.Allocations"]</MudText>
                         </div>
                     }
+                    @if (_amount > _openDebt.TotalOpen)
+                    {
+                        <MudAlert Severity="Severity.Info" Dense="true" Class="mt-2">
+                            @Loc["Cari.Wizard.AdvanceInfo"] <b>@Fmt(_amount - _openDebt.TotalOpen)</b>
+                        </MudAlert>
+                    }
                     <MudText Typo="Typo.caption" Class="mud-text-secondary mt-3 d-block">@Loc["Cari.Wizard.Allocation.Note"]</MudText>
                 }
 
@@ -183,6 +191,10 @@
                         @Row(Loc["Cari.Wizard.Summary.Amount"].Value, Fmt(_amount))
                         @Row(Loc["Cari.Wizard.Summary.Period"].Value, _period is null ? "—" : $"{TurkishMonth(_period.Month)} {_period.Year}")
                         @Row(Loc["Cari.Wizard.Summary.Allocations"].Value, ComputeAllocation(_amount).Count.ToString())
+                        @if (_amount > _openDebt.TotalOpen)
+                        {
+                            @Row(Loc["Cari.Wizard.AdvanceLabel"].Value, Fmt(_amount - _openDebt.TotalOpen))
+                        }
                     </MudPaper>
 
                     <MudNumericField T="decimal?" @bind-Value="_confirmAmount" Label="@Loc["Cari.Wizard.Confirm.Retype"]"
@@ -283,7 +295,7 @@
     private bool CanGoNext => _step switch
     {
         1 => _channelKind is not null && _cashAccount is not null,
-        2 => _amount > 0m && _amount <= (_openDebt?.TotalOpen ?? 0m) && _period is not null && _paymentDate.HasValue,
+        2 => _amount > 0m && _period is not null && _paymentDate.HasValue,
         3 => true,
         _ => false
     };

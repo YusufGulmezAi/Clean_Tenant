@@ -92,9 +92,9 @@ public sealed class RecordCollectionCommandHandler
         var totalOpen = open.Sum(d => d.Remaining);
         if (totalOpen <= 0m)
             return Result<CollectionResult>.Failure(Error.Failure("COL-006", "BB'nin açık borcu yok."));
-        if (request.Amount > totalOpen)
-            return Result<CollectionResult>.Failure(
-                Error.Failure("COL-005", $"Tutar açık borcu aşıyor (açık borç: {totalOpen:N2})."));
+        // Fazla ödeme (Amount > totalOpen) artık reddedilmez (eski COL-005 kaldırıldı):
+        // fazlalık AVANS olarak BB'nin alacak hesabına kredilenir → 120 bakiyesi
+        // alacaklıya (negatif) döner. Ayrı 340 Alınan Avanslar hesabı kullanılmaz.
 
         // Tahsilat + TBK m.101 dağıtım
         var now = _clock.UtcNow;
@@ -135,6 +135,19 @@ public sealed class RecordCollectionCommandHandler
             });
             creditByAccount[recvId] = creditByAccount.GetValueOrDefault(recvId) + apply;
             remaining -= apply;
+        }
+
+        // Fazla ödeme → avans: kalan tutar BB'nin (en yeni açık tahakkuğun) alacak
+        // hesabına kredilenir; 120 bakiyesi alacaklıya (negatif) döner. UnallocatedAmount
+        // avansı izler; sonradan mahsup (Slice 2) veya iade (Slice 3) edilir.
+        if (remaining > 0m)
+        {
+            var advanceAccountId = open[^1].ReceivableAccountCodeId ?? open[0].ReceivableAccountCodeId;
+            if (advanceAccountId is not { } advId)
+                return Result<CollectionResult>.Failure(
+                    Error.Failure("COL-007", "Avans için alacak hesabı belirlenemedi."));
+            creditByAccount[advId] = creditByAccount.GetValueOrDefault(advId) + remaining;
+            collection.UnallocatedAmount = remaining;
         }
 
         // Yevmiye fişi: Borç Kasa/Banka / Alacak 120.0X.NNN (hesap bazında gruplu)

@@ -692,6 +692,59 @@ public sealed class BudgetChainE2ETests : IClassFixture<BudgetE2EFixture>
     }
 
     [Fact]
+    public async Task Senaryo10_fazla_odeme_avansa_yazilir_120_negatif()
+    {
+        // F1 Slice 1: fazla ödeme reddedilmez (COL-005 kalktı) — fazlalık avans olarak
+        // 120 alacak hesabına kredilenir (negatif bakiye), UnallocatedAmount izler.
+        var s = await SeedScenarioAsync(unitCount: 3, plannedAnnual: 36_000m, DistributionModel.Equal);
+        var unit0 = s.UnitIds[0];
+
+        // Mart tahakkuğu: BB#1 = 1000 borç
+        _fixture.Clock.UtcNow = new DateTimeOffset(2026, 3, 10, 0, 0, 0, TimeSpan.Zero);
+        Ok(await SendAsync(new GenerateBudgetAccrualCommand(s.TenantId, s.CompanyId, s.BudgetId, 2026, 3)));
+
+        // BB#1'e 1500 ödeme → 1000 mahsup + 500 avans
+        var col = Ok(await SendAsync(new RecordCollectionCommand(
+            s.TenantId, s.CompanyId, unit0, s.PeriodId,
+            new DateOnly(2026, 3, 20), 1_500m, PaymentMethod.Cash, s.CashAccountCodeId)));
+
+        col.UnallocatedAmount.Should().Be(500m, "fazlalık avans");
+        col.AllocationCount.Should().Be(1, "tek açık tahakkuğa mahsup");
+
+        using (var scope = _fixture.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<MainDbContext>();
+            var collection = await db.Collections.FirstAsync(c => c.Id == col.CollectionId);
+            collection.Amount.Should().Be(1_500m);
+            collection.UnallocatedAmount.Should().Be(500m);
+
+            var allocs = await db.CollectionAllocations
+                .Where(a => a.CollectionId == col.CollectionId && !a.IsDeleted).ToListAsync();
+            allocs.Sum(a => a.AllocatedAmount).Should().Be(1_000m, "yalnız açık borç mahsup edildi");
+
+            // Yevmiye dengeli: Borç 100 Kasa = 1500 / Alacak 120 = 1500 (1000 borç + 500 avans)
+            var entry = await db.JournalEntries.Include(e => e.Lines).FirstAsync(e => e.ReferenceId == col.CollectionId);
+            entry.TotalDebit.Should().Be(1_500m);
+            entry.TotalCredit.Should().Be(1_500m);
+            entry.Lines.Where(l => l.Debit > 0).Sum(l => l.Debit).Should().Be(1_500m);
+            entry.Lines.Where(l => l.Credit > 0).Sum(l => l.Credit).Should().Be(1_500m);
+        }
+
+        // KPI: tam nakit tahsil edildi → net bakiye -500 (alacaklı/avans)
+        var kpi = Ok(await SendAsync(new GetUnitCurrentAccountKpiQuery(s.CompanyId, unit0)));
+        kpi.TotalAccrued.Should().Be(1_000m);
+        kpi.TotalCollected.Should().Be(1_500m, "tam nakit (mahsup + avans)");
+        kpi.NetBalance.Should().Be(-500m, "fazla ödeme → alacaklı");
+        kpi.OverdueAmount.Should().Be(0m);
+
+        // Ledger: borç 1000 + tahsilat 1000 + avans 500 kredi → yürüyen bakiye -500
+        var ledger = Ok(await SendAsync(new GetUnitLedgerQuery(s.CompanyId, unit0)));
+        ledger.Sum(r => r.Debit).Should().Be(1_000m);
+        ledger.Sum(r => r.Credit).Should().Be(1_500m, "tahsilat 1000 + avans 500");
+        ledger[^1].RunningBalance.Should().Be(-500m, "avans sonrası alacaklı bakiye");
+    }
+
+    [Fact]
     public async Task GetBuildingSchema_cogul_filtreli_include_calisir()
     {
         // Regresyon: Parcels/Buildings çoğul filtreli Include "tek filtre" EF hatası

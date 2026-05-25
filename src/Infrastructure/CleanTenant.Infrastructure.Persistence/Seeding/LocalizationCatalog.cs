@@ -245,6 +245,8 @@ public static class LocalizationCatalog
         new("Cari.Wizard.Reference",      "Referans / Dekont No",  "Reference / Receipt No"),
         new("Cari.Wizard.Description",    "Açıklama",              "Description"),
         new("Cari.Wizard.AmountExceeds",  "Tutar açık borcu aşamaz.", "Amount cannot exceed open debt."),
+        new("Cari.Wizard.AdvanceInfo",    "Fazlalık avans olarak yazılacak:", "Excess will be recorded as advance:"),
+        new("Cari.Wizard.AdvanceLabel",   "Avans (fazla ödeme)",    "Advance (overpayment)"),
         new("Cari.Wizard.Allocation.Line",    "Tahakkuk",          "Accrual"),
         new("Cari.Wizard.Allocation.Open",    "Açık",              "Open"),
         new("Cari.Wizard.Allocation.Applied", "Mahsup",            "Applied"),

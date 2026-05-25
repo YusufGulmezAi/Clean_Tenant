@@ -56,6 +56,21 @@ public sealed class CurrentAccountReader : ICurrentAccountReader
                 JOIN collections c ON c.id = al.collection_id
                     AND c.company_id = @companyId AND c.is_deleted = false
                 WHERE al.is_deleted = false
+
+                UNION ALL
+
+                -- Avans (fazla ödeme): dağıtılmamış tutar BB lehine kredi (120 negatif)
+                SELECT
+                    c.payment_date::timestamptz AS movement_date,
+                    'Avans (fazla ödeme)'       AS description,
+                    0::numeric                  AS debit,
+                    c.unallocated_amount        AS credit,
+                    NULL::uuid                  AS party_id,
+                    'Advance'                   AS source,
+                    2                           AS ord
+                FROM collections c
+                WHERE c.unit_id = @unitId AND c.company_id = @companyId
+                    AND c.is_deleted = false AND c.unallocated_amount > 0
             )
             SELECT
                 m.movement_date AS Date,
@@ -85,22 +100,33 @@ public sealed class CurrentAccountReader : ICurrentAccountReader
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
         var conn = db.Database.GetDbConnection();
 
+        // TotalCollected = BB'ye yapılan TÜM tahsilat nakdi (collections.amount) — yani
+        // dağıtılan + avans (unallocated). Böylece fazla ödemede NetBalance negatif
+        // (alacaklı/avans) çıkar. Overdue, detay-bazlı ödenen (allocation) ile hesaplanır.
         const string sql = """
             SELECT
-                COALESCE(SUM(d.amount), 0)                                   AS TotalAccrued,
-                COALESCE(SUM(paid.paid), 0)                                  AS TotalCollected,
-                COALESCE(SUM(d.amount), 0) - COALESCE(SUM(paid.paid), 0)     AS NetBalance,
-                COALESCE(SUM(CASE WHEN d.due_date < @today
-                                  THEN d.amount - COALESCE(paid.paid, 0) ELSE 0 END), 0) AS OverdueAmount
-            FROM accrual_details d
-            JOIN accruals a ON a.id = d.accrual_id
-                AND a.company_id = @companyId AND a.is_deleted = false
-            LEFT JOIN LATERAL (
-                SELECT COALESCE(SUM(al.allocated_amount), 0) AS paid
-                FROM collection_allocations al
-                WHERE al.accrual_detail_id = d.id AND al.is_deleted = false
-            ) paid ON true
-            WHERE d.unit_id = @unitId AND d.is_deleted = false
+                acc.total_accrued                          AS TotalAccrued,
+                coll.total_collected                       AS TotalCollected,
+                acc.total_accrued - coll.total_collected   AS NetBalance,
+                acc.overdue                                AS OverdueAmount
+            FROM
+                (SELECT
+                     COALESCE(SUM(d.amount), 0) AS total_accrued,
+                     COALESCE(SUM(CASE WHEN d.due_date < @today
+                                       THEN d.amount - COALESCE(paid.paid, 0) ELSE 0 END), 0) AS overdue
+                 FROM accrual_details d
+                 JOIN accruals a ON a.id = d.accrual_id
+                     AND a.company_id = @companyId AND a.is_deleted = false
+                 LEFT JOIN LATERAL (
+                     SELECT COALESCE(SUM(al.allocated_amount), 0) AS paid
+                     FROM collection_allocations al
+                     WHERE al.accrual_detail_id = d.id AND al.is_deleted = false
+                 ) paid ON true
+                 WHERE d.unit_id = @unitId AND d.is_deleted = false) acc
+                CROSS JOIN
+                (SELECT COALESCE(SUM(c.amount), 0) AS total_collected
+                 FROM collections c
+                 WHERE c.unit_id = @unitId AND c.company_id = @companyId AND c.is_deleted = false) coll
             """;
 
         // Dapper (bu sürüm) DateOnly parametresini desteklemez → DateTime'a çevir.
@@ -122,7 +148,10 @@ public sealed class CurrentAccountReader : ICurrentAccountReader
                 u.id     AS UnitId,
                 u.number AS Number,
                 b.name   AS BuildingName,
-                COALESCE(SUM(d.amount), 0) - COALESCE(SUM(pa.paid), 0) AS RemainingBalance,
+                COALESCE(SUM(d.amount), 0) - COALESCE(SUM(pa.paid), 0)
+                    - COALESCE((SELECT SUM(c.unallocated_amount) FROM collections c
+                                WHERE c.unit_id = u.id AND c.company_id = @companyId
+                                  AND c.is_deleted = false), 0) AS RemainingBalance,
                 COALESCE(SUM(CASE WHEN d.due_date < @today
                                   THEN d.amount - COALESCE(pa.paid, 0) ELSE 0 END), 0) AS OverdueAmount
             FROM units u
