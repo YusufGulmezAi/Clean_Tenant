@@ -8,6 +8,7 @@
 @using CleanTenant.Application.Features.Main.Accounting.FiscalYears
 @using CleanTenant.Application.Features.Main.Accounting.Periods
 @using CleanTenant.Domain.Tenant.Accounting.Enums
+@using CleanTenant.ManagementApp.Components.Shared
 
 <PageTitle>Mali Yıllar</PageTitle>
 
@@ -47,12 +48,16 @@ else
                         <MudDatePicker @bind-Date="_form.StartDateDt"
                                        Label="Başlangıç Tarihi"
                                        DateFormat="dd.MM.yyyy"
+                                       Editable="true"
+                                       Converter="@_dateConverter"
                                        Required="true" />
                     </MudItem>
                     <MudItem xs="12" sm="4">
                         <MudDatePicker @bind-Date="_form.EndDateDt"
                                        Label="Bitiş Tarihi"
                                        DateFormat="dd.MM.yyyy"
+                                       Editable="true"
+                                       Converter="@_dateConverter"
                                        Required="true" />
                     </MudItem>
                     @if (_form.IsNonCalendar)
@@ -341,6 +346,9 @@ else
         PeriodStatus.ClosedPermanent => "Kalıcı Kapalı",
         _ => status.ToString()
     };
+
+    // Esnek tarih girişi: elle yazma + "." "/" "-" ayraçları (ortak helper).
+    private readonly MudBlazor.Converter<DateTime?, string> _dateConverter = DateInputConverter.Create();
 
     private class FiscalYearForm
     {
