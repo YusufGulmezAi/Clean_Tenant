@@ -8,8 +8,12 @@
 @inject NavigationManager Nav
 @inject IStringLocalizer Loc
 @using CleanTenant.Application.Common.Auth
+@using CleanTenant.Application.Features.Main.Parties
 @using CleanTenant.Application.Features.Main.Parties.CurrentAccount
 @using CleanTenant.Application.Features.Main.Parties.Tenures
+@using CleanTenant.Application.Features.Main.Accruals.Queries
+@using CleanTenant.Application.Features.Main.Collections.Queries
+@using CleanTenant.Domain.Tenant.Parties.Enums
 
 <PageTitle>@(_tenures is null ? Loc["Cari.Card.PageTitle"].Value : $"Daire {_tenures.UnitNumber}")</PageTitle>
 
@@ -113,13 +117,168 @@ else
                 <div class="cari-panel">
                     <div class="cari-panel-head">@CurrentTabTitle</div>
                     <div class="cari-panel-body">
-                        @if (IsActiveTab(_tab))
+                        @switch (_tab)
                         {
-                            <p class="cari-placeholder">@Loc["Cari.Panel.ComingS5b"]</p>
-                        }
-                        else
-                        {
-                            <p class="cari-placeholder">@Loc["Cari.Panel.NextPhase"]</p>
+                            case "genel":
+                                @if (_partyDetail is null)
+                                {
+                                    <MudAlert Severity="Severity.Info" Dense="true">@Loc["Cari.Genel.NoParty"]</MudAlert>
+                                }
+                                else
+                                {
+                                    <MudGrid Spacing="2">
+                                        @Field(Loc["Cari.Field.FullName"].Value, _partyDetail.FullName)
+                                        @Field(Loc["Cari.Field.Kind"].Value, Loc[_partyDetail.Kind == PartyKind.Legal ? "Cari.Kind.Legal" : "Cari.Kind.Individual"].Value)
+                                        @Field("TCKN", _partyDetail.Tckn)
+                                        @Field("VKN", _partyDetail.Vkn)
+                                        @Field(Loc["Cari.Field.Birth"].Value, _partyDetail.BirthDate?.ToString("dd.MM.yyyy"))
+                                        @Field(Loc["Cari.Field.Phone"].Value, _partyDetail.Phone)
+                                        @Field(Loc["Cari.Field.Email"].Value, _partyDetail.Email)
+                                        @Field(Loc["Cari.Field.Address"].Value, _partyDetail.AddressLine)
+                                        @Field("KVKK", _partyDetail.KvkkConsentGiven ? Loc["Cari.Field.KvkkYes"].Value : Loc["Cari.Field.KvkkNo"].Value)
+                                    </MudGrid>
+                                    @if (_partyDetail.PiiMasked)
+                                    {
+                                        <MudText Typo="Typo.caption" Class="mud-text-secondary mt-3">@Loc["Cari.Genel.PiiMasked"]</MudText>
+                                    }
+                                }
+                                break;
+
+                            case "hissedar":
+                                @if (_tenures!.Owners.Count == 0)
+                                {
+                                    <MudAlert Severity="Severity.Info" Dense="true">@Loc["Cari.Hissedar.Empty"]</MudAlert>
+                                }
+                                else
+                                {
+                                    <MudSimpleTable Dense="true" Hover="true">
+                                        <thead><tr>
+                                            <th>@Loc["Cari.Tag.Owner"]</th>
+                                            <th style="text-align:right">@Loc["Cari.Col.Share"]</th>
+                                            <th>@Loc["Cari.Col.Liability"]</th>
+                                            <th>@Loc["Cari.Col.Period"]</th>
+                                            <th>@Loc["Cari.Col.Status"]</th>
+                                        </tr></thead>
+                                        <tbody>
+                                        @foreach (var o in _tenures.Owners)
+                                        {
+                                            <tr>
+                                                <td>@o.PartyName</td>
+                                                <td style="text-align:right">%@o.SharePercent.ToString("0.##")</td>
+                                                <td>@(o.IsJointAndSeveral ? Loc["Cari.Col.JointSeveral"].Value : "—")</td>
+                                                <td>@D(o.StartDate) – @(o.EndDate is null ? "…" : D(o.EndDate))</td>
+                                                <td>@StatusChip(o.IsActive)</td>
+                                            </tr>
+                                        }
+                                        </tbody>
+                                    </MudSimpleTable>
+                                }
+                                break;
+
+                            case "oturan":
+                                <MudSimpleTable Dense="true" Hover="true">
+                                    <thead><tr>
+                                        <th>@Loc["Cari.Col.Person"]</th>
+                                        <th>@Loc["Cari.Col.Role"]</th>
+                                        <th>@Loc["Cari.Col.Period"]</th>
+                                        <th>@Loc["Cari.Col.Status"]</th>
+                                    </tr></thead>
+                                    <tbody>
+                                    @foreach (var o in _tenures!.Owners)
+                                    {
+                                        <tr><td>@o.PartyName</td><td>@Loc["Cari.Tag.Owner"]</td><td>@D(o.StartDate) – @(o.EndDate is null ? "…" : D(o.EndDate))</td><td>@StatusChip(o.IsActive)</td></tr>
+                                    }
+                                    @foreach (var t in _tenures.Tenants)
+                                    {
+                                        <tr><td>@t.PartyName</td><td>@Loc["Cari.Tag.Tenant"]</td><td>@D(t.StartDate) – @(t.EndDate is null ? "…" : D(t.EndDate))</td><td>@StatusChip(t.IsActive)</td></tr>
+                                    }
+                                    @if (_tenures.Owners.Count == 0 && _tenures.Tenants.Count == 0)
+                                    {
+                                        <tr><td colspan="4" class="cari-placeholder">@Loc["Cari.Oturan.Empty"]</td></tr>
+                                    }
+                                    </tbody>
+                                </MudSimpleTable>
+                                break;
+
+                            case "iletisimkisi":
+                                @if (_tenures!.Contacts.Count == 0)
+                                {
+                                    <MudAlert Severity="Severity.Info" Dense="true">@Loc["Cari.Contacts.Empty"]</MudAlert>
+                                }
+                                else
+                                {
+                                    <MudSimpleTable Dense="true" Hover="true">
+                                        <thead><tr><th>@Loc["Cari.Col.Person"]</th><th>@Loc["Cari.Col.Role"]</th><th>@Loc["Cari.Col.Period"]</th><th>@Loc["Cari.Col.Status"]</th></tr></thead>
+                                        <tbody>
+                                        @foreach (var c in _tenures.Contacts)
+                                        {
+                                            <tr><td>@c.PartyName</td><td>@c.ContactRole</td><td>@D(c.StartDate) – @(c.EndDate is null ? "…" : D(c.EndDate))</td><td>@StatusChip(c.IsActive)</td></tr>
+                                        }
+                                        </tbody>
+                                    </MudSimpleTable>
+                                }
+                                break;
+
+                            case "cari":
+                                @if (_ledger.Count == 0)
+                                {
+                                    <MudAlert Severity="Severity.Info" Dense="true">@Loc["Cari.Ledger.Empty"]</MudAlert>
+                                }
+                                else
+                                {
+                                    <MudSimpleTable Dense="true" Hover="true">
+                                        <thead><tr>
+                                            <th>@Loc["Cari.Col.Date"]</th>
+                                            <th>@Loc["Cari.Col.Description"]</th>
+                                            <th style="text-align:right">@Loc["Cari.Col.Debit"]</th>
+                                            <th style="text-align:right">@Loc["Cari.Col.Credit"]</th>
+                                            <th style="text-align:right">@Loc["Cari.Col.Balance"]</th>
+                                        </tr></thead>
+                                        <tbody>
+                                        @foreach (var e in _ledger)
+                                        {
+                                            <tr>
+                                                <td>@e.Date.ToString("dd.MM.yyyy")</td>
+                                                <td>@e.Description</td>
+                                                <td style="text-align:right">@(e.Debit > 0 ? e.Debit.ToString("N2") : "—")</td>
+                                                <td style="text-align:right">@(e.Credit > 0 ? e.Credit.ToString("N2") : "—")</td>
+                                                <td style="text-align:right">@e.RunningBalance.ToString("N2")</td>
+                                            </tr>
+                                        }
+                                        </tbody>
+                                    </MudSimpleTable>
+                                }
+                                break;
+
+                            case "tahakkuk":
+                                <div class="kpi-strip" style="margin-top:0;margin-bottom:16px;">
+                                    <div class="kpi"><div class="kpi-label">@Loc["Cari.Kpi.Accrued"]</div><div class="kpi-value">@Fmt(_debt?.TotalAccrued ?? 0)</div></div>
+                                    <div class="kpi"><div class="kpi-label">@Loc["Cari.Debt.Paid"]</div><div class="kpi-value pos">@Fmt(_debt?.PaidAmount ?? 0)</div></div>
+                                    <div class="kpi"><div class="kpi-label">@Loc["Cari.Debt.Remaining"]</div><div class="kpi-value @((_debt?.RemainingAmount ?? 0) > 0 ? "neg" : "")">@Fmt(_debt?.RemainingAmount ?? 0)</div></div>
+                                    <div class="kpi"><div class="kpi-label">@Loc["Cari.Kpi.Overdue"]</div><div class="kpi-value @((_debt?.OverdueAmount ?? 0) > 0 ? "neg" : "")">@Fmt(_debt?.OverdueAmount ?? 0)</div></div>
+                                </div>
+                                <MudText Typo="Typo.subtitle2" Class="mb-2">@Loc["Cari.Tahakkuk.Collections"]</MudText>
+                                @if (_collections.Count == 0)
+                                {
+                                    <MudAlert Severity="Severity.Info" Dense="true">@Loc["Cari.Tahakkuk.NoCollection"]</MudAlert>
+                                }
+                                else
+                                {
+                                    <MudSimpleTable Dense="true" Hover="true">
+                                        <thead><tr><th>@Loc["Cari.Col.Date"]</th><th style="text-align:right">@Loc["Cari.Col.Amount"]</th><th>@Loc["Cari.Col.Method"]</th><th>@Loc["Cari.Col.Reference"]</th></tr></thead>
+                                        <tbody>
+                                        @foreach (var c in _collections)
+                                        {
+                                            <tr><td>@c.PaymentDate.ToString("dd.MM.yyyy")</td><td style="text-align:right">@c.Amount.ToString("N2")</td><td>@c.Method</td><td>@(c.Reference ?? "—")</td></tr>
+                                        }
+                                        </tbody>
+                                    </MudSimpleTable>
+                                }
+                                break;
+
+                            default:
+                                <p class="cari-placeholder">@Loc["Cari.Panel.NextPhase"]</p>
+                                break;
                         }
                     </div>
                 </div>
@@ -138,6 +297,10 @@ else
     private CurrentAccountKpi _kpi = new(0, 0, 0, 0);
     private OwnershipItem? _activeOwner;
     private TenancyItem? _activeTenant;
+    private PartyDetail? _partyDetail;
+    private IReadOnlyList<LedgerEntryRow> _ledger = [];
+    private UnitDebtStatus? _debt;
+    private IReadOnlyList<CollectionListItem> _collections = [];
 
     private string Initials => _tenures is null ? "?" : $"D{_tenures.UnitNumber}";
 
@@ -170,6 +333,22 @@ else
     private string CurrentTabTitle => TabGroups.SelectMany(g => g.Tabs).First(t => t.Key == _tab).Title;
 
     private static string Fmt(decimal v) => v.ToString("N2") + " ₺";
+    private static string? D(DateOnly? d) => d?.ToString("dd.MM.yyyy");
+
+    private RenderFragment Field(string label, string? value) => __builder =>
+    {
+        <MudItem xs="12" sm="6" md="4">
+            <div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--mud-palette-text-secondary);">@label</div>
+            <div style="font-weight:500;">@(string.IsNullOrWhiteSpace(value) ? "—" : value)</div>
+        </MudItem>
+    };
+
+    private RenderFragment StatusChip(bool active) => __builder =>
+    {
+        <MudChip T="string" Size="Size.Small" Color="@(active ? Color.Success : Color.Default)">
+            @(active ? Loc["Cari.Status.Active"].Value : Loc["Cari.Status.Past"].Value)
+        </MudChip>
+    };
 
     protected override async Task OnParametersSetAsync()
     {
@@ -191,6 +370,20 @@ else
 
         var kpi = await Mediator.Send(new GetUnitCurrentAccountKpiQuery(CompanyId, UnitId));
         if (kpi.IsSuccess && kpi.Value is not null) _kpi = kpi.Value;
+
+        // Sekme verileri (S5b) — tek BB için topluca yükle
+        var primaryPartyId = _activeOwner?.PartyId ?? _activeTenant?.PartyId;
+        if (primaryPartyId is { } pid)
+        {
+            var pd = await Mediator.Send(new GetPartyDetailQuery(CompanyId, pid));
+            if (pd.IsSuccess) _partyDetail = pd.Value;
+        }
+        var ledger = await Mediator.Send(new GetUnitLedgerQuery(CompanyId, UnitId));
+        if (ledger.IsSuccess && ledger.Value is not null) _ledger = ledger.Value;
+        var debt = await Mediator.Send(new GetUnitDebtStatusQuery(CompanyId, UnitId));
+        if (debt.IsSuccess) _debt = debt.Value;
+        var cols = await Mediator.Send(new GetUnitCollectionHistoryQuery(CompanyId, UnitId));
+        if (cols.IsSuccess && cols.Value is not null) _collections = cols.Value;
 
         _initialized = true;
     }
